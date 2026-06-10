@@ -68,4 +68,78 @@ public class RoundStateTests
 
         Assert.That(round.CurrentSeat, Is.EqualTo(0));
     }
+
+    // ── 드로우: 바닥 더미 1장 → 현재 플레이어 손패 (5→6) (rules.md §3) ──
+
+    [Test]
+    public void Draw_moves_top_of_draw_pile_into_current_hand()
+    {
+        var round = Deal(playerCount: 4);
+        var top = round.DrawPile[0];
+
+        var after = round.Draw();
+
+        Assert.That(after.Players[0].Hand.Count, Is.EqualTo(6));
+        Assert.That(after.DrawPile.Count, Is.EqualTo(27));
+        Assert.That(after.Players[0].Hand.Contains(top), Is.True);
+    }
+
+    [Test]
+    public void Draw_does_not_change_turn_or_other_players()
+    {
+        var round = Deal(playerCount: 4);
+
+        var after = round.Draw();
+
+        Assert.That(after.CurrentSeat, Is.EqualTo(0));
+        Assert.That(after.Players[1].Hand.Count, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void Draw_does_not_mutate_original_round()
+    {
+        var round = Deal(playerCount: 4);
+
+        round.Draw();
+
+        Assert.That(round.Players[0].Hand.Count, Is.EqualTo(5));
+        Assert.That(round.DrawPile.Count, Is.EqualTo(28));
+    }
+
+    // ── 버림: 손패 1장 → 버림 더미 (6→5), 다음 좌석으로 (rules.md §3) ──
+
+    [Test]
+    public void Discard_moves_card_to_discard_pile_and_returns_to_five()
+    {
+        var round = Deal(playerCount: 4).Draw();
+        var toDiscard = round.Players[0].Hand.Cards[0];
+
+        var after = round.Discard(toDiscard);
+
+        Assert.That(after.Players[0].Hand.Count, Is.EqualTo(5));
+        Assert.That(after.Players[0].Hand.Contains(toDiscard), Is.False);
+        Assert.That(after.DiscardPile, Does.Contain(toDiscard));
+    }
+
+    [Test]
+    public void Discard_advances_turn_to_next_seat()
+    {
+        var round = Deal(playerCount: 4).Draw();
+        var toDiscard = round.Players[0].Hand.Cards[0];
+
+        var after = round.Discard(toDiscard);
+
+        Assert.That(after.CurrentSeat, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Discard_wraps_turn_from_last_seat_to_first()
+    {
+        var round = Deal(playerCount: 4, dealerSeat: 3).Draw();
+        var toDiscard = round.Players[3].Hand.Cards[0];
+
+        var after = round.Discard(toDiscard);
+
+        Assert.That(after.CurrentSeat, Is.EqualTo(0));
+    }
 }

@@ -54,4 +54,28 @@ public sealed class RoundState
 
         return new RoundState(players, drawPile, discardPile: Enumerable.Empty<Card>(), dealerSeat);
     }
+
+    public Player CurrentPlayer => _players[CurrentSeat];
+
+    /// <summary>현재 플레이어가 바닥 더미 맨 위 1장을 손에 넣습니다(rules.md §3). 턴 유지.</summary>
+    public RoundState Draw()
+    {
+        var top = _drawPile[0];
+        var newPlayers = ReplaceCurrent(CurrentPlayer.WithHand(CurrentPlayer.Hand.Draw(top)));
+
+        return new RoundState(newPlayers, _drawPile.Skip(1), _discardPile, CurrentSeat);
+    }
+
+    /// <summary>현재 플레이어가 카드 1장을 버림 더미에 올리고 다음 좌석으로 넘깁니다(rules.md §3).</summary>
+    public RoundState Discard(Card card)
+    {
+        var newPlayers = ReplaceCurrent(CurrentPlayer.WithHand(CurrentPlayer.Hand.Discard(card)));
+        var newDiscard = _discardPile.Append(card); // 맨 위 = 마지막 원소
+        var nextSeat = (CurrentSeat + 1) % _players.Count;
+
+        return new RoundState(newPlayers, _drawPile, newDiscard, nextSeat);
+    }
+
+    private IEnumerable<Player> ReplaceCurrent(Player updated) =>
+        _players.Select(p => p.Seat == CurrentSeat ? updated : p);
 }
