@@ -54,4 +54,49 @@ public class HandEvaluatorTests
         Assert.That(result.Type, Is.EqualTo(MeldType.None));
         Assert.That(result.Score, Is.EqualTo(0));
     }
+
+    // ── 또이또이: 같은 숫자 2장씩 3쌍(2+2+2), 6장, 0점 (rules.md §5) ──
+
+    [Test]
+    public void Ttoittoi_with_three_pairs()
+    {
+        // 3·3 / 7·7 / 9·9
+        var hand = HandOf(
+            new Card(3, CardColor.Red), new Card(3, CardColor.Blue),
+            new Card(7, CardColor.Red), new Card(7, CardColor.Green),
+            new Card(9, CardColor.Red), new Card(9, CardColor.Yellow));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.Ttoittoi));
+        Assert.That(result.Score, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Not_ttoittoi_with_two_pairs_and_two_singles()
+    {
+        // 3·3 / 7·7 / 9 / 11  (쌍 2개뿐)
+        var hand = HandOf(
+            new Card(3, CardColor.Red), new Card(3, CardColor.Blue),
+            new Card(7, CardColor.Red), new Card(7, CardColor.Green),
+            new Card(9, CardColor.Red), new Card(11, CardColor.Yellow));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.None));
+    }
+
+    [Test]
+    public void Not_ttoittoi_with_a_triple_and_a_pair_and_a_single()
+    {
+        // 3·3·3 / 7·7 / 9  (3+2+1, 쌍 3개 아님)
+        var hand = HandOf(
+            new Card(3, CardColor.Red), new Card(3, CardColor.Blue), new Card(3, CardColor.Green),
+            new Card(7, CardColor.Red), new Card(7, CardColor.Green),
+            new Card(9, CardColor.Red));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.None));
+    }
 }
