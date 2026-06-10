@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Game;
 
@@ -6,21 +7,30 @@ namespace BbongCore.Rules;
 /// <summary>손패의 족보를 판정합니다(rules.md §5).</summary>
 public static class HandEvaluator
 {
+    /// <summary>성립하는 족보 중 가장 유리한(빚 최다 탕감 = 최저 점수) 1개를 반환합니다.</summary>
     public static MeldResult Evaluate(Hand hand)
+    {
+        var candidates = Candidates(hand).ToList();
+        return candidates.Count == 0
+            ? MeldResult.None
+            : candidates.OrderBy(c => c.Score).First();
+    }
+
+    private static IEnumerable<MeldResult> Candidates(Hand hand)
     {
         if (IsChongtong(hand))
         {
-            return new MeldResult(MeldType.Chongtong, -100);
+            yield return new MeldResult(MeldType.Chongtong, -100);
         }
 
         if (IsTtoittoi(hand))
         {
-            return new MeldResult(MeldType.Ttoittoi, 0);
+            yield return new MeldResult(MeldType.Ttoittoi, 0);
         }
 
         if (IsStraight(hand))
         {
-            return new MeldResult(MeldType.Straight, -hand.Sum());
+            yield return new MeldResult(MeldType.Straight, -hand.Sum());
         }
 
         if (hand.Count == 6)
@@ -28,16 +38,14 @@ public static class HandEvaluator
             var sum = hand.Sum();
             if (sum <= 10)
             {
-                return new MeldResult(MeldType.TenOrUnder, -100);
+                yield return new MeldResult(MeldType.TenOrUnder, -100);
             }
 
             if (sum >= 66)
             {
-                return new MeldResult(MeldType.SixtySixOrOver, -100);
+                yield return new MeldResult(MeldType.SixtySixOrOver, -100);
             }
         }
-
-        return MeldResult.None;
     }
 
     /// <summary>총통: 같은 숫자가 4장(잔여 카드 무관). 5장·6장 상태 모두 성립.</summary>

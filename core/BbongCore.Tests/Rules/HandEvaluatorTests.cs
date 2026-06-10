@@ -249,4 +249,22 @@ public class HandEvaluatorTests
 
         Assert.That(result.Type, Is.EqualTo(MeldType.None));
     }
+
+    // ── 복수 성립: 가장 유리한(빚 최다 탕감 = 최저 점수) 족보 선택 (rules.md §5) ──
+
+    [Test]
+    public void Picks_most_favorable_when_ttoittoi_and_sixtysix_overlap()
+    {
+        // 12·12 / 11·11 / 10·10 = 합 66
+        //   또이또이(0) + 66이상(-100) 동시 성립 → 더 유리한 -100 선택
+        var hand = HandOf(
+            new Card(12, CardColor.Red), new Card(12, CardColor.Blue),
+            new Card(11, CardColor.Red), new Card(11, CardColor.Blue),
+            new Card(10, CardColor.Red), new Card(10, CardColor.Blue));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.SixtySixOrOver));
+        Assert.That(result.Score, Is.EqualTo(-100));
+    }
 }
