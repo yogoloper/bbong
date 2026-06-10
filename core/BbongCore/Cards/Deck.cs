@@ -28,15 +28,5 @@ public sealed class Deck
     }
 
     /// <summary>Fisher-Yates 셔플. 원본은 두지 않고 섞인 새 Deck을 반환합니다.</summary>
-    public Deck Shuffle(IRandom random)
-    {
-        var shuffled = new List<Card>(_cards);
-        for (var i = shuffled.Count - 1; i > 0; i--)
-        {
-            var j = random.Next(i + 1);
-            (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
-        }
-
-        return new Deck(shuffled);
-    }
+    public Deck Shuffle(IRandom random) => new(Shuffler.Shuffle(_cards, random));
 }

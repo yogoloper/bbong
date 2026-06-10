@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using BbongCore.Cards;
 using BbongCore.Game;
@@ -10,6 +11,10 @@ public class RoundStateTests
 {
     private static RoundState Deal(int playerCount, int dealerSeat = 0) =>
         RoundState.Deal(Deck.CreateStandard(), playerCount, new SeededRandom(42), dealerSeat);
+
+    private static Card Card(int n, CardColor c) => new(n, c);
+
+    private static Hand HandOf(params Card[] cards) => new(cards);
 
     [Test]
     public void Deal_gives_each_player_five_cards()
@@ -141,5 +146,28 @@ public class RoundStateTests
         var after = round.Discard(toDiscard);
 
         Assert.That(after.CurrentSeat, Is.EqualTo(0));
+    }
+
+    // ── 바닥 더미 소진 재셔플: 버림 더미 맨 위 1장 남기고 나머지 셔플 (rules.md §3) ──
+
+    [Test]
+    public void Draw_reshuffles_discard_pile_when_draw_pile_empty()
+    {
+        var players = new[]
+        {
+            new Player(0, HandOf(Card(3, CardColor.Red), Card(3, CardColor.Blue))),
+            new Player(1, HandOf(Card(7, CardColor.Red), Card(7, CardColor.Blue)))
+        };
+        // 버림 더미 3장(맨 위 = 마지막 = 8Y), 바닥 더미 0장
+        var discard = new[] { Card(5, CardColor.Blue), Card(6, CardColor.Green), Card(8, CardColor.Yellow) };
+        var round = new RoundState(players, Array.Empty<Card>(), discard, 0, new SeededRandom(1));
+
+        var after = round.Draw();
+
+        // 맨 위 8Y는 버림 더미에 남고, 5B·6G가 셔플돼 바닥 더미(2장) → 1장 드로우 → 1장 남음
+        Assert.That(after.DiscardPile.Count, Is.EqualTo(1));
+        Assert.That(after.DiscardPile[0], Is.EqualTo(Card(8, CardColor.Yellow)));
+        Assert.That(after.DrawPile.Count, Is.EqualTo(1));
+        Assert.That(after.CurrentPlayer.Hand.Count, Is.EqualTo(3));
     }
 }
