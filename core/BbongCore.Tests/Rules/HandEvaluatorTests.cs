@@ -99,4 +99,72 @@ public class HandEvaluatorTests
 
         Assert.That(result.Type, Is.EqualTo(MeldType.None));
     }
+
+    // ── 스트레이트: 연속 6장, wrap 불가, 색무관, -(6장 합) (rules.md §5) ──
+
+    [Test]
+    public void Straight_one_to_six_scores_negative_sum()
+    {
+        // 1·2·3·4·5·6 = 21 → -21. 색 섞어도 무관.
+        var hand = HandOf(
+            new Card(1, CardColor.Red), new Card(2, CardColor.Blue),
+            new Card(3, CardColor.Green), new Card(4, CardColor.Yellow),
+            new Card(5, CardColor.Red), new Card(6, CardColor.Blue));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.Straight));
+        Assert.That(result.Score, Is.EqualTo(-21));
+    }
+
+    [Test]
+    public void Straight_seven_to_twelve_scores_negative_sum()
+    {
+        // 7·8·9·10·11·12 = 57 → -57
+        var hand = HandOf(
+            Red(7), Red(8), Red(9), Red(10), Red(11), Red(12));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.Straight));
+        Assert.That(result.Score, Is.EqualTo(-57));
+    }
+
+    [Test]
+    public void Not_straight_when_wrapping_around_twelve_to_one()
+    {
+        // 11·12·1·2·3·4 → wrap 불가
+        var hand = HandOf(
+            Red(11), Red(12), Red(1), Red(2), Red(3), Red(4));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.None));
+    }
+
+    [Test]
+    public void Not_straight_when_gap_in_sequence()
+    {
+        // 1·2·3·4·5·7 (6 빠짐)
+        var hand = HandOf(
+            Red(1), Red(2), Red(3), Red(4), Red(5), Red(7));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.None));
+    }
+
+    [Test]
+    public void Not_straight_when_duplicate_number()
+    {
+        // 1·2·3·4·5·5 (연속 아님, 중복)
+        var hand = HandOf(
+            new Card(1, CardColor.Red), new Card(2, CardColor.Red),
+            new Card(3, CardColor.Red), new Card(4, CardColor.Red),
+            new Card(5, CardColor.Red), new Card(5, CardColor.Blue));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.None));
+    }
 }

@@ -18,6 +18,11 @@ public static class HandEvaluator
             return new MeldResult(MeldType.Ttoittoi, 0);
         }
 
+        if (IsStraight(hand))
+        {
+            return new MeldResult(MeldType.Straight, -hand.Sum());
+        }
+
         return MeldResult.None;
     }
 
@@ -37,5 +42,17 @@ public static class HandEvaluator
 
         var groups = hand.Cards.GroupBy(c => c.Number).ToList();
         return groups.Count == 3 && groups.All(g => g.Count() == 2);
+    }
+
+    /// <summary>스트레이트: 연속 숫자 6장(색 무관, wrap 불가). 중복 숫자 불가.</summary>
+    private static bool IsStraight(Hand hand)
+    {
+        if (hand.Count != 6)
+        {
+            return false;
+        }
+
+        var numbers = hand.Cards.Select(c => c.Number).Distinct().ToList();
+        return numbers.Count == 6 && numbers.Max() - numbers.Min() == 5;
     }
 }
