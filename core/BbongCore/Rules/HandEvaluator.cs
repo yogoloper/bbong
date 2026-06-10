@@ -23,6 +23,20 @@ public static class HandEvaluator
             return new MeldResult(MeldType.Straight, -hand.Sum());
         }
 
+        if (hand.Count == 6)
+        {
+            var sum = hand.Sum();
+            if (sum <= 10)
+            {
+                return new MeldResult(MeldType.TenOrUnder, -100);
+            }
+
+            if (sum >= 66)
+            {
+                return new MeldResult(MeldType.SixtySixOrOver, -100);
+            }
+        }
+
         return MeldResult.None;
     }
 

@@ -167,4 +167,86 @@ public class HandEvaluatorTests
 
         Assert.That(result.Type, Is.EqualTo(MeldType.None));
     }
+
+    // ── 10이하: 6장 합 ≤ 10, -100 (rules.md §5) ──
+
+    [Test]
+    public void TenOrUnder_when_six_card_sum_below_ten()
+    {
+        // 1·1·1·2·2·2 = 9 (3+3 분포 → 또이또이 아님)
+        var hand = HandOf(
+            new Card(1, CardColor.Red), new Card(1, CardColor.Blue), new Card(1, CardColor.Green),
+            new Card(2, CardColor.Red), new Card(2, CardColor.Blue), new Card(2, CardColor.Green));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.TenOrUnder));
+        Assert.That(result.Score, Is.EqualTo(-100));
+    }
+
+    [Test]
+    public void TenOrUnder_at_boundary_sum_exactly_ten()
+    {
+        // 1·1·1·2·2·3 = 10
+        var hand = HandOf(
+            new Card(1, CardColor.Red), new Card(1, CardColor.Blue), new Card(1, CardColor.Green),
+            new Card(2, CardColor.Red), new Card(2, CardColor.Blue), Red(3));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.TenOrUnder));
+    }
+
+    // ── 66이상: 6장 합 ≥ 66, -100 (rules.md §5) ──
+
+    [Test]
+    public void SixtySixOrOver_when_six_card_sum_at_least_66()
+    {
+        // 12·12·12·11·11·11 = 69 (3+3 → 또이또이 아님)
+        var hand = HandOf(
+            new Card(12, CardColor.Red), new Card(12, CardColor.Blue), new Card(12, CardColor.Green),
+            new Card(11, CardColor.Red), new Card(11, CardColor.Blue), new Card(11, CardColor.Green));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.SixtySixOrOver));
+        Assert.That(result.Score, Is.EqualTo(-100));
+    }
+
+    [Test]
+    public void SixtySixOrOver_at_boundary_sum_exactly_66()
+    {
+        // 12·12·12·11·11·8 = 66
+        var hand = HandOf(
+            new Card(12, CardColor.Red), new Card(12, CardColor.Blue), new Card(12, CardColor.Green),
+            new Card(11, CardColor.Red), new Card(11, CardColor.Blue), Red(8));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.SixtySixOrOver));
+    }
+
+    [Test]
+    public void No_sum_meld_when_sum_between_11_and_65()
+    {
+        // 1·2·3·4·5·8 = 23
+        var hand = HandOf(Red(1), Red(2), Red(3), Red(4), Red(5), Red(8));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.None));
+    }
+
+    [Test]
+    public void No_sum_meld_for_five_card_hand_even_if_sum_below_ten()
+    {
+        // 5장(드로우 전)은 합산 족보 미판정 (rules.md §5: 6장 시점)
+        var hand = HandOf(
+            new Card(1, CardColor.Red), new Card(1, CardColor.Blue),
+            new Card(2, CardColor.Red), new Card(2, CardColor.Blue), Red(3));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.None));
+    }
 }
