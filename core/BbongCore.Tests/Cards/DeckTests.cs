@@ -35,4 +35,35 @@ public class DeckTests
 
         Assert.That(deck.Cards.Select(c => c.Number), Is.All.InRange(1, 12));
     }
+
+    // ── 셔플: IRandom 주입(서버 보안 시드/테스트 재현) (rules.md §2) ──
+
+    [Test]
+    public void Shuffle_preserves_all_48_cards()
+    {
+        var shuffled = Deck.CreateStandard().Shuffle(new SeededRandom(123));
+
+        Assert.That(shuffled.Cards.Count, Is.EqualTo(48));
+        Assert.That(shuffled.Cards, Is.EquivalentTo(Deck.CreateStandard().Cards));
+    }
+
+    [Test]
+    public void Shuffle_with_same_seed_is_reproducible()
+    {
+        var a = Deck.CreateStandard().Shuffle(new SeededRandom(123));
+        var b = Deck.CreateStandard().Shuffle(new SeededRandom(123));
+
+        Assert.That(a.Cards, Is.EqualTo(b.Cards)); // 순서까지 동일
+    }
+
+    [Test]
+    public void Shuffle_does_not_mutate_original_deck()
+    {
+        var deck = Deck.CreateStandard();
+        var originalOrder = deck.Cards.ToList();
+
+        deck.Shuffle(new SeededRandom(7));
+
+        Assert.That(deck.Cards, Is.EqualTo(originalOrder));
+    }
 }
