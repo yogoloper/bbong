@@ -6,6 +6,22 @@
 
 ---
 
+## 0. 레포 레이아웃 (모노레포)
+
+```
+bbong/
+  docs/        # 명세·설계 (rules / architecture / considerations)
+  core/        # 공유 순수 C# 엔진. 클라·서버 양쪽이 참조 (단일 진실)
+  client/      # Unity 클라이언트 (Phase 3 착수)
+  server/      # ASP.NET Core 백엔드 (Phase 4~5 착수)
+```
+
+- **core는 client/server의 형제** — 공유 의존성이라 어느 한쪽 하위에 두지 않음.
+- 한 레포에서 코어 변경 → 클라·서버 동시 반영(버전 드리프트 방지).
+- client/server는 placeholder만 존재. 각 Phase에서 실제 프로젝트 생성.
+
+---
+
 ## 1. 3-레이어 큰 그림
 
 ```
