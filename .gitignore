@@ -1,0 +1,26 @@
+# .NET build artifacts
+bin/
+obj/
+*.user
+
+# Test results
+[Tt]est[Rr]esults/
+*.trx
+
+# IDE
+.vs/
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Unity (Phase 3+)
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]serSettings/
+*.csproj.meta
