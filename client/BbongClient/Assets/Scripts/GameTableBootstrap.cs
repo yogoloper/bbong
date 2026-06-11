@@ -299,6 +299,14 @@ namespace Bbong.Client
                     AddDiscard(toss);
                     Refresh();
                     yield return new WaitForSeconds(BotDelay);
+
+                    // 자연뽕의 추가 버림도 내가 뽕 가능
+                    if (_round.CanPong(MySeat))
+                    {
+                        OpenPongWindow(seat);
+                        yield break;
+                    }
+
                     continue;
                 }
 
@@ -316,26 +324,35 @@ namespace Bbong.Client
                     yield break;
                 }
 
-                if (TryBotPong(seat))
+                var ponger = TryBotPong(seat);
+                if (ponger >= 0)
                 {
                     Refresh();
                     yield return new WaitForSeconds(BotDelay);
+
+                    // 봇 뽕의 추가 버림도 내가 뽕(두 번째 뽕) 가능
+                    if (_state != UiState.RoundOver && _state != UiState.SetOver && _round.CanPong(MySeat))
+                    {
+                        OpenPongWindow(ponger);
+                        yield break;
+                    }
                 }
             }
         }
 
-        private bool TryBotPong(int discarderSeat)
+        /// <summary>봇 중 뽕 가능한 첫 번째가 뽕. 뽕한 좌석 반환, 없으면 -1.</summary>
+        private int TryBotPong(int discarderSeat)
         {
             for (var s = 0; s < PlayerCount; s++)
             {
                 if (s != MySeat && _round.CanPong(s) && _bots[s].ShouldPong())
                 {
                     DoBotPong(s, discarderSeat);
-                    return true;
+                    return s;
                 }
             }
 
-            return false;
+            return -1;
         }
 
         private void DoBotPong(int seat, int discarderSeat)
