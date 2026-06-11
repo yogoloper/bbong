@@ -61,6 +61,11 @@ namespace Bbong.Client
         private Button _drawBtn, _stopBtn, _pongBtn, _passBtn, _naturalBtn, _nextBtn;
         private readonly List<string> _events = new();
 
+        private AudioSource _audio;
+        private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop;
+        private Image _flash;
+        private int _discardShownCount;
+
         private void Start()
         {
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -77,12 +82,14 @@ namespace Bbong.Client
             _round = RoundState.Deal(Deck.CreateStandard(), PlayerCount, new SeededRandom(_seed++),
                 dealerSeat: _roundIndex % PlayerCount);
             _state = UiState.NeedDraw;
+            _discardShownCount = 0;
             SetLog($"{_roundIndex + 1}판 시작.");
             RunBots();
         }
 
         private void EndRound(int[] scores, string reason)
         {
+            PlayStop();
             _game = _game.ApplyRoundScores(scores);
             _roundIndex++;
 
@@ -160,6 +167,7 @@ namespace Bbong.Client
                     var rest = new Hand(_round.CurrentPlayer.Hand.Cards.Where(c => c.Number != number));
                     _round = _round.NaturalPong(number, _bots[seat].ChoosePongDiscard(rest));
                     SetLog($"P{seat} 자연뽕! {number} 3장 고정");
+                    PlayPong();
                     Refresh();
                     yield return new WaitForSeconds(BotDelay);
                     continue;
@@ -168,6 +176,7 @@ namespace Bbong.Client
                 var discard = _bots[seat].ChooseDiscard(_round.CurrentPlayer.Hand);
                 _round = _round.Discard(discard);
                 SetLog($"P{seat} 버림 {CardLabel(discard)}");
+                PlayDiscard();
                 Refresh();
                 yield return new WaitForSeconds(BotDelay);
 
@@ -212,6 +221,7 @@ namespace Bbong.Client
 
             _round = _round.Pong(seat, _bots[seat].ChoosePongDiscard(rest));
             SetLog($"P{seat} 뽕! {number} 3장 고정");
+            PlayPong();
         }
 
         // ── 뽕 창 (사람) ──
@@ -262,6 +272,7 @@ namespace Bbong.Client
 
             _drawnThisTurn = true;
             _round = _round.Draw();
+            PlayDraw();
             var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
             if (meld.Type != MeldType.None)
             {
@@ -354,6 +365,7 @@ namespace Bbong.Client
                     _state = UiState.Resolving; // 더블클릭 → 두 장 버림 방지
                     _round = _round.Discard(card);
                     SetLog($"내 버림 {CardLabel(card)}");
+                    PlayDiscard();
                     TryBotPong(MySeat);
                     RunBots();
                     break;
@@ -367,6 +379,7 @@ namespace Bbong.Client
                     _state = UiState.Resolving;
                     _round = _round.Pong(MySeat, card);
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
+                    PlayPong();
                     RunBots();
                     break;
 
@@ -379,6 +392,7 @@ namespace Bbong.Client
                     _state = UiState.Resolving;
                     _round = _round.NaturalPong(_naturalPongNumber, card);
                     SetLog($"자연뽕 완료. {_naturalPongNumber} 3장 고정");
+                    PlayPong();
                     RunBots();
                     break;
             }
@@ -480,6 +494,101 @@ namespace Bbong.Client
             _nextBtn = CreateButton(bar, "다음 판", OnNext);
 
             _handRow = CreateRow(root, new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.28f), 12).transform;
+
+            // 전체 화면 플래시(연출용, 클릭 막지 않음)
+            _flash = CreatePanel(root, new Color(1, 1, 1, 0));
+            Stretch(_flash.rectTransform);
+            _flash.raycastTarget = false;
+            _flash.transform.SetAsLastSibling();
+
+            // 오디오 + 절차적 효과음
+            _audio = canvasGo.AddComponent<AudioSource>();
+            _audio.playOnAwake = false;
+            _sfxDraw = Tone("draw", 880f, 0.06f, 24f);
+            _sfxDiscard = Tone("discard", 300f, 0.12f, 16f);
+            _sfxPong = Noise("pong", 0.16f, 42f);   // "찰싹" 노이즈 버스트
+            _sfxStop = Tone("stop", 520f, 0.28f, 7f);
+        }
+
+        // ── 연출/사운드 ──
+
+        private void PlayDraw() => _audio.PlayOneShot(_sfxDraw, 0.5f);
+        private void PlayDiscard() => _audio.PlayOneShot(_sfxDiscard, 0.5f);
+        private void PlayStop() => _audio.PlayOneShot(_sfxStop, 0.6f);
+
+        private void PlayPong()
+        {
+            _audio.PlayOneShot(_sfxPong, 0.8f);
+            Flash(new Color(1f, 0.95f, 0.4f, 0.5f)); // 노란 섬광
+        }
+
+        private void Flash(Color color)
+        {
+            _flash.color = color;
+            StartCoroutine(FadeFlash());
+        }
+
+        private IEnumerator FadeFlash()
+        {
+            var start = _flash.color;
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.25f)
+            {
+                _flash.color = new Color(start.r, start.g, start.b, Mathf.Lerp(start.a, 0f, t));
+                yield return null;
+            }
+
+            _flash.color = new Color(start.r, start.g, start.b, 0f);
+        }
+
+        private IEnumerator ScalePop(Transform target)
+        {
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.15f)
+            {
+                var s = Mathf.Lerp(1.4f, 1f, t);
+                if (target != null)
+                {
+                    target.localScale = new Vector3(s, s, 1f);
+                }
+
+                yield return null;
+            }
+
+            if (target != null)
+            {
+                target.localScale = Vector3.one;
+            }
+        }
+
+        private AudioClip Tone(string name, float freq, float duration, float decay)
+        {
+            var rate = 44100;
+            var count = Mathf.RoundToInt(rate * duration);
+            var data = new float[count];
+            for (var i = 0; i < count; i++)
+            {
+                var t = i / (float)rate;
+                data[i] = Mathf.Sin(2f * Mathf.PI * freq * t) * Mathf.Exp(-decay * t);
+            }
+
+            var clip = AudioClip.Create(name, count, 1, rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        private AudioClip Noise(string name, float duration, float decay)
+        {
+            var rate = 44100;
+            var count = Mathf.RoundToInt(rate * duration);
+            var data = new float[count];
+            for (var i = 0; i < count; i++)
+            {
+                var t = i / (float)rate;
+                data[i] = (Random.value * 2f - 1f) * Mathf.Exp(-decay * t);
+            }
+
+            var clip = AudioClip.Create(name, count, 1, rate, false);
+            clip.SetData(data, 0);
+            return clip;
         }
 
         /// <summary>카드 한 장의 시각 표현(색 채운 패널 + 숫자 + 색문자). 손패·버림 더미 공용.</summary>
@@ -528,10 +637,18 @@ namespace Bbong.Client
             }
 
             var show = Mathf.Min(7, pile.Count);
+            GameObject newest = null;
             for (var i = pile.Count - show; i < pile.Count; i++)
             {
-                CreateCardFace(_discardRow, pile[i], 90, 140); // 맨 오른쪽 = 최신(맨 위)
+                newest = CreateCardFace(_discardRow, pile[i], 90, 140); // 맨 오른쪽 = 최신(맨 위)
             }
+
+            if (pile.Count > _discardShownCount && newest != null)
+            {
+                StartCoroutine(ScalePop(newest.transform)); // 새로 버려진 카드 팝
+            }
+
+            _discardShownCount = pile.Count;
         }
 
         // ── UI 헬퍼 ──
