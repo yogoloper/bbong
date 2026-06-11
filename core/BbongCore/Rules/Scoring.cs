@@ -7,17 +7,15 @@ public static class Scoring
 {
     public static int Score(PlayerOutcome outcome)
     {
-        // 스톱 바가지: 손패 합 무관, 고정 30점(§6).
-        if (outcome.StopBagaji)
-        {
-            return GameConfig.StopBagajiPenalty;
-        }
-
         // 족보 승자는 족보 점수, 그 외(비승자·뽕소진·스톱)는 남은 손패 합.
         var baseScore = outcome.DeclaredMeld is { } meld
             ? meld.Score
             : outcome.RemainingHand.Sum();
 
-        return baseScore + (outcome.PongBak ? GameConfig.PongBakPenalty : 0); // 뽕 박은 가산(§7)
+        var penalty =
+            (outcome.PongBak ? GameConfig.PongBakPenalty : 0) +
+            (outcome.StopBagaji ? GameConfig.StopBagajiPenalty : 0);
+
+        return baseScore + penalty;
     }
 }

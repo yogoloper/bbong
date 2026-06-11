@@ -85,7 +85,7 @@ public class RoundSettlementTests
 
         var scores = RoundSettlement.SettleByStop(round, stopSeat: 0);
 
-        // 바가지: 선언자 고정 30(손패 합 무관), 나머지 전원 0 (rules.md §6)
-        Assert.That(scores, Is.EqualTo(new[] { 30, 0, 0 }));
+        // 바가지: 선언자 7+30=37, 나머지 전원 0 (rules.md §6-4)
+        Assert.That(scores, Is.EqualTo(new[] { 37, 0, 0 }));
     }
 }
