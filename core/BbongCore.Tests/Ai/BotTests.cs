@@ -58,13 +58,22 @@ public class BotTests
     }
 
     [Test]
-    public void Normal_pongs_and_stops_when_eligible()
+    public void Normal_pongs_and_stops_when_sum_is_low()
     {
         var bot = new Bot(BotDifficulty.Normal);
 
         Assert.That(bot.ShouldPong(), Is.True);
-        // 바가지여도 Normal은 스톱 (단순)
-        Assert.That(bot.ShouldStop(StopRound(declarerSum: 8, otherSum: 5), seat: 0), Is.True);
+        // 손합 5(한도의 절반) 이하 → 스톱. 바가지 여부는 안 봄(단순)
+        Assert.That(bot.ShouldStop(StopRound(declarerSum: 5, otherSum: 3), seat: 0), Is.True);
+    }
+
+    [Test]
+    public void Normal_continues_when_stop_sum_is_high()
+    {
+        var bot = new Bot(BotDifficulty.Normal);
+
+        // 손합 8 > 5 → 성급한 스톱 안 함(스톱 종료 편중 완화)
+        Assert.That(bot.ShouldStop(StopRound(declarerSum: 8, otherSum: 9), seat: 0), Is.False);
     }
 
     // ── Hard ──
@@ -85,6 +94,26 @@ public class BotTests
 
         // 선언자 합 5 < 상대 9 → 바가지 아님 → 스톱
         Assert.That(bot.ShouldStop(StopRound(declarerSum: 5, otherSum: 9), seat: 0), Is.True);
+    }
+
+    [Test]
+    public void Hard_continues_when_stop_sum_is_high()
+    {
+        var bot = new Bot(BotDifficulty.Hard);
+
+        // 바가지 아님(8 < 9)이어도 손합 8 > 5 → 더 낮춰서 스톱(성급한 스톱 편중 완화)
+        Assert.That(bot.ShouldStop(StopRound(declarerSum: 8, otherSum: 9), seat: 0), Is.False);
+    }
+
+    [Test]
+    public void Hard_dumps_high_card_in_post_pong_endgame()
+    {
+        var bot = new Bot(BotDifficulty.Hard);
+
+        // 뽕 이후 3장: 족보(6장) 불가 → 연속(10·11) 보존 무의미. 고점 11 버리고 저점 지향.
+        var discard = bot.ChooseDiscard(HandOf(C(10), C(11), C(3)));
+
+        Assert.That(discard.Number, Is.EqualTo(11));
     }
 
     [Test]

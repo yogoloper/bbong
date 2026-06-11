@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Cards;
+using BbongCore.Config;
 using BbongCore.Game;
 
 namespace BbongCore.Ai;
@@ -34,15 +35,17 @@ public sealed class Bot
 
     /// <summary>
     /// 쓸모도가 가장 낮은 카드를 버립니다(동점이면 큰 수). 쌍·연속(run) 조각과 낮은 수를 보존합니다.
+    /// 연속 보존은 족보(6장)가 성립 가능할 때만 — 뽕 이후 3장 손패에선 무의미하고 고점만 끌어안습니다.
     /// </summary>
     private static Card LeastUseful(Hand hand)
     {
         var cards = hand.Cards;
+        var meldFeasible = cards.Count >= GameConfig.HandSize; // 뽕 이후(≤3장)는 족보 불가
 
         int Usefulness(Card c)
         {
             var sameNumber = cards.Count(x => x.Number == c.Number) >= 2 ? 100 : 0;        // 쌍/총통 노림
-            var adjacent = cards.Any(x => x.Number == c.Number - 1 || x.Number == c.Number + 1) ? 20 : 0; // 스트레이트 노림
+            var adjacent = meldFeasible && cards.Any(x => x.Number == c.Number - 1 || x.Number == c.Number + 1) ? 20 : 0; // 스트레이트 노림
             return sameNumber + adjacent + (13 - c.Number);                                  // 낮은 수 살짝 우대
         }
 
@@ -55,13 +58,22 @@ public sealed class Bot
     /// <summary>뽕 이후 버릴 카드(남은 손패 중 최대 수 → 저점 지향).</summary>
     public Card ChoosePongDiscard(Hand handAfterRemovingPair) => Highest(handAfterRemovingPair.Cards);
 
-    /// <summary>스톱 가능 시 스톱할지. Easy=안 함, Normal=함, Hard=바가지면 회피.</summary>
+    /// <summary>
+    /// 스톱 가능 시 스톱할지. Easy=안 함.
+    /// Normal=손합이 한도 절반 이하일 때만(성급한 스톱 편중 완화, 상대 패는 안 봄).
+    /// Hard=바가지 회피 + 손패가 쌍이면 두 번 뽕(손 털기·상대 박 +20)을 노리고 보류.
+    /// </summary>
     public bool ShouldStop(RoundState round, int seat) => Difficulty switch
     {
-        BotDifficulty.Normal => true,
-        BotDifficulty.Hard => !StopResolver.IsBagaji(round, seat),
+        BotDifficulty.Normal => round.Players[seat].Hand.Sum() <= GameConfig.DefaultStopLimit / 2,
+        BotDifficulty.Hard => !StopResolver.IsBagaji(round, seat)
+                              && round.Players[seat].Hand.Sum() <= GameConfig.DefaultStopLimit / 2,
         _ => false
     };
+
+    /// <summary>손패 2장이 같은 숫자(뽕 대기 쌍)인지.</summary>
+    private static bool IsPair(Hand hand) =>
+        hand.Count == 2 && hand.Cards[0].Number == hand.Cards[1].Number;
 
     private static Card Highest(IEnumerable<Card> cards) => cards.OrderByDescending(c => c.Number).First();
 }
