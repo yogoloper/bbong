@@ -74,37 +74,38 @@ namespace Bbong.Client
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = _canvasGo.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
+            scaler.referenceResolution = new Vector2(1920, 1080); // 폰 가로(16:9 기준, 넓은 화면은 여유 확장)
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand; // 화면비 달라도 글씨 비대 방지
             var root = _canvasGo.transform;
 
             Stretch(CreatePanel(root, new Color(0.12f, 0.30f, 0.20f)).rectTransform);
 
             var title = CreateText(root, "나이롱뽕", 96, TextAnchor.MiddleCenter);
             title.fontStyle = FontStyle.Bold;
-            Anchor(title.rectTransform, new Vector2(0.05f, 0.80f), new Vector2(0.95f, 0.92f));
+            Anchor(title.rectTransform, new Vector2(0.05f, 0.80f), new Vector2(0.95f, 0.95f));
 
             var subtitle = CreateText(root, "방 만들기", 40, TextAnchor.MiddleCenter);
             subtitle.color = new Color(1f, 1f, 1f, 0.75f);
-            Anchor(subtitle.rectTransform, new Vector2(0.05f, 0.755f), new Vector2(0.95f, 0.795f));
+            Anchor(subtitle.rectTransform, new Vector2(0.05f, 0.73f), new Vector2(0.95f, 0.785f));
 
             _wallet = CreateText(root, "", 36, TextAnchor.MiddleCenter);
             _wallet.fontStyle = FontStyle.Bold;
             _wallet.color = new Color(0.5f, 0.95f, 0.6f);
-            Anchor(_wallet.rectTransform, new Vector2(0.05f, 0.715f), new Vector2(0.95f, 0.755f));
+            Anchor(_wallet.rectTransform, new Vector2(0.05f, 0.665f), new Vector2(0.95f, 0.725f));
 
             var playerLabel = CreateText(root, "인원", 40, TextAnchor.MiddleCenter);
-            Anchor(playerLabel.rectTransform, new Vector2(0.05f, 0.675f), new Vector2(0.95f, 0.715f));
+            Anchor(playerLabel.rectTransform, new Vector2(0.05f, 0.585f), new Vector2(0.95f, 0.635f));
 
-            var playerRow = CreateRow(root, new Vector2(0.05f, 0.575f), new Vector2(0.95f, 0.665f), 14).transform;
+            var playerRow = CreateRow(root, new Vector2(0.25f, 0.46f), new Vector2(0.75f, 0.575f), 14).transform;
             for (var n = GameConfig.MinPlayers; n <= GameConfig.MaxPlayers; n++)
             {
                 CreateChoice(playerRow, $"{n}명", n, _playerChoices, v => _playerCount = v);
             }
 
             var stakeLabel = CreateText(root, "판돈", 40, TextAnchor.MiddleCenter);
-            Anchor(stakeLabel.rectTransform, new Vector2(0.05f, 0.51f), new Vector2(0.95f, 0.55f));
+            Anchor(stakeLabel.rectTransform, new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.43f));
 
-            var stakeRow = CreateRow(root, new Vector2(0.05f, 0.41f), new Vector2(0.95f, 0.50f), 14).transform;
+            var stakeRow = CreateRow(root, new Vector2(0.25f, 0.255f), new Vector2(0.75f, 0.37f), 14).transform;
             foreach (var stake in GameConfig.StakeOptions)
             {
                 CreateChoice(stakeRow, $"{stake:N0}", stake, _stakeChoices, v => _stake = v);
@@ -112,10 +113,10 @@ namespace Bbong.Client
 
             _summary = CreateText(root, "", 36, TextAnchor.MiddleCenter);
             _summary.color = new Color(1f, 0.92f, 0.4f);
-            Anchor(_summary.rectTransform, new Vector2(0.05f, 0.325f), new Vector2(0.95f, 0.385f));
+            Anchor(_summary.rectTransform, new Vector2(0.05f, 0.165f), new Vector2(0.95f, 0.23f));
 
             _startBtn = CreateButton(root, "게임 시작", OnStartGame);
-            Anchor((RectTransform)_startBtn.transform, new Vector2(0.28f, 0.18f), new Vector2(0.72f, 0.27f));
+            Anchor((RectTransform)_startBtn.transform, new Vector2(0.40f, 0.025f), new Vector2(0.60f, 0.145f));
             _startBtn.GetComponentInChildren<Text>().fontSize = 48;
         }
 

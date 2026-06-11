@@ -59,12 +59,11 @@ namespace Bbong.Client
 
         private Font _font;
         private GameObject _canvasGo;
-        private Transform _opponentsRow;
+        private Transform _seatsArea;        // 좌석 패널(타원 배치) 컨테이너
         private Transform _discardRow;
         private Transform _handRow;
         private Text _info;
         private Text _prompt;                // 내 차례 안내 문구(손패 위)
-        private Text _scoreboard;            // 상시 점수 전광판(누적)
         private GameObject _scorePopup;      // 판 종료 중앙 전광판(표)
         private Text _scoreTitle;
         private Transform _scoreGrid;        // 표 셀 컨테이너(GridLayout)
@@ -290,6 +289,7 @@ namespace Bbong.Client
                 if (meld.Type != MeldType.None)
                 {
                     _meldSet = Sorted(_round.CurrentPlayer.Hand.Cards); // 족보: 버림 비우고 표시
+                    ShowCallout($"{SeatName(seat)} {MeldName(meld.Type)}!");
                     EndRound(RoundSettlement.SettleByMeld(_round, seat, meld), $"P{seat} 족보 완성 [{MeldName(meld.Type)} {meld.Score}점]", seat);
                     yield break;
                 }
@@ -305,7 +305,7 @@ namespace Bbong.Client
                         // 3장 전부 같은 숫자 → 손 소진 자연뽕 종료
                         _round = _round.NaturalPong(number, null);
                         AddGroup(laid);
-                        PlayPong($"{number}자연뽕!");
+                        PlayPong($"{SeatName(seat)} {number}자연뽕!");
                         EndRound(RoundSettlement.SettleByHandClear(_round, seat), $"P{seat} 자연뽕 손 소진", seat);
                         yield break;
                     }
@@ -313,7 +313,7 @@ namespace Bbong.Client
                     var toss = _bots[seat].ChoosePongDiscard(rest);
                     _round = _round.NaturalPong(number, toss);
                     SetLog($"P{seat} 자연뽕! {number} 3장 고정");
-                    PlayPong($"{number}자연뽕!");
+                    PlayPong($"{SeatName(seat)} {number}자연뽕!");
                     AddGroup(laid);
                     AddDiscard(toss);
                     Refresh();
@@ -381,7 +381,7 @@ namespace Bbong.Client
             if (rest.Count == 0)
             {
                 _round = _round.Pong(seat, null);
-                PlayPong($"{number}뽕!");
+                PlayPong($"{SeatName(seat)} {number}뽕!");
                 AddGroup(laid);
                 EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"P{seat} 손 모두 털기(두 번 뽕) · P{discarderSeat} 박 +20", seat);
                 return;
@@ -390,7 +390,7 @@ namespace Bbong.Client
             var toss = _bots[seat].ChoosePongDiscard(rest);
             _round = _round.Pong(seat, toss);
             SetLog($"P{seat} 뽕! {number} 3장 고정");
-            PlayPong($"{number}뽕!");
+            PlayPong($"{SeatName(seat)} {number}뽕!");
             AddGroup(laid);
             AddDiscard(toss);
         }
@@ -449,6 +449,7 @@ namespace Bbong.Client
             if (meld.Type != MeldType.None)
             {
                 _meldSet = Sorted(_round.CurrentPlayer.Hand.Cards); // 족보: 버림 비우고 표시
+                ShowCallout($"{SeatName(MySeat)} {MeldName(meld.Type)}!");
                 EndRound(RoundSettlement.SettleByMeld(_round, MySeat, meld), $"P{MySeat}(나) 족보 완성 [{MeldName(meld.Type)} {meld.Score}점]", MySeat);
                 return;
             }
@@ -519,7 +520,7 @@ namespace Bbong.Client
             {
                 var laid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
                 _round = _round.Pong(MySeat, null);
-                PlayPong($"{_pongNumber}뽕!");
+                PlayPong($"{SeatName(MySeat)} {_pongNumber}뽕!");
                 AddGroup(laid);
                 EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"P{MySeat}(나) 손 모두 털기(두 번 뽕) · P{_pongDiscarderSeat} 박 +20", MySeat);
                 return;
@@ -568,7 +569,7 @@ namespace Bbong.Client
                 _state = UiState.Resolving;
                 _round = _round.NaturalPong(_naturalPongNumber, null);
                 AddGroup(laid);
-                PlayPong($"{_naturalPongNumber}자연뽕!");
+                PlayPong($"{SeatName(MySeat)} {_naturalPongNumber}자연뽕!");
                 EndRound(RoundSettlement.SettleByHandClear(_round, MySeat), $"P{MySeat}(나) 자연뽕 손 소진", MySeat);
                 return;
             }
@@ -639,7 +640,7 @@ namespace Bbong.Client
                     var pongLaid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
                     _round = _round.Pong(MySeat, card);
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
-                    PlayPong($"{_pongNumber}뽕!");
+                    PlayPong($"{SeatName(MySeat)} {_pongNumber}뽕!");
                     AddGroup(pongLaid);
                     AddDiscard(card);
                     RunBots();
@@ -655,7 +656,7 @@ namespace Bbong.Client
                     var naturalLaid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _naturalPongNumber).Take(3).ToList();
                     _round = _round.NaturalPong(_naturalPongNumber, card);
                     SetLog($"자연뽕 완료. {_naturalPongNumber} 3장 고정");
-                    PlayPong($"{_naturalPongNumber}자연뽕!");
+                    PlayPong($"{SeatName(MySeat)} {_naturalPongNumber}자연뽕!");
                     AddGroup(naturalLaid);
                     AddDiscard(card);
                     RunBots();
@@ -667,7 +668,7 @@ namespace Bbong.Client
 
         private void Refresh()
         {
-            RenderOpponents();
+            RenderSeats();
             RenderDiscard();
             RenderHand(_round.Players[MySeat].Hand);
 
@@ -676,9 +677,6 @@ namespace Bbong.Client
             _info.text =
                 $"{_roundIndex + 1}/{GameConfig.DefaultSetRounds}판   턴 P{_round.CurrentSeat}   더미 {_round.DrawPile.Count}   버림 {top}\n" +
                 $"내 손패 {me.Hand.Count}장 합 {me.Hand.Sum()}";
-
-            _scoreboard.text = "누적  " + string.Join("   ", Enumerable.Range(0, PlayerCount)
-                .Select(s => $"P{s}{(s == MySeat ? "(나)" : "")} {_game.CumulativeDebts[s]}"));
 
             _prompt.text = _state switch
             {
@@ -704,25 +702,36 @@ namespace Bbong.Client
             _lobbyBtn.gameObject.SetActive(_state == UiState.SetOver);
         }
 
-        private void RenderOpponents()
+        /// <summary>
+        /// 좌석 패널: 테이블 중심 타원 위에 360°/인원수 간격으로 배치.
+        /// 나(P0)=아래, 좌석 순서대로 반시계 방향(2인: P1 위 / 4인: P1 오른쪽·P2 위·P3 왼쪽).
+        /// 이름 옆 누적 점수, 현재 턴은 노란 배경.
+        /// </summary>
+        private void RenderSeats()
         {
-            foreach (Transform child in _opponentsRow)
+            foreach (Transform child in _seatsArea)
             {
                 Destroy(child.gameObject);
             }
 
+            var center = new Vector2(0.50f, 0.58f);
+            var radius = new Vector2(0.40f, 0.30f);
+
             for (var seat = 0; seat < PlayerCount; seat++)
             {
-                if (seat == MySeat)
-                {
-                    continue;
-                }
+                var angle = (-90f + seat * 360f / PlayerCount) * Mathf.Deg2Rad;
+                var anchor = center + new Vector2(Mathf.Cos(angle) * radius.x, Mathf.Sin(angle) * radius.y);
 
                 var p = _round.Players[seat];
                 var highlight = _round.CurrentSeat == seat;
-                var panel = CreatePanel(_opponentsRow, highlight ? new Color(0.9f, 0.8f, 0.2f, 0.55f) : new Color(0, 0, 0, 0.25f));
-                panel.gameObject.AddComponent<LayoutElement>().preferredWidth = 210;
-                var t = CreateText(panel.transform, $"P{seat}\n손 {p.Hand.Count}\n뽕 {p.PongCount}", 28, TextAnchor.MiddleCenter);
+                var panel = CreatePanel(_seatsArea, highlight ? new Color(0.9f, 0.8f, 0.2f, 0.55f) : new Color(0, 0, 0, 0.35f));
+                var rt = panel.rectTransform;
+                rt.anchorMin = rt.anchorMax = anchor;
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(250f, 100f);
+
+                var label = $"P{seat}{(seat == MySeat ? "(나)" : "")} · 누적 {_game.CumulativeDebts[seat]}\n손 {p.Hand.Count} · 뽕 {p.PongCount}";
+                var t = CreateText(panel.transform, label, 26, TextAnchor.MiddleCenter);
                 Stretch(t.rectTransform);
             }
         }
@@ -736,7 +745,9 @@ namespace Bbong.Client
 
             foreach (var card in Sorted(hand.Cards))
             {
-                CreateCardButton(card);
+                var go = CreateCardFace(_handRow, card, 130, 200);
+                var captured = card;
+                go.AddComponent<Button>().onClick.AddListener(() => OnCardClicked(captured));
             }
         }
 
@@ -750,41 +761,42 @@ namespace Bbong.Client
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = canvasGo.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
+            scaler.referenceResolution = new Vector2(1920, 1080); // 폰 가로(16:9 기준, 넓은 화면은 여유 확장)
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand; // 화면비 달라도 글씨/카드 비대 방지
             var root = canvasGo.transform;
 
             GenerateArt();
 
             Stretch(CreatePanel(root, new Color(0.12f, 0.30f, 0.20f)).rectTransform);
 
-            // 상시 점수 전광판(최상단)
-            var boardBg = CreatePanel(root, new Color(0, 0, 0, 0.35f));
-            Anchor(boardBg.rectTransform, new Vector2(0.02f, 0.955f), new Vector2(0.98f, 0.998f));
-            _scoreboard = CreateText(root, "", 26, TextAnchor.MiddleCenter);
-            Anchor(_scoreboard.rectTransform, new Vector2(0.02f, 0.955f), new Vector2(0.98f, 0.998f));
+            // 좌상단: 판/턴/더미 정보 블록
+            _info = CreateText(root, "", 28, TextAnchor.UpperLeft);
+            Anchor(_info.rectTransform, new Vector2(0.015f, 0.79f), new Vector2(0.175f, 0.92f));
 
-            _opponentsRow = CreateRow(root, new Vector2(0.02f, 0.83f), new Vector2(0.98f, 0.95f), 12).transform;
-
-            _info = CreateText(root, "", 28, TextAnchor.UpperCenter);
-            Anchor(_info.rectTransform, new Vector2(0.04f, 0.795f), new Vector2(0.96f, 0.845f));
+            // 좌석 패널: 테이블 중심 기준 타원 배치(나=아래, 반시계 방향)
+            var seatsGo = new GameObject("SeatsArea", typeof(RectTransform));
+            seatsGo.transform.SetParent(root, false);
+            _seatsArea = seatsGo.transform;
+            Stretch((RectTransform)_seatsArea);
 
             var discardLabel = CreateText(root, "버림 더미 (노란 테두리 = 마지막 버림)", 24, TextAnchor.MiddleLeft);
             discardLabel.color = new Color(1, 1, 1, 0.7f);
-            Anchor(discardLabel.rectTransform, new Vector2(0.05f, 0.755f), new Vector2(0.96f, 0.79f));
+            Anchor(discardLabel.rectTransform, new Vector2(0.21f, 0.72f), new Vector2(0.80f, 0.755f));
 
-            // 버림 더미/내려놓은 패 영역(수동 배치 — 겹침/펼침 제어)
+            // 버림 더미/내려놓은 패 영역(수동 배치 — 겹침/펼침 제어). 테이블 중앙.
             var discardGo = new GameObject("DiscardArea", typeof(RectTransform));
             discardGo.transform.SetParent(root, false);
             _discardRow = discardGo.transform;
-            Anchor((RectTransform)_discardRow, new Vector2(0.03f, 0.595f), new Vector2(0.97f, 0.755f));
+            Anchor((RectTransform)_discardRow, new Vector2(0.20f, 0.42f), new Vector2(0.80f, 0.72f));
 
-            // 내 차례 안내 문구(손패/버튼 위)
+            // 내 차례 안내 문구(버튼 위)
             _prompt = CreateText(root, "", 44, TextAnchor.MiddleCenter);
             _prompt.fontStyle = FontStyle.Bold;
             _prompt.color = new Color(1f, 0.92f, 0.4f);
-            Anchor(_prompt.rectTransform, new Vector2(0.04f, 0.44f), new Vector2(0.96f, 0.57f));
+            Anchor(_prompt.rectTransform, new Vector2(0.20f, 0.335f), new Vector2(0.80f, 0.41f));
 
-            var bar = CreateRow(root, new Vector2(0.03f, 0.30f), new Vector2(0.97f, 0.42f), 14).transform;
+            // 액션 버튼: 손패 우측(시기에 따라 표시, 동시 노출 최대 2개)
+            var bar = CreateRow(root, new Vector2(0.80f, 0.04f), new Vector2(0.995f, 0.21f), 14).transform;
             _stopBtn = CreateButton(bar, "스톱", OnStop);
             _naturalBtn = CreateButton(bar, "자연뽕", OnNaturalPong);
             _pongBtn = CreateButton(bar, "뽕!", OnPong);
@@ -792,12 +804,17 @@ namespace Bbong.Client
             _nextBtn = CreateButton(bar, "다음 판", OnNext);
             _lobbyBtn = CreateButton(bar, "로비로", OnLobby);
 
-            _handRow = CreateRow(root, new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.28f), 12).transform;
+            // 내 손패: 화면 가로 정중앙 기준 가운데 정렬(카드 수에 따라 유동).
+            // 전폭 컨테이너라 배경·클릭 차단은 제거(우측 버튼 영역과 겹치므로).
+            var handPanel = CreateRow(root, new Vector2(0f, 0.02f), new Vector2(1f, 0.225f), 12);
+            handPanel.color = new Color(0, 0, 0, 0);
+            handPanel.raycastTarget = false;
+            _handRow = handPanel.transform;
 
             // 판 종료 중앙 전광판(표). 떴다가 사라짐, 클릭 통과.
             var popupBg = CreatePanel(root, new Color(0.05f, 0.05f, 0.08f, 0.92f));
             _scorePopup = popupBg.gameObject;
-            Anchor(popupBg.rectTransform, new Vector2(0.08f, 0.40f), new Vector2(0.92f, 0.82f));
+            Anchor(popupBg.rectTransform, new Vector2(0.28f, 0.22f), new Vector2(0.72f, 0.80f));
             popupBg.raycastTarget = false;
             _scorePopupGroup = _scorePopup.AddComponent<CanvasGroup>();
             _scorePopupGroup.blocksRaycasts = false;
@@ -813,7 +830,7 @@ namespace Bbong.Client
             Anchor((RectTransform)_scoreGrid, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.84f));
             var grid = gridGo.AddComponent<GridLayoutGroup>();
             var cols = PlayerCount + 1; // 라벨 칸 + 플레이어
-            var gridWidth = 1080f * (0.92f - 0.08f) * (0.96f - 0.04f); // 팝업 폭 × 그리드 폭 비율
+            var gridWidth = 1920f * (0.72f - 0.28f) * (0.96f - 0.04f); // 팝업 폭 × 그리드 폭 비율
             grid.spacing = new Vector2(6, 6);
             grid.cellSize = new Vector2(Mathf.Min(150f, (gridWidth - grid.spacing.x * (cols - 1)) / cols), 48);
             grid.childAlignment = TextAnchor.UpperCenter;
@@ -822,13 +839,13 @@ namespace Bbong.Client
 
             _scorePopup.SetActive(false);
 
-            // 뽕/자연뽕 콜아웃("8뽕!") — 더미 위 중앙에 크게 떴다 사라짐
-            _callout = CreateText(root, "", 120, TextAnchor.MiddleCenter);
+            // 뽕/자연뽕/족보 콜아웃("P1 8뽕!") — 더미 위 중앙에 크게 떴다 사라짐
+            _callout = CreateText(root, "", 100, TextAnchor.MiddleCenter);
             _callout.fontStyle = FontStyle.Bold;
             _callout.color = new Color(1f, 0.92f, 0.35f);
             _callout.raycastTarget = false;
             AddOutline(_callout);
-            Anchor(_callout.rectTransform, new Vector2(0.05f, 0.58f), new Vector2(0.95f, 0.76f));
+            Anchor(_callout.rectTransform, new Vector2(0.25f, 0.43f), new Vector2(0.75f, 0.62f));
             _calloutGroup = _callout.gameObject.AddComponent<CanvasGroup>();
             _calloutGroup.alpha = 0f;
             _calloutGroup.blocksRaycasts = false;
@@ -904,11 +921,11 @@ namespace Bbong.Client
 
         /// <summary>단일 버림: 중앙 더미에 무작위 위치·기울기로 던져 놓기(실제 카드판 느낌).</summary>
         private void AddDiscard(Card card) => _timeline.Add((new List<Card> { card }, false,
-            new Vector2(Tri(110f), Tri(34f)), Tri(28f)));
+            new Vector2(Tri(150f), Tri(50f)), Tri(28f)));
 
         /// <summary>뽕/자연뽕 고정 패: 더미 위로 같이 던짐(한 지점에 살짝 펼쳐서).</summary>
         private void AddGroup(IEnumerable<Card> cards) => _timeline.Add((Sorted(cards), true,
-            new Vector2(Tri(90f), Tri(20f)), Tri(16f)));
+            new Vector2(Tri(120f), Tri(45f)), Tri(16f)));
 
         private void Flash(Color color)
         {
@@ -1083,13 +1100,6 @@ namespace Bbong.Client
             return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
         }
 
-        private void CreateCardButton(Card card)
-        {
-            var go = CreateCardFace(_handRow, card, 130, 200);
-            var captured = card;
-            go.AddComponent<Button>().onClick.AddListener(() => OnCardClicked(captured));
-        }
-
         private void RenderDiscard()
         {
             foreach (Transform child in _discardRow)
@@ -1097,14 +1107,13 @@ namespace Bbong.Client
                 Destroy(child.gameObject);
             }
 
-            // 족보 완성: 버림 타임라인 비우고 족보 6장만 펼쳐 표시
+            // 족보 완성: 버림 타임라인 비우고 족보 6장만 영역 정중앙에 펼쳐 표시
             if (_meldSet != null)
             {
-                var mx = 12f;
-                foreach (var card in _meldSet)
+                for (var i = 0; i < _meldSet.Count; i++)
                 {
-                    PlaceCard(card, 128, 192, new Vector2(0f, 0.5f), new Vector2(mx + 64f, 0f), 0f);
-                    mx += 136f;
+                    var offset = (i - (_meldSet.Count - 1) / 2f) * 136f;
+                    PlaceCard(_meldSet[i], 128, 192, new Vector2(0.5f, 0.5f), new Vector2(offset, 0f), 0f);
                 }
 
                 return;
@@ -1112,7 +1121,7 @@ namespace Bbong.Client
 
             // 전부 중앙 무작위 더미: 발생 순서대로 쌓아 마지막 던진 카드가 맨 위.
             // 뽕/자연뽕 3장도 같은 지점에 살짝 펼쳐 던짐(j별 고정 오프셋 → Refresh마다 동일).
-            const float w = 78f, h = 117f;
+            const float w = 120f, h = 180f;
             var heapAnchor = new Vector2(0.5f, 0.45f);
             GameObject last = null;
             foreach (var (cards, group, pos, rot) in _timeline)
@@ -1123,7 +1132,7 @@ namespace Bbong.Client
                     {
                         var fan = j - (cards.Count - 1) / 2f;
                         last = PlaceCard(cards[j], w, h, heapAnchor,
-                            pos + new Vector2(fan * 26f, j * 3f), rot + fan * 9f);
+                            pos + new Vector2(fan * 38f, j * 3f), rot + fan * 9f);
                     }
                 }
                 else
@@ -1249,6 +1258,8 @@ namespace Bbong.Client
         private int TopDiscardNumber() => _round.DiscardPile[_round.DiscardPile.Count - 1].Number;
 
         private string CardLabel(Card c) => $"{c.Number}{ColorLetter[(int)c.Color]}";
+
+        private string SeatName(int seat) => seat == MySeat ? $"P{seat}(나)" : $"P{seat}";
 
         private void SetLog(string message) => Debug.Log($"[BBONG] {message.Replace("\n", " | ")}"); // 콘솔 전용
 
