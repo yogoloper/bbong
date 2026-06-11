@@ -66,6 +66,9 @@ namespace Bbong.Client
         private Image _flash;
         private int _discardShownCount;
 
+        private Sprite _cardBase;            // 둥근 흰 카드 배경(9-slice)
+        private readonly Sprite[] _shapes = new Sprite[4]; // 색별 도형(색약 대응)
+
         private void Start()
         {
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -469,6 +472,8 @@ namespace Bbong.Client
             scaler.referenceResolution = new Vector2(1080, 1920);
             var root = canvasGo.transform;
 
+            GenerateArt();
+
             Stretch(CreatePanel(root, new Color(0.12f, 0.30f, 0.20f)).rectTransform);
 
             _opponentsRow = CreateRow(root, new Vector2(0.02f, 0.85f), new Vector2(0.98f, 0.99f), 12).transform;
@@ -591,27 +596,135 @@ namespace Bbong.Client
             return clip;
         }
 
-        /// <summary>카드 한 장의 시각 표현(색 채운 패널 + 숫자 + 색문자). 손패·버림 더미 공용.</summary>
+        /// <summary>
+        /// 카드 한 장의 시각 표현(둥근 흰 카드 + 색별 도형 워터마크 + 큰 숫자 + 모서리 핍).
+        /// 손패·버림 더미 공용. 색약 대응으로 색마다 도형이 다름.
+        /// </summary>
         private GameObject CreateCardFace(Transform parent, Card card, float width, float height)
         {
-            var go = new GameObject($"Card_{card.Number}{ColorLetter[(int)card.Color]}",
+            var colorIndex = (int)card.Color;
+            var col = Palette[colorIndex];
+
+            var go = new GameObject($"Card_{card.Number}{ColorLetter[colorIndex]}",
                 typeof(RectTransform), typeof(Image), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
-            go.GetComponent<Image>().color = Palette[(int)card.Color];
+
+            var bg = go.GetComponent<Image>();
+            bg.sprite = _cardBase;
+            bg.type = Image.Type.Sliced;
+            bg.color = Color.white;
 
             var le = go.GetComponent<LayoutElement>();
             le.preferredWidth = width;
             le.preferredHeight = height;
 
-            var number = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.35f), TextAnchor.MiddleCenter);
-            number.color = Color.white;
+            // 중앙 워터마크 도형(옅게)
+            var watermark = AddImage(go.transform, _shapes[colorIndex], new Color(col.r, col.g, col.b, 0.15f));
+            Anchor(watermark.rectTransform, new Vector2(0.22f, 0.20f), new Vector2(0.78f, 0.80f));
+
+            // 중앙 숫자(굵게, 카드 색)
+            var number = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.42f), TextAnchor.MiddleCenter);
+            number.color = col;
+            number.fontStyle = FontStyle.Bold;
             Stretch(number.rectTransform);
 
-            var letter = CreateText(go.transform, ColorLetter[(int)card.Color], Mathf.RoundToInt(height * 0.14f), TextAnchor.UpperLeft);
-            letter.color = new Color(1, 1, 1, 0.85f);
-            Anchor(letter.rectTransform, new Vector2(0.08f, 0.74f), new Vector2(0.62f, 0.98f));
+            // 좌상단 핍: 작은 숫자 + 도형
+            var pipNum = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.14f), TextAnchor.UpperLeft);
+            pipNum.color = col;
+            pipNum.fontStyle = FontStyle.Bold;
+            Anchor(pipNum.rectTransform, new Vector2(0.10f, 0.78f), new Vector2(0.55f, 0.97f));
+
+            var pipShape = AddImage(go.transform, _shapes[colorIndex], col);
+            Anchor(pipShape.rectTransform, new Vector2(0.12f, 0.62f), new Vector2(0.32f, 0.77f));
 
             return go;
+        }
+
+        private Image AddImage(Transform parent, Sprite sprite, Color color)
+        {
+            var go = new GameObject("Img", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = sprite;
+            img.color = color;
+            img.raycastTarget = false;
+            img.preserveAspect = true;
+            return img;
+        }
+
+        // ── 절차적 카드 아트 ──
+
+        private void GenerateArt()
+        {
+            _cardBase = RoundedSprite(120, 168, 22, Color.white);
+            for (var i = 0; i < 4; i++)
+            {
+                _shapes[i] = ShapeSprite(i, 64);
+            }
+        }
+
+        /// <summary>둥근 모서리 사각형 스프라이트(9-slice border로 어떤 크기에도 모서리 유지).</summary>
+        private static Sprite RoundedSprite(int w, int h, int radius, Color fill)
+        {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color[w * h];
+            for (var y = 0; y < h; y++)
+            {
+                for (var x = 0; x < w; x++)
+                {
+                    var cx = Mathf.Clamp(x, radius, w - 1 - radius);
+                    var cy = Mathf.Clamp(y, radius, h - 1 - radius);
+                    var dist = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                    var a = Mathf.Clamp01(radius - dist + 0.5f); // 모서리 안티앨리어싱
+                    pixels[y * w + x] = new Color(fill.r, fill.g, fill.b, fill.a * a);
+                }
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply();
+            var border = new Vector4(radius, radius, radius, radius);
+            return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
+        }
+
+        /// <summary>색 인덱스별 도형(0 원, 1 사각, 2 삼각, 3 마름모). 흰색으로 그려 Image.color로 틴트.</summary>
+        private static Sprite ShapeSprite(int shape, int size)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color[size * size];
+            var c = (size - 1) / 2f;
+            var r = size * 0.42f;
+            for (var y = 0; y < size; y++)
+            {
+                for (var x = 0; x < size; x++)
+                {
+                    var dx = x - c;
+                    var dy = y - c;
+                    bool inside;
+                    switch (shape)
+                    {
+                        case 1: // 사각형
+                            inside = Mathf.Abs(dx) <= r * 0.85f && Mathf.Abs(dy) <= r * 0.85f;
+                            break;
+                        case 2: // 삼각형(위쪽 꼭짓점)
+                            var ny = (c - y) / (r * 1.4f);          // 위로 갈수록 +
+                            var halfWidth = (1f - ny) * r;          // 아래로 넓어짐
+                            inside = ny <= 1f && ny >= -0.4f && Mathf.Abs(dx) <= halfWidth;
+                            break;
+                        case 3: // 마름모
+                            inside = Mathf.Abs(dx) + Mathf.Abs(dy) <= r;
+                            break;
+                        default: // 원
+                            inside = dx * dx + dy * dy <= r * r;
+                            break;
+                    }
+
+                    pixels[y * size + x] = new Color(1, 1, 1, inside ? 1f : 0f);
+                }
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
         private void CreateCardButton(Card card)
