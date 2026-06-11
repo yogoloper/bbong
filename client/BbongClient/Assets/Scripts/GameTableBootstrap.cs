@@ -49,6 +49,7 @@ namespace Bbong.Client
         private GameState _game;
         private RoundState _round;
         private int _roundIndex;
+        private int _dealerSeat; // 다음 판 선(직전 판 끝낸 사람). 첫 판 = 0
         private UiState _state;
         private int _pongNumber;
         private int _pongDiscarderSeat;
@@ -98,7 +99,7 @@ namespace Bbong.Client
         private void StartRound()
         {
             _round = RoundState.Deal(Deck.CreateStandard(), PlayerCount, new SeededRandom(_seed++),
-                dealerSeat: _roundIndex % PlayerCount);
+                dealerSeat: _dealerSeat);
             _state = UiState.NeedDiscard;
             _timeline.Clear();
             _timelineShown = 0;
@@ -112,12 +113,13 @@ namespace Bbong.Client
             RunBots();
         }
 
-        private void EndRound(int[] scores, string reason)
+        private void EndRound(int[] scores, string reason, int enderSeat)
         {
             PlayStop();
             _roundHistory.Add(scores);
             _game = _game.ApplyRoundScores(scores);
             _roundIndex++;
+            _dealerSeat = enderSeat; // 판 끝낸 사람이 다음 판 선
 
             var detail = string.Join("  ", Enumerable.Range(0, PlayerCount).Select(s => $"P{s} {scores[s]:+0;-0;0}"));
             var cumulative = string.Join("  ", Enumerable.Range(0, PlayerCount).Select(s => $"P{s}={_game.CumulativeDebts[s]}"));
@@ -263,7 +265,7 @@ namespace Bbong.Client
 
                 if (StopResolver.CanStop(_round, seat) && _bots[seat].ShouldStop(_round, seat))
                 {
-                    EndRound(RoundSettlement.SettleByStop(_round, seat), $"P{seat} 스톱");
+                    EndRound(RoundSettlement.SettleByStop(_round, seat), $"P{seat} 스톱", StopEnderSeat(seat));
                     yield break;
                 }
 
@@ -275,7 +277,7 @@ namespace Bbong.Client
                 if (meld.Type != MeldType.None)
                 {
                     _meldSet = Sorted(_round.CurrentPlayer.Hand.Cards); // 족보: 버림 비우고 표시
-                    EndRound(RoundSettlement.SettleByMeld(_round, seat, meld), $"P{seat} 족보 {meld.Type}({meld.Score})");
+                    EndRound(RoundSettlement.SettleByMeld(_round, seat, meld), $"P{seat} 족보 {meld.Type}({meld.Score})", seat);
                     yield break;
                 }
 
@@ -341,7 +343,7 @@ namespace Bbong.Client
                 _round = _round.Pong(seat, null);
                 PlayPong();
                 AddGroup(laid);
-                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"P{seat} 두 번 뽕 (P{discarderSeat} 박)");
+                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"P{seat} 두 번 뽕 (P{discarderSeat} 박)", seat);
                 return;
             }
 
@@ -401,7 +403,7 @@ namespace Bbong.Client
             if (meld.Type != MeldType.None)
             {
                 _meldSet = Sorted(_round.CurrentPlayer.Hand.Cards); // 족보: 버림 비우고 표시
-                EndRound(RoundSettlement.SettleByMeld(_round, MySeat, meld), $"내 족보 {meld.Type}({meld.Score})");
+                EndRound(RoundSettlement.SettleByMeld(_round, MySeat, meld), $"내 족보 {meld.Type}({meld.Score})", MySeat);
                 return;
             }
 
@@ -410,11 +412,33 @@ namespace Bbong.Client
             Refresh();
         }
 
+        /// <summary>스톱 종료 시 다음 판 선: 바가지면 이긴 자(최저 손합 뽕한 게이머), 아니면 스톱 선언자.</summary>
+        private int StopEnderSeat(int stopSeat)
+        {
+            if (!StopResolver.IsBagaji(_round, stopSeat))
+            {
+                return stopSeat;
+            }
+
+            var winner = stopSeat;
+            var min = _round.Players[stopSeat].Hand.Sum();
+            for (var s = 0; s < PlayerCount; s++)
+            {
+                if (_round.Players[s].HasPonged && _round.Players[s].Hand.Sum() < min)
+                {
+                    min = _round.Players[s].Hand.Sum();
+                    winner = s;
+                }
+            }
+
+            return winner;
+        }
+
         private void OnStop()
         {
             if (_state == UiState.StopDecision && StopResolver.CanStop(_round, MySeat))
             {
-                EndRound(RoundSettlement.SettleByStop(_round, MySeat), "내 스톱");
+                EndRound(RoundSettlement.SettleByStop(_round, MySeat), "내 스톱", StopEnderSeat(MySeat));
             }
         }
 
@@ -433,7 +457,7 @@ namespace Bbong.Client
                 _round = _round.Pong(MySeat, null);
                 PlayPong();
                 AddGroup(laid);
-                EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"내 두 번 뽕 (P{_pongDiscarderSeat} 박)");
+                EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"내 두 번 뽕 (P{_pongDiscarderSeat} 박)", MySeat);
                 return;
             }
 
@@ -487,6 +511,7 @@ namespace Bbong.Client
             {
                 _game = GameState.Start(PlayerCount);
                 _roundIndex = 0;
+                _dealerSeat = 0;
                 _roundHistory.Clear();
             }
 
