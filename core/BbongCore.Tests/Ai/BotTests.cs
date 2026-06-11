@@ -86,4 +86,39 @@ public class BotTests
         // 선언자 합 5 < 상대 9 → 바가지 아님 → 스톱
         Assert.That(bot.ShouldStop(StopRound(declarerSum: 5, otherSum: 9), seat: 0), Is.True);
     }
+
+    [Test]
+    public void Hard_keeps_run_pieces_and_discards_isolated_card()
+    {
+        var bot = new Bot(BotDifficulty.Hard);
+
+        // 9·10·11은 연속(스트레이트 노림) → 보존. 고립된 {2,5} 중 최고 5 버림.
+        // (Normal이라면 최대 단일 11을 버려 run을 깨뜨림)
+        var discard = bot.ChooseDiscard(HandOf(C(10), C(11), C(2), C(5), C(9)));
+
+        Assert.That(discard.Number, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void Normal_breaks_run_by_discarding_highest_single()
+    {
+        var bot = new Bot(BotDifficulty.Normal);
+
+        // Normal은 run을 모르고 최대 단일 11 버림 → Hard와 대비
+        var discard = bot.ChooseDiscard(HandOf(C(10), C(11), C(2), C(5), C(9)));
+
+        Assert.That(discard.Number, Is.EqualTo(11));
+    }
+
+    [Test]
+    public void Hard_still_keeps_pairs()
+    {
+        var bot = new Bot(BotDifficulty.Hard);
+
+        // 11 쌍 보존, 고립 단일 {2,5,9} 중 9 버림
+        var discard = bot.ChooseDiscard(HandOf(
+            C(11, CardColor.Red), C(11, CardColor.Blue), C(2), C(5), C(9)));
+
+        Assert.That(discard.Number, Is.EqualTo(9));
+    }
 }

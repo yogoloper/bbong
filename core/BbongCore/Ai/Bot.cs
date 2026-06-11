@@ -12,19 +12,41 @@ public sealed class Bot
 
     public BotDifficulty Difficulty { get; }
 
-    /// <summary>버릴 카드 선택. Easy=최대 수, Normal·Hard=쌍 보존 후 최대 단일.</summary>
-    public Card ChooseDiscard(Hand hand)
+    /// <summary>
+    /// 버릴 카드 선택.
+    /// Easy=최대 수, Normal=쌍 보존 후 최대 단일, Hard=쓸모도 최소 카드(쌍·연속 보존, 저점 지향).
+    /// </summary>
+    public Card ChooseDiscard(Hand hand) => Difficulty switch
     {
-        if (Difficulty == BotDifficulty.Easy)
-        {
-            return Highest(hand.Cards);
-        }
+        BotDifficulty.Normal => HighestSingle(hand),
+        BotDifficulty.Hard => LeastUseful(hand),
+        _ => Highest(hand.Cards)
+    };
 
+    private static Card HighestSingle(Hand hand)
+    {
         var singles = hand.Cards
             .Where(c => hand.Cards.Count(x => x.Number == c.Number) == 1)
             .ToList();
 
         return Highest(singles.Count > 0 ? singles : hand.Cards);
+    }
+
+    /// <summary>
+    /// 쓸모도가 가장 낮은 카드를 버립니다(동점이면 큰 수). 쌍·연속(run) 조각과 낮은 수를 보존합니다.
+    /// </summary>
+    private static Card LeastUseful(Hand hand)
+    {
+        var cards = hand.Cards;
+
+        int Usefulness(Card c)
+        {
+            var sameNumber = cards.Count(x => x.Number == c.Number) >= 2 ? 100 : 0;        // 쌍/총통 노림
+            var adjacent = cards.Any(x => x.Number == c.Number - 1 || x.Number == c.Number + 1) ? 20 : 0; // 스트레이트 노림
+            return sameNumber + adjacent + (13 - c.Number);                                  // 낮은 수 살짝 우대
+        }
+
+        return cards.OrderBy(Usefulness).ThenByDescending(c => c.Number).First();
     }
 
     /// <summary>뽕 가능 시 뽕할지. Easy는 안 함.</summary>
