@@ -67,11 +67,11 @@ public class ScoringTests
     }
 
     [Test]
-    public void Stop_bagaji_adds_30_to_base()
+    public void Stop_bagaji_is_flat_30_ignoring_hand_sum()
     {
-        // 스톱 바가지: 스톱 선언자 2장 합 + 30 (rules.md §6)
+        // 스톱 바가지: 고정 30점 (손패 합 무관, rules.md §6)
         var outcome = new PlayerOutcome(HandOf(4, 4), StopBagaji: true);
 
-        Assert.That(Scoring.Score(outcome), Is.EqualTo(8 + 30));
+        Assert.That(Scoring.Score(outcome), Is.EqualTo(30));
     }
 }
