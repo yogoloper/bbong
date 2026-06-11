@@ -85,6 +85,7 @@ namespace Bbong.Client
 
         private void Start()
         {
+            _seed = Random.Range(1, 1_000_000); // Play마다 다른 패(고정 시드 버그 수정)
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             EnsureEventSystem();
             BuildUi();
