@@ -73,6 +73,20 @@ public class HandEvaluatorTests
     }
 
     [Test]
+    public void Ttoittoi_with_two_triples()
+    {
+        // 7·7·7 / 9·9·9 (3+3)
+        var hand = HandOf(
+            new Card(7, CardColor.Red), new Card(7, CardColor.Blue), new Card(7, CardColor.Green),
+            new Card(9, CardColor.Red), new Card(9, CardColor.Blue), new Card(9, CardColor.Green));
+
+        var result = HandEvaluator.Evaluate(hand);
+
+        Assert.That(result.Type, Is.EqualTo(MeldType.Ttoittoi));
+        Assert.That(result.Score, Is.EqualTo(0));
+    }
+
+    [Test]
     public void Not_ttoittoi_with_two_pairs_and_two_singles()
     {
         // 3·3 / 7·7 / 9 / 11  (쌍 2개뿐)
