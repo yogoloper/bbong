@@ -207,6 +207,12 @@ namespace Bbong.Client
             }
 
             _scorePopup.SetActive(false);
+
+            // 전광판이 닫히면 다음 판 자동 시작(게임 종료 시엔 '새 게임' 버튼 유지)
+            if (_state == UiState.RoundOver)
+            {
+                OnNext();
+            }
         }
 
         // ── 봇 자동 진행 (코루틴, 천천히) ──
