@@ -37,6 +37,9 @@ namespace Bbong.Client
         };
 
         private static readonly string[] ColorLetter = { "R", "B", "G", "Y" };
+
+        // 정렬 색 순위: 빨(0)·파(1)·노(2)·초(3). enum 순서(Red0,Blue1,Green2,Yellow3) → 순위.
+        private static readonly int[] ColorRank = { 0, 1, 3, 2 };
         private readonly Bot[] _bots =
         {
             new(BotDifficulty.Normal), new(BotDifficulty.Normal),
@@ -520,11 +523,11 @@ namespace Bbong.Client
 
             _handRow = CreateRow(root, new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.28f), 12).transform;
 
-            // 내려놓은 패 노출 영역(중앙, 자유 배치 — 겹침/회전). 클릭 막지 않음.
+            // 내려놓은 패 노출 영역(버림 더미 위, 자유 배치 — 겹침/회전). 클릭 막지 않음.
             var revealGo = new GameObject("MeldReveal", typeof(RectTransform));
             revealGo.transform.SetParent(root, false);
             _meldReveal = revealGo.transform;
-            Anchor((RectTransform)_meldReveal, new Vector2(0.1f, 0.44f), new Vector2(0.9f, 0.6f));
+            Anchor((RectTransform)_meldReveal, new Vector2(0.03f, 0.595f), new Vector2(0.97f, 0.755f));
 
             // 전체 화면 플래시(연출용, 클릭 막지 않음)
             _flash = CreatePanel(root, new Color(1, 1, 1, 0));
@@ -549,14 +552,16 @@ namespace Bbong.Client
 
         private void PlayPong() => _audio.PlayOneShot(_sfxPong, 0.8f); // 플래시는 ShowLaidSet이 담당
 
-        /// <summary>내려놓은 패를 비스듬히 겹쳐 노출. persist=false면 잠시 후 자동 정리.</summary>
+        /// <summary>내려놓은 패를 버림 더미 영역에 정렬해 노출. persist=false면 잠시 후 자동 정리.</summary>
         private void ShowLaidSet(IReadOnlyList<Card> cards, bool persist)
         {
             ClearMeldReveal();
-            var n = cards.Count;
+            // 숫자 오름차순 → 같은 숫자는 빨·파·노·초 순
+            var sorted = cards.OrderBy(c => c.Number).ThenBy(c => ColorRank[(int)c.Color]).ToList();
+            var n = sorted.Count;
             for (var i = 0; i < n; i++)
             {
-                var face = CreateCardFace(_meldReveal, cards[i], 150, 225);
+                var face = CreateCardFace(_meldReveal, sorted[i], 150, 225);
                 var rt = face.GetComponent<RectTransform>();
                 rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
                 rt.pivot = new Vector2(0.5f, 0.5f);
