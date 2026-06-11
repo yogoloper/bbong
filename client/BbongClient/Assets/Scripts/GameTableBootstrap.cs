@@ -559,6 +559,11 @@ namespace Bbong.Client
             // 숫자 오름차순 → 같은 숫자는 빨·파·노·초 순
             var sorted = cards.OrderBy(c => c.Number).ThenBy(c => ColorRank[(int)c.Color]).ToList();
             var n = sorted.Count;
+
+            // 뽕/자연뽕(persist=false)=겹쳐서, 족보(persist=true)=버림 패처럼 안 겹치게 나란히
+            var spacing = persist ? 158f : 78f;
+            var rotation = persist ? 0f : -7f;
+
             for (var i = 0; i < n; i++)
             {
                 var face = CreateCardFace(_meldReveal, sorted[i], 150, 225);
@@ -566,8 +571,8 @@ namespace Bbong.Client
                 rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
                 rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.sizeDelta = new Vector2(150, 225);
-                rt.anchoredPosition = new Vector2((i - (n - 1) / 2f) * 78f, 0f);
-                rt.localRotation = Quaternion.Euler(0, 0, (i - (n - 1) / 2f) * -7f); // 비스듬히
+                rt.anchoredPosition = new Vector2((i - (n - 1) / 2f) * spacing, 0f);
+                rt.localRotation = Quaternion.Euler(0, 0, (i - (n - 1) / 2f) * rotation);
             }
 
             Flash(new Color(1f, 0.95f, 0.4f, 0.45f));
