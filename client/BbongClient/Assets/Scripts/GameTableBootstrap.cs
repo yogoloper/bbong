@@ -24,7 +24,7 @@ namespace Bbong.Client
         private const int PlayerCount = 4;
         private const int MySeat = 0;
         private const int Stake = 1000;
-        private const float BotDelay = 1.0f;
+        private const float BotDelay = 0.5f;
         private const int PongWindowSeconds = 4;
 
         // 색약 안전 팔레트(Okabe-Ito 기반). 색은 보조, 도형이 주 구분 수단.
@@ -602,7 +602,9 @@ namespace Bbong.Client
 
             _prompt.text = _state switch
             {
-                UiState.NeedDiscard => _round.CanNaturalPong() ? "버릴 카드를 선택하세요 (또는 자연뽕)" : "버릴 카드를 선택하세요",
+                // 내 차례(드로우 완료)일 때만. 봇 턴 중 stale NeedDiscard 방지.
+                UiState.NeedDiscard when _round.CurrentSeat == MySeat =>
+                    _round.CanNaturalPong() ? "버릴 카드를 선택하세요 (또는 자연뽕)" : "버릴 카드를 선택하세요",
                 UiState.PongDiscardSelect => "뽕! 버릴 카드를 선택하세요",
                 UiState.NaturalPongSelect => "자연뽕! 버릴 카드를 선택하세요",
                 UiState.StopDecision => "스톱 또는 계속을 선택하세요",
