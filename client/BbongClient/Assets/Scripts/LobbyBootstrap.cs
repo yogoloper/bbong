@@ -16,27 +16,44 @@ namespace Bbong.Client
     {
         private static readonly Color SelectedColor = new(1f, 0.85f, 0.3f);
         private static readonly Color UnselectedColor = new(0.95f, 0.95f, 0.95f);
+        private static readonly Color DisabledColor = new(0.45f, 0.45f, 0.45f);
 
         private int _playerCount = 4;
         private int _stake = 1000;
 
         private Font _font;
         private GameObject _canvasGo;
+        private Text _wallet;
         private Text _summary;
-        private readonly List<(int value, Image bg)> _playerChoices = new();
-        private readonly List<(int value, Image bg)> _stakeChoices = new();
+        private Button _startBtn;
+        private readonly List<(int value, Button button)> _playerChoices = new();
+        private readonly List<(int value, Button button)> _stakeChoices = new();
 
         private void Start()
         {
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             EnsureEventSystem();
             BuildUi();
+
+            // 잔액으로 못 거는 판돈이 선택돼 있으면 감당 가능한 최대 판돈으로 조정
+            if (!PlayerWallet.CanAfford(_stake))
+            {
+                foreach (var stake in GameConfig.StakeOptions)
+                {
+                    if (PlayerWallet.CanAfford(stake))
+                    {
+                        _stake = stake;
+                    }
+                }
+            }
+
             RefreshSelection();
         }
 
         private void OnStartGame()
         {
-            if (!GameConfig.IsValidPlayerCount(_playerCount) || !GameConfig.IsValidStake(_stake))
+            if (!GameConfig.IsValidPlayerCount(_playerCount) || !GameConfig.IsValidStake(_stake)
+                || !PlayerWallet.CanAfford(_stake))
             {
                 return;
             }
@@ -70,6 +87,11 @@ namespace Bbong.Client
             subtitle.color = new Color(1f, 1f, 1f, 0.75f);
             Anchor(subtitle.rectTransform, new Vector2(0.05f, 0.755f), new Vector2(0.95f, 0.795f));
 
+            _wallet = CreateText(root, "", 36, TextAnchor.MiddleCenter);
+            _wallet.fontStyle = FontStyle.Bold;
+            _wallet.color = new Color(0.5f, 0.95f, 0.6f);
+            Anchor(_wallet.rectTransform, new Vector2(0.05f, 0.715f), new Vector2(0.95f, 0.755f));
+
             var playerLabel = CreateText(root, "인원", 40, TextAnchor.MiddleCenter);
             Anchor(playerLabel.rectTransform, new Vector2(0.05f, 0.675f), new Vector2(0.95f, 0.715f));
 
@@ -92,36 +114,46 @@ namespace Bbong.Client
             _summary.color = new Color(1f, 0.92f, 0.4f);
             Anchor(_summary.rectTransform, new Vector2(0.05f, 0.325f), new Vector2(0.95f, 0.385f));
 
-            var startBtn = CreateButton(root, "게임 시작", OnStartGame);
-            Anchor((RectTransform)startBtn.transform, new Vector2(0.28f, 0.18f), new Vector2(0.72f, 0.27f));
-            startBtn.GetComponentInChildren<Text>().fontSize = 48;
+            _startBtn = CreateButton(root, "게임 시작", OnStartGame);
+            Anchor((RectTransform)_startBtn.transform, new Vector2(0.28f, 0.18f), new Vector2(0.72f, 0.27f));
+            _startBtn.GetComponentInChildren<Text>().fontSize = 48;
         }
 
-        /// <summary>선택지 버튼 1개 생성 + 선택 강조용 배경 등록.</summary>
+        /// <summary>선택지 버튼 1개 생성 + 선택 강조/비활성 표시용 등록.</summary>
         private void CreateChoice(Transform parent, string label, int value,
-            List<(int value, Image bg)> registry, System.Action<int> onPick)
+            List<(int value, Button button)> registry, System.Action<int> onPick)
         {
             var button = CreateButton(parent, label, () =>
             {
                 onPick(value);
                 RefreshSelection();
             });
-            registry.Add((value, button.GetComponent<Image>()));
+            registry.Add((value, button));
         }
 
         private void RefreshSelection()
         {
-            foreach (var (value, bg) in _playerChoices)
+            _wallet.text = $"보유 재화 {PlayerWallet.Balance:N0}";
+
+            foreach (var (value, button) in _playerChoices)
             {
-                bg.color = value == _playerCount ? SelectedColor : UnselectedColor;
+                button.GetComponent<Image>().color = value == _playerCount ? SelectedColor : UnselectedColor;
             }
 
-            foreach (var (value, bg) in _stakeChoices)
+            // 잔액으로 못 거는 판돈은 비활성(회색)
+            foreach (var (value, button) in _stakeChoices)
             {
-                bg.color = value == _stake ? SelectedColor : UnselectedColor;
+                var affordable = PlayerWallet.CanAfford(value);
+                button.interactable = affordable;
+                button.GetComponent<Image>().color = !affordable ? DisabledColor
+                    : value == _stake ? SelectedColor : UnselectedColor;
             }
 
-            _summary.text = $"나 + 봇 {_playerCount - 1}  ·  판돈 {_stake:N0}";
+            var canStart = PlayerWallet.CanAfford(_stake);
+            _startBtn.interactable = canStart;
+            _summary.text = canStart
+                ? $"나 + 봇 {_playerCount - 1}  ·  판돈 {_stake:N0}"
+                : "재화가 부족합니다 (Play를 다시 시작하면 충전)";
         }
 
         // ── UI 헬퍼 (GameTableBootstrap과 동일 패턴) ──
