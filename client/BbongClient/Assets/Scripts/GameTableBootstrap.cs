@@ -14,18 +14,21 @@ using UnityEngine.UI;
 namespace Bbong.Client
 {
     /// <summary>
-    /// 코드 생성 카드 테이블 + 게임 흐름(Phase 3). 4인(사람 P0 + 봇 3).
+    /// 코드 생성 카드 테이블 + 게임 흐름(Phase 3). 2~6인(사람 P0 + 봇).
     /// 드로우/버림 · 뽕/자연뽕 · 스톱 · 게임(5판) 점수/판돈. 봇 턴은 코루틴으로 천천히 진행.
+    /// 인원·판돈은 로비(LobbyBootstrap)에서 Start 전에 설정. 단독 사용 시 기본 4인·판돈 1000.
     /// </summary>
     public sealed class GameTableBootstrap : MonoBehaviour
     {
         private enum UiState { StopDecision, NeedDiscard, PongWindow, PongDiscardSelect, NaturalPongSelect, Resolving, RoundOver, SetOver }
 
-        private const int PlayerCount = 4;
         private const int MySeat = 0;
-        private const int Stake = 1000;
         private const float BotDelay = 0.5f;
         private const int PongWindowSeconds = 4;
+
+        public int PlayerCount { get; set; } = 4;
+
+        public int Stake { get; set; } = 1000;
 
         // 색약 안전 팔레트(Okabe-Ito 기반). 색은 보조, 도형이 주 구분 수단.
         private static readonly Color[] Palette =
@@ -40,11 +43,7 @@ namespace Bbong.Client
 
         // 정렬 색 순위: 빨(0)·파(1)·노(2)·초(3). enum 순서(Red0,Blue1,Green2,Yellow3) → 순위.
         private static readonly int[] ColorRank = { 0, 1, 3, 2 };
-        private readonly Bot[] _bots =
-        {
-            new(BotDifficulty.Normal), new(BotDifficulty.Normal),
-            new(BotDifficulty.Normal), new(BotDifficulty.Normal)
-        };
+        private Bot[] _bots;
 
         private GameState _game;
         private RoundState _round;
@@ -59,6 +58,7 @@ namespace Bbong.Client
         private Coroutine _botLoop;
 
         private Font _font;
+        private GameObject _canvasGo;
         private Transform _opponentsRow;
         private Transform _discardRow;
         private Transform _handRow;
@@ -71,7 +71,7 @@ namespace Bbong.Client
         private CanvasGroup _scorePopupGroup;
         private Coroutine _scoreFade;
         private readonly List<int[]> _roundHistory = new(); // 게임 내 판별 점수
-        private Button _stopBtn, _pongBtn, _passBtn, _naturalBtn, _nextBtn;
+        private Button _stopBtn, _pongBtn, _passBtn, _naturalBtn, _nextBtn, _lobbyBtn;
 
         private AudioSource _audio;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop;
@@ -87,6 +87,7 @@ namespace Bbong.Client
         {
             _seed = Random.Range(1, 1_000_000); // Play마다 다른 패(고정 시드 버그 수정)
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            _bots = Enumerable.Range(0, PlayerCount).Select(_ => new Bot(BotDifficulty.Normal)).ToArray();
             EnsureEventSystem();
             BuildUi();
             _game = GameState.Start(PlayerCount);
@@ -588,6 +589,19 @@ namespace Bbong.Client
             StartRound();
         }
 
+        /// <summary>게임 종료 화면에서 로비로 복귀. 테이블 UI 전체 파기 후 로비 재생성.</summary>
+        private void OnLobby()
+        {
+            if (_state != UiState.SetOver)
+            {
+                return;
+            }
+
+            new GameObject("Lobby", typeof(LobbyBootstrap));
+            Destroy(_canvasGo);
+            Destroy(gameObject);
+        }
+
         private void OnCardClicked(Card card)
         {
             switch (_state)
@@ -672,6 +686,7 @@ namespace Bbong.Client
             SetButtonLabel(_passBtn, _state == UiState.StopDecision ? "계속" : "패스");
             _nextBtn.gameObject.SetActive(_state == UiState.RoundOver || _state == UiState.SetOver);
             SetButtonLabel(_nextBtn, _state == UiState.SetOver ? "새 게임" : "다음 판");
+            _lobbyBtn.gameObject.SetActive(_state == UiState.SetOver);
         }
 
         private void RenderOpponents()
@@ -715,6 +730,7 @@ namespace Bbong.Client
         private void BuildUi()
         {
             var canvasGo = new GameObject("Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            _canvasGo = canvasGo;
             var canvas = canvasGo.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = canvasGo.GetComponent<CanvasScaler>();
@@ -759,6 +775,7 @@ namespace Bbong.Client
             _pongBtn = CreateButton(bar, "뽕!", OnPong);
             _passBtn = CreateButton(bar, "패스", OnPass);
             _nextBtn = CreateButton(bar, "다음 판", OnNext);
+            _lobbyBtn = CreateButton(bar, "로비로", OnLobby);
 
             _handRow = CreateRow(root, new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.28f), 12).transform;
 
@@ -780,11 +797,13 @@ namespace Bbong.Client
             _scoreGrid = gridGo.transform;
             Anchor((RectTransform)_scoreGrid, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.84f));
             var grid = gridGo.AddComponent<GridLayoutGroup>();
-            grid.cellSize = new Vector2(150, 48);
+            var cols = PlayerCount + 1; // 라벨 칸 + 플레이어
+            var gridWidth = 1080f * (0.92f - 0.08f) * (0.96f - 0.04f); // 팝업 폭 × 그리드 폭 비율
             grid.spacing = new Vector2(6, 6);
+            grid.cellSize = new Vector2(Mathf.Min(150f, (gridWidth - grid.spacing.x * (cols - 1)) / cols), 48);
             grid.childAlignment = TextAnchor.UpperCenter;
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            grid.constraintCount = PlayerCount + 1; // 라벨 칸 + 플레이어
+            grid.constraintCount = cols;
 
             _scorePopup.SetActive(false);
 
