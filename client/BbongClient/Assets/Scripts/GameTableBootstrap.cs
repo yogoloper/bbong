@@ -53,6 +53,7 @@ namespace Bbong.Client
 
         private Font _font;
         private Transform _opponentsRow;
+        private Transform _discardRow;
         private Transform _handRow;
         private Text _info;
         private Text _log;
@@ -386,6 +387,7 @@ namespace Bbong.Client
         private void Refresh()
         {
             RenderOpponents();
+            RenderDiscard();
             RenderHand(_round.Players[MySeat].Hand);
 
             var top = _round.DiscardPile.Count > 0 ? CardLabel(_round.DiscardPile[_round.DiscardPile.Count - 1]) : "-";
@@ -453,13 +455,19 @@ namespace Bbong.Client
 
             Stretch(CreatePanel(root, new Color(0.12f, 0.30f, 0.20f)).rectTransform);
 
-            _opponentsRow = CreateRow(root, new Vector2(0.02f, 0.84f), new Vector2(0.98f, 0.98f), 12).transform;
+            _opponentsRow = CreateRow(root, new Vector2(0.02f, 0.85f), new Vector2(0.98f, 0.99f), 12).transform;
 
-            _info = CreateText(root, "", 30, TextAnchor.UpperCenter);
-            Anchor(_info.rectTransform, new Vector2(0.04f, 0.74f), new Vector2(0.96f, 0.83f));
+            _info = CreateText(root, "", 28, TextAnchor.UpperCenter);
+            Anchor(_info.rectTransform, new Vector2(0.04f, 0.795f), new Vector2(0.96f, 0.845f));
 
-            _log = CreateText(root, "", 26, TextAnchor.UpperCenter);
-            Anchor(_log.rectTransform, new Vector2(0.04f, 0.46f), new Vector2(0.96f, 0.73f));
+            var discardLabel = CreateText(root, "버림 더미 (오른쪽이 최신)", 24, TextAnchor.MiddleLeft);
+            discardLabel.color = new Color(1, 1, 1, 0.7f);
+            Anchor(discardLabel.rectTransform, new Vector2(0.05f, 0.755f), new Vector2(0.96f, 0.79f));
+
+            _discardRow = CreateRow(root, new Vector2(0.03f, 0.60f), new Vector2(0.97f, 0.75f), 8).transform;
+
+            _log = CreateText(root, "", 24, TextAnchor.UpperCenter);
+            Anchor(_log.rectTransform, new Vector2(0.04f, 0.44f), new Vector2(0.96f, 0.59f));
 
             var bar = CreateRow(root, new Vector2(0.03f, 0.30f), new Vector2(0.97f, 0.42f), 14).transform;
             _drawBtn = CreateButton(bar, "드로우", OnDraw);
@@ -472,27 +480,56 @@ namespace Bbong.Client
             _handRow = CreateRow(root, new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.28f), 12).transform;
         }
 
-        private void CreateCardButton(Card card)
+        /// <summary>카드 한 장의 시각 표현(색 채운 패널 + 숫자 + 색문자). 손패·버림 더미 공용.</summary>
+        private GameObject CreateCardFace(Transform parent, Card card, float width, float height)
         {
             var go = new GameObject($"Card_{card.Number}{ColorLetter[(int)card.Color]}",
-                typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
-            go.transform.SetParent(_handRow, false);
+                typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
             go.GetComponent<Image>().color = Palette[(int)card.Color];
 
             var le = go.GetComponent<LayoutElement>();
-            le.preferredWidth = 130;
-            le.preferredHeight = 200;
+            le.preferredWidth = width;
+            le.preferredHeight = height;
 
-            var number = CreateText(go.transform, card.Number.ToString(), 70, TextAnchor.MiddleCenter);
+            var number = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.35f), TextAnchor.MiddleCenter);
             number.color = Color.white;
             Stretch(number.rectTransform);
 
-            var letter = CreateText(go.transform, ColorLetter[(int)card.Color], 28, TextAnchor.UpperLeft);
+            var letter = CreateText(go.transform, ColorLetter[(int)card.Color], Mathf.RoundToInt(height * 0.14f), TextAnchor.UpperLeft);
             letter.color = new Color(1, 1, 1, 0.85f);
-            Anchor(letter.rectTransform, new Vector2(0.08f, 0.76f), new Vector2(0.6f, 0.98f));
+            Anchor(letter.rectTransform, new Vector2(0.08f, 0.74f), new Vector2(0.62f, 0.98f));
 
+            return go;
+        }
+
+        private void CreateCardButton(Card card)
+        {
+            var go = CreateCardFace(_handRow, card, 130, 200);
             var captured = card;
-            go.GetComponent<Button>().onClick.AddListener(() => OnCardClicked(captured));
+            go.AddComponent<Button>().onClick.AddListener(() => OnCardClicked(captured));
+        }
+
+        private void RenderDiscard()
+        {
+            foreach (Transform child in _discardRow)
+            {
+                Destroy(child.gameObject);
+            }
+
+            var pile = _round.DiscardPile;
+            if (pile.Count == 0)
+            {
+                var empty = CreateText(_discardRow, "(아직 버린 카드 없음)", 28, TextAnchor.MiddleCenter);
+                empty.color = new Color(1, 1, 1, 0.6f);
+                return;
+            }
+
+            var show = Mathf.Min(7, pile.Count);
+            for (var i = pile.Count - show; i < pile.Count; i++)
+            {
+                CreateCardFace(_discardRow, pile[i], 90, 140); // 맨 오른쪽 = 최신(맨 위)
+            }
         }
 
         // ── UI 헬퍼 ──
