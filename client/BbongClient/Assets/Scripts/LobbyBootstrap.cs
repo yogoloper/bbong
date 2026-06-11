@@ -31,7 +31,8 @@ namespace Bbong.Client
 
         private void Start()
         {
-            _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            _font = Resources.Load<Font>("Fonts/Pretendard-SemiBold")
+                    ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             EnsureEventSystem();
             BuildUi();
 
@@ -78,7 +79,9 @@ namespace Bbong.Client
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand; // 화면비 달라도 글씨 비대 방지
             var root = _canvasGo.transform;
 
-            Stretch(CreatePanel(root, new Color(0.12f, 0.30f, 0.20f)).rectTransform);
+            var felt = CreatePanel(root, Color.white);
+            felt.sprite = UiArt.Felt;
+            Stretch(felt.rectTransform);
 
             var title = CreateText(root, "나이롱뽕", 96, TextAnchor.MiddleCenter);
             title.fontStyle = FontStyle.Bold;
@@ -102,7 +105,7 @@ namespace Bbong.Client
                 CreateChoice(playerRow, $"{n}명", n, _playerChoices, v => _playerCount = v);
             }
 
-            var stakeLabel = CreateText(root, "판돈", 40, TextAnchor.MiddleCenter);
+            var stakeLabel = CreateText(root, "입장료", 40, TextAnchor.MiddleCenter);
             Anchor(stakeLabel.rectTransform, new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.43f));
 
             var stakeRow = CreateRow(root, new Vector2(0.25f, 0.255f), new Vector2(0.75f, 0.37f), 14).transform;
@@ -134,7 +137,7 @@ namespace Bbong.Client
 
         private void RefreshSelection()
         {
-            _wallet.text = $"보유 재화 {PlayerWallet.Balance:N0}";
+            _wallet.text = $"{PlayerWallet.Balance:N0} 포인트";
 
             foreach (var (value, button) in _playerChoices)
             {
@@ -153,7 +156,7 @@ namespace Bbong.Client
             var canStart = PlayerWallet.CanAfford(_stake);
             _startBtn.interactable = canStart;
             _summary.text = canStart
-                ? $"나 + 봇 {_playerCount - 1}  ·  판돈 {_stake:N0}"
+                ? $"나 + 봇 {_playerCount - 1}  ·  입장료 {_stake:N0}"
                 : "재화가 부족합니다 (Play를 다시 시작하면 충전)";
         }
 
@@ -207,7 +210,10 @@ namespace Bbong.Client
         {
             var go = new GameObject("Button", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
-            go.GetComponent<Image>().color = UnselectedColor;
+            var img = go.GetComponent<Image>();
+            img.sprite = UiArt.Button;
+            img.type = Image.Type.Sliced;
+            img.color = UnselectedColor;
             var le = go.GetComponent<LayoutElement>();
             le.preferredWidth = 160;
             le.preferredHeight = 90;
