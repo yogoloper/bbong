@@ -63,6 +63,7 @@ namespace Bbong.Client
         private Transform _discardRow;
         private Transform _handRow;
         private Text _info;
+        private Text _prompt;                // 내 차례 안내 문구(손패 위)
         private Text _scoreboard;            // 상시 점수 전광판(누적)
         private GameObject _scorePopup;      // 판 종료 중앙 전광판(표)
         private Text _scoreTitle;
@@ -599,6 +600,16 @@ namespace Bbong.Client
             _scoreboard.text = "누적  " + string.Join("   ", Enumerable.Range(0, PlayerCount)
                 .Select(s => $"P{s}{(s == MySeat ? "(나)" : "")} {_game.CumulativeDebts[s]}"));
 
+            _prompt.text = _state switch
+            {
+                UiState.NeedDiscard => _round.CanNaturalPong() ? "버릴 카드를 선택하세요 (또는 자연뽕)" : "버릴 카드를 선택하세요",
+                UiState.PongDiscardSelect => "뽕! 버릴 카드를 선택하세요",
+                UiState.NaturalPongSelect => "자연뽕! 버릴 카드를 선택하세요",
+                UiState.StopDecision => "스톱 또는 계속을 선택하세요",
+                UiState.PongWindow => "뽕 하시겠습니까?",
+                _ => ""
+            };
+
             _stopBtn.gameObject.SetActive(_state == UiState.StopDecision);
             _naturalBtn.gameObject.SetActive(_state == UiState.NeedDiscard && _round.CanNaturalPong());
             _pongBtn.gameObject.SetActive(_state == UiState.PongWindow);
@@ -680,6 +691,12 @@ namespace Bbong.Client
             discardGo.transform.SetParent(root, false);
             _discardRow = discardGo.transform;
             Anchor((RectTransform)_discardRow, new Vector2(0.03f, 0.595f), new Vector2(0.97f, 0.755f));
+
+            // 내 차례 안내 문구(손패/버튼 위)
+            _prompt = CreateText(root, "", 44, TextAnchor.MiddleCenter);
+            _prompt.fontStyle = FontStyle.Bold;
+            _prompt.color = new Color(1f, 0.92f, 0.4f);
+            Anchor(_prompt.rectTransform, new Vector2(0.04f, 0.44f), new Vector2(0.96f, 0.57f));
 
             var bar = CreateRow(root, new Vector2(0.03f, 0.30f), new Vector2(0.97f, 0.42f), 14).transform;
             _stopBtn = CreateButton(bar, "스톱", OnStop);
