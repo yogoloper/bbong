@@ -19,7 +19,7 @@ namespace Bbong.Client
     /// </summary>
     public sealed class GameTableBootstrap : MonoBehaviour
     {
-        private enum UiState { NeedDraw, NeedDiscard, PongWindow, PongDiscardSelect, NaturalPongSelect, Resolving, RoundOver, SetOver }
+        private enum UiState { StopDecision, NeedDiscard, PongWindow, PongDiscardSelect, NaturalPongSelect, Resolving, RoundOver, SetOver }
 
         private const int PlayerCount = 4;
         private const int MySeat = 0;
@@ -53,7 +53,6 @@ namespace Bbong.Client
         private int _pongNumber;
         private int _pongDiscarderSeat;
         private int _naturalPongNumber;
-        private bool _drawnThisTurn; // 턴당 드로우 1회 보장(버튼 이중 발화 방어)
         private int _seed = 1;
         private Coroutine _pongTimer;
         private Coroutine _botLoop;
@@ -64,15 +63,16 @@ namespace Bbong.Client
         private Transform _handRow;
         private Text _info;
         private Text _log;
-        private Button _drawBtn, _stopBtn, _pongBtn, _passBtn, _naturalBtn, _nextBtn;
+        private Button _stopBtn, _pongBtn, _passBtn, _naturalBtn, _nextBtn;
         private readonly List<string> _events = new();
 
         private AudioSource _audio;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop;
         private Image _flash;
-        private int _discardShownCount;
-        private readonly List<List<Card>> _laidSets = new(); // 이번 판 뽕/자연뽕 나간 패(겹침)
-        private List<Card> _meldSet;                          // 족보 완성 시 6장(버림 비우고 표시)
+        // 버림 타임라인: 발생 순서대로. group=true면 뽕/자연뽕(겹쳐 표시), false면 단일 버림.
+        private readonly List<(List<Card> cards, bool group)> _timeline = new();
+        private int _timelineShown;
+        private List<Card> _meldSet; // 족보 완성 시 6장(버림 비우고 표시)
 
         private readonly Sprite[] _cardBg = new Sprite[4];  // 색별 둥근 그라데이션 카드 배경
 
@@ -91,9 +91,9 @@ namespace Bbong.Client
         {
             _round = RoundState.Deal(Deck.CreateStandard(), PlayerCount, new SeededRandom(_seed++),
                 dealerSeat: _roundIndex % PlayerCount);
-            _state = UiState.NeedDraw;
-            _discardShownCount = 0;
-            _laidSets.Clear();
+            _state = UiState.NeedDiscard;
+            _timeline.Clear();
+            _timelineShown = 0;
             _meldSet = null;
             SetLog($"{_roundIndex + 1}판 시작.");
             RunBots();
@@ -150,9 +150,18 @@ namespace Bbong.Client
                 var seat = _round.CurrentSeat;
                 if (seat == MySeat)
                 {
-                    _state = UiState.NeedDraw;
-                    _drawnThisTurn = false; // 새 내 턴 → 드로우 허용
-                    Refresh();
+                    // 스톱 가능하면 결정(스톱/계속), 아니면 자동 드로우 후 버림 대기
+                    if (StopResolver.CanStop(_round, MySeat))
+                    {
+                        _state = UiState.StopDecision;
+                        SetLog("스톱? 또는 계속");
+                        Refresh();
+                    }
+                    else
+                    {
+                        AutoDrawMe();
+                    }
+
                     yield break;
                 }
 
@@ -179,10 +188,12 @@ namespace Bbong.Client
                     var number = TripleNumber(_round.CurrentPlayer.Hand);
                     var laid = _round.CurrentPlayer.Hand.Cards.Where(c => c.Number == number).Take(3).ToList();
                     var rest = new Hand(_round.CurrentPlayer.Hand.Cards.Where(c => c.Number != number));
-                    _round = _round.NaturalPong(number, _bots[seat].ChoosePongDiscard(rest));
+                    var toss = _bots[seat].ChoosePongDiscard(rest);
+                    _round = _round.NaturalPong(number, toss);
                     SetLog($"P{seat} 자연뽕! {number} 3장 고정");
                     PlayPong();
-                    _laidSets.Add(Sorted(laid));
+                    AddGroup(laid);
+                    AddDiscard(toss);
                     Refresh();
                     yield return new WaitForSeconds(BotDelay);
                     continue;
@@ -192,6 +203,7 @@ namespace Bbong.Client
                 _round = _round.Discard(discard);
                 SetLog($"P{seat} 버림 {CardLabel(discard)}");
                 PlayDiscard();
+                AddDiscard(discard);
                 Refresh();
                 yield return new WaitForSeconds(BotDelay);
 
@@ -232,15 +244,17 @@ namespace Bbong.Client
             {
                 _round = _round.Pong(seat, null);
                 PlayPong();
-                _laidSets.Add(Sorted(laid));
+                AddGroup(laid);
                 EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"P{seat} 두 번 뽕 (P{discarderSeat} 박)");
                 return;
             }
 
-            _round = _round.Pong(seat, _bots[seat].ChoosePongDiscard(rest));
+            var toss = _bots[seat].ChoosePongDiscard(rest);
+            _round = _round.Pong(seat, toss);
             SetLog($"P{seat} 뽕! {number} 3장 고정");
             PlayPong();
-            _laidSets.Add(Sorted(laid));
+            AddGroup(laid);
+            AddDiscard(toss);
         }
 
         // ── 뽕 창 (사람) ──
@@ -282,14 +296,9 @@ namespace Bbong.Client
 
         // ── 사람 액션 ──
 
-        private void OnDraw()
+        /// <summary>내 턴 자동 드로우 → 족보면 종료, 아니면 버림 대기(NeedDiscard).</summary>
+        private void AutoDrawMe()
         {
-            if (_state != UiState.NeedDraw || _drawnThisTurn)
-            {
-                return;
-            }
-
-            _drawnThisTurn = true;
             _round = _round.Draw();
             PlayDraw();
             var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
@@ -307,7 +316,7 @@ namespace Bbong.Client
 
         private void OnStop()
         {
-            if (_state == UiState.NeedDraw && StopResolver.CanStop(_round, MySeat))
+            if (_state == UiState.StopDecision && StopResolver.CanStop(_round, MySeat))
             {
                 EndRound(RoundSettlement.SettleByStop(_round, MySeat), "내 스톱");
             }
@@ -327,7 +336,7 @@ namespace Bbong.Client
                 var laid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
                 _round = _round.Pong(MySeat, null);
                 PlayPong();
-                _laidSets.Add(Sorted(laid));
+                AddGroup(laid);
                 EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"내 두 번 뽕 (P{_pongDiscarderSeat} 박)");
                 return;
             }
@@ -339,6 +348,13 @@ namespace Bbong.Client
 
         private void OnPass()
         {
+            if (_state == UiState.StopDecision)
+            {
+                _state = UiState.Resolving;
+                AutoDrawMe(); // 스톱 안 하고 계속 → 자동 드로우
+                return;
+            }
+
             if (_state != UiState.PongWindow)
             {
                 return;
@@ -389,6 +405,7 @@ namespace Bbong.Client
                     _round = _round.Discard(card);
                     SetLog($"내 버림 {CardLabel(card)}");
                     PlayDiscard();
+                    AddDiscard(card);
                     TryBotPong(MySeat);
                     RunBots();
                     break;
@@ -404,7 +421,8 @@ namespace Bbong.Client
                     _round = _round.Pong(MySeat, card);
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
                     PlayPong();
-                    _laidSets.Add(Sorted(pongLaid)); Refresh();
+                    AddGroup(pongLaid);
+                    AddDiscard(card);
                     RunBots();
                     break;
 
@@ -419,7 +437,8 @@ namespace Bbong.Client
                     _round = _round.NaturalPong(_naturalPongNumber, card);
                     SetLog($"자연뽕 완료. {_naturalPongNumber} 3장 고정");
                     PlayPong();
-                    _laidSets.Add(Sorted(naturalLaid)); Refresh();
+                    AddGroup(naturalLaid);
+                    AddDiscard(card);
                     RunBots();
                     break;
             }
@@ -439,11 +458,11 @@ namespace Bbong.Client
                 $"{_roundIndex + 1}/{GameConfig.DefaultSetRounds}판   턴 P{_round.CurrentSeat}   더미 {_round.DrawPile.Count}   버림 {top}\n" +
                 $"내 손패 {me.Hand.Count}장 합 {me.Hand.Sum()}   내 누적빚 {_game.CumulativeDebts[MySeat]}";
 
-            _drawBtn.gameObject.SetActive(_state == UiState.NeedDraw);
-            _stopBtn.gameObject.SetActive(_state == UiState.NeedDraw && StopResolver.CanStop(_round, MySeat));
+            _stopBtn.gameObject.SetActive(_state == UiState.StopDecision);
             _naturalBtn.gameObject.SetActive(_state == UiState.NeedDiscard && _round.CanNaturalPong());
             _pongBtn.gameObject.SetActive(_state == UiState.PongWindow);
-            _passBtn.gameObject.SetActive(_state == UiState.PongWindow);
+            _passBtn.gameObject.SetActive(_state == UiState.PongWindow || _state == UiState.StopDecision);
+            SetButtonLabel(_passBtn, _state == UiState.StopDecision ? "계속" : "패스");
             _nextBtn.gameObject.SetActive(_state == UiState.RoundOver || _state == UiState.SetOver);
             SetButtonLabel(_nextBtn, _state == UiState.SetOver ? "새 게임" : "다음 판");
         }
@@ -519,7 +538,6 @@ namespace Bbong.Client
             Anchor(_log.rectTransform, new Vector2(0.04f, 0.44f), new Vector2(0.96f, 0.59f));
 
             var bar = CreateRow(root, new Vector2(0.03f, 0.30f), new Vector2(0.97f, 0.42f), 14).transform;
-            _drawBtn = CreateButton(bar, "드로우", OnDraw);
             _stopBtn = CreateButton(bar, "스톱", OnStop);
             _naturalBtn = CreateButton(bar, "자연뽕", OnNaturalPong);
             _pongBtn = CreateButton(bar, "뽕!", OnPong);
@@ -558,6 +576,10 @@ namespace Bbong.Client
         /// <summary>숫자 오름차순 → 같은 숫자는 빨·파·노·초 순으로 정렬.</summary>
         private static List<Card> Sorted(IEnumerable<Card> cards) =>
             cards.OrderBy(c => c.Number).ThenBy(c => ColorRank[(int)c.Color]).ToList();
+
+        private void AddDiscard(Card card) => _timeline.Add((new List<Card> { card }, false));
+
+        private void AddGroup(IEnumerable<Card> cards) => _timeline.Add((Sorted(cards), true));
 
         private void Flash(Color color)
         {
@@ -744,47 +766,49 @@ namespace Bbong.Client
                 Destroy(child.gameObject);
             }
 
-            // 족보 완성: 버림 더미 비우고 족보 6장만 펼쳐 표시
+            // 족보 완성: 버림 타임라인 비우고 족보 6장만 펼쳐 표시
             if (_meldSet != null)
             {
-                var x = 12f;
+                var mx = 12f;
                 foreach (var card in _meldSet)
                 {
-                    PlaceCard(card, 128, 192, x, 0f);
-                    x += 136f;
+                    PlaceCard(card, 128, 192, mx, 0f);
+                    mx += 136f;
                 }
 
                 return;
             }
 
-            var pile = _round.DiscardPile;
+            // 하나의 타임라인: 단일 버림 + 뽕/자연뽕(겹침)을 발생 순서대로. 최근 12개만 표시.
+            const float w = 78f, h = 117f;
+            var start = Mathf.Max(0, _timeline.Count - 12);
             var px = 8f;
-            var show = Mathf.Min(7, pile.Count);
-            GameObject newest = null;
-            for (var i = pile.Count - show; i < pile.Count; i++)
+            GameObject last = null;
+            for (var i = start; i < _timeline.Count; i++)
             {
-                newest = PlaceCard(pile[i], 84, 126, px, 0f); // 왼→오, 맨 오른쪽=최신
-                px += 90f;
-            }
-
-            // 뽕/자연뽕 나간 패: 버림 카드 뒤에 겹친 스택으로 계속 남김
-            px += 24f;
-            foreach (var set in _laidSets)
-            {
-                for (var j = 0; j < set.Count; j++)
+                var (cards, group) = _timeline[i];
+                if (group)
                 {
-                    PlaceCard(set[j], 84, 126, px + j * 26f, (j - (set.Count - 1) / 2f) * -6f);
+                    for (var j = 0; j < cards.Count; j++)
+                    {
+                        last = PlaceCard(cards[j], w, h, px + j * 24f, (j - (cards.Count - 1) / 2f) * -6f);
+                    }
+
+                    px += (cards.Count - 1) * 24f + w + 16f; // 그룹 폭 + 간격
                 }
-
-                px += (set.Count - 1) * 26f + 90f + 18f;
+                else
+                {
+                    last = PlaceCard(cards[0], w, h, px, 0f);
+                    px += w + 8f;
+                }
             }
 
-            if (newest != null && pile.Count > _discardShownCount)
+            if (last != null && _timeline.Count > _timelineShown)
             {
-                StartCoroutine(ScalePop(newest.transform));
+                StartCoroutine(ScalePop(last.transform));
             }
 
-            _discardShownCount = pile.Count;
+            _timelineShown = _timeline.Count;
         }
 
         /// <summary>버림 영역에 카드 1장을 좌측 기준 x 위치에 배치(회전 가능).</summary>
