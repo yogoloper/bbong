@@ -480,6 +480,7 @@ namespace Bbong.Client
             }
 
             _log.text = string.Join("\n", _events);
+            Debug.Log($"[BBONG] {message.Replace("\n", " | ")}"); // Console/Editor.log 미러링
         }
 
         private static void Stretch(RectTransform rt) => Anchor(rt, Vector2.zero, Vector2.one);
