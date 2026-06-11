@@ -23,6 +23,11 @@ var names = new[] { "Hard  ", "Normal", "Easy  " };
             return (RoundSettlement.SettleByStop(round, seat), 0);
         }
 
+        if (!round.CanDraw)
+        {
+            return (RoundSettlement.SettleByExhaustion(round), 0); // 재셔플 한도 초과 강제 종료
+        }
+
         round = round.Draw();
         var me = round.CurrentPlayer;
 
@@ -30,6 +35,12 @@ var names = new[] { "Hard  ", "Normal", "Easy  " };
         {
             var triple = me.Hand.Cards.GroupBy(c => c.Number).First(g => g.Count() >= 3).Key;
             var rest = new Hand(me.Hand.Cards.Where(c => c.Number != triple));
+            if (rest.Count == 0)
+            {
+                round = round.NaturalPong(triple, null); // 3장 전부 같음 → 손 소진
+                return (RoundSettlement.SettleByHandClear(round, seat), 0);
+            }
+
             round = round.NaturalPong(triple, bots[seat].ChoosePongDiscard(rest));
             continue;
         }
