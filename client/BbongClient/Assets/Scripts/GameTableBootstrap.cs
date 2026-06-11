@@ -64,10 +64,12 @@ namespace Bbong.Client
         private Text _info;
         private Text _log;
         private Text _scoreboard;            // 상시 점수 전광판(누적)
-        private GameObject _scorePopup;      // 판 종료 중앙 전광판
-        private Text _scorePopupText;
+        private GameObject _scorePopup;      // 판 종료 중앙 전광판(표)
+        private Text _scoreTitle;
+        private Transform _scoreGrid;        // 표 셀 컨테이너(GridLayout)
         private CanvasGroup _scorePopupGroup;
         private Coroutine _scoreFade;
+        private readonly List<int[]> _roundHistory = new(); // 게임 내 판별 점수
         private Button _stopBtn, _pongBtn, _passBtn, _naturalBtn, _nextBtn;
         private readonly List<string> _events = new();
 
@@ -112,7 +114,7 @@ namespace Bbong.Client
         private void EndRound(int[] scores, string reason)
         {
             PlayStop();
-            var prev = _game.CumulativeDebts.ToArray(); // 이번 판 반영 전 누적
+            _roundHistory.Add(scores);
             _game = _game.ApplyRoundScores(scores);
             _roundIndex++;
 
@@ -136,22 +138,44 @@ namespace Bbong.Client
                 _state = UiState.RoundOver;
             }
 
-            ShowScorePopup(title, prev, scores, _game.CumulativeDebts);
+            ShowScorePopup(title);
             Refresh();
         }
 
-        /// <summary>중앙 전광판: 이전+이번판=누적 줄별 표기. 잠시 후 페이드아웃.</summary>
-        private void ShowScorePopup(string title, int[] prev, int[] round, IReadOnlyList<int> cum)
+        /// <summary>중앙 전광판(표): 헤더 + 판별 점수 행 + 합계 행. 잠시 후 페이드아웃.</summary>
+        private void ShowScorePopup(string title)
         {
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine(title).AppendLine();
-            for (var s = 0; s < PlayerCount; s++)
+            _scoreTitle.text = title;
+
+            foreach (Transform child in _scoreGrid)
             {
-                var me = s == MySeat ? " (나)" : "";
-                sb.AppendLine($"P{s}{me}:  {prev[s]} + {round[s]} = {cum[s]}");
+                Destroy(child.gameObject);
             }
 
-            _scorePopupText.text = sb.ToString();
+            // 헤더
+            AddCell("판", true);
+            for (var s = 0; s < PlayerCount; s++)
+            {
+                AddCell($"P{s}{(s == MySeat ? "*" : "")}", true);
+            }
+
+            // 판별 점수
+            for (var r = 0; r < _roundHistory.Count; r++)
+            {
+                AddCell($"{r + 1}", true);
+                for (var s = 0; s < PlayerCount; s++)
+                {
+                    AddCell($"{_roundHistory[r][s]}", false);
+                }
+            }
+
+            // 합계
+            AddCell("계", true);
+            for (var s = 0; s < PlayerCount; s++)
+            {
+                AddCell($"{_game.CumulativeDebts[s]}", true);
+            }
+
             _scorePopup.SetActive(true);
             _scorePopupGroup.alpha = 1f;
 
@@ -163,10 +187,20 @@ namespace Bbong.Client
             _scoreFade = StartCoroutine(FadeScorePopup());
         }
 
+        private void AddCell(string text, bool emphasize)
+        {
+            var t = CreateText(_scoreGrid, text, 30, TextAnchor.MiddleRight);
+            t.color = emphasize ? new Color(1f, 0.9f, 0.4f) : Color.white;
+            if (emphasize)
+            {
+                t.fontStyle = FontStyle.Bold;
+            }
+        }
+
         private IEnumerator FadeScorePopup()
         {
-            yield return new WaitForSeconds(3f);
-            for (var t = 0f; t < 1f; t += Time.deltaTime / 1f)
+            yield return new WaitForSeconds(4.5f); // 충분히 보이도록
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 1.2f)
             {
                 _scorePopupGroup.alpha = 1f - t;
                 yield return null;
@@ -441,6 +475,7 @@ namespace Bbong.Client
             {
                 _game = GameState.Start(PlayerCount);
                 _roundIndex = 0;
+                _roundHistory.Clear();
             }
 
             StartRound();
@@ -605,16 +640,30 @@ namespace Bbong.Client
 
             _handRow = CreateRow(root, new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.28f), 12).transform;
 
-            // 판 종료 중앙 전광판(떴다가 사라짐). 클릭은 통과.
-            var popupBg = CreatePanel(root, new Color(0.05f, 0.05f, 0.08f, 0.9f));
+            // 판 종료 중앙 전광판(표). 떴다가 사라짐, 클릭 통과.
+            var popupBg = CreatePanel(root, new Color(0.05f, 0.05f, 0.08f, 0.92f));
             _scorePopup = popupBg.gameObject;
-            Anchor(popupBg.rectTransform, new Vector2(0.12f, 0.42f), new Vector2(0.88f, 0.76f));
+            Anchor(popupBg.rectTransform, new Vector2(0.08f, 0.40f), new Vector2(0.92f, 0.82f));
             popupBg.raycastTarget = false;
             _scorePopupGroup = _scorePopup.AddComponent<CanvasGroup>();
             _scorePopupGroup.blocksRaycasts = false;
             _scorePopupGroup.interactable = false;
-            _scorePopupText = CreateText(popupBg.transform, "", 34, TextAnchor.MiddleCenter);
-            Stretch(_scorePopupText.rectTransform);
+
+            _scoreTitle = CreateText(popupBg.transform, "", 36, TextAnchor.MiddleCenter);
+            _scoreTitle.fontStyle = FontStyle.Bold;
+            Anchor(_scoreTitle.rectTransform, new Vector2(0.04f, 0.85f), new Vector2(0.96f, 0.99f));
+
+            var gridGo = new GameObject("ScoreGrid", typeof(RectTransform));
+            gridGo.transform.SetParent(popupBg.transform, false);
+            _scoreGrid = gridGo.transform;
+            Anchor((RectTransform)_scoreGrid, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.84f));
+            var grid = gridGo.AddComponent<GridLayoutGroup>();
+            grid.cellSize = new Vector2(150, 48);
+            grid.spacing = new Vector2(6, 6);
+            grid.childAlignment = TextAnchor.UpperCenter;
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = PlayerCount + 1; // 라벨 칸 + 플레이어
+
             _scorePopup.SetActive(false);
 
             // 전체 화면 플래시(연출용, 클릭 막지 않음)
