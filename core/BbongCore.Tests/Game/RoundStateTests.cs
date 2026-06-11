@@ -148,6 +148,32 @@ public class RoundStateTests
         Assert.That(after.CurrentSeat, Is.EqualTo(0));
     }
 
+    // ── 재셔플 한도(2회) 초과 시 드로우 불가 (rules.md §3) ──
+
+    [Test]
+    public void CanDraw_false_when_reshuffle_limit_reached_and_pile_empty()
+    {
+        var players = new[] { new Player(0, HandOf(Card(3, CardColor.Red), Card(4, CardColor.Red))) };
+        var discard = new[] { Card(5, CardColor.Blue), Card(6, CardColor.Green), Card(8, CardColor.Yellow) };
+        // 바닥 0장 + 이미 2회 재셔플함 → 더 못 뽑음
+        var round = new RoundState(players, Array.Empty<Card>(), discard, 0, new SeededRandom(1), reshuffles: 2);
+
+        Assert.That(round.CanDraw, Is.False);
+        Assert.That(() => round.Draw(), Throws.InstanceOf<System.InvalidOperationException>());
+    }
+
+    [Test]
+    public void Draw_increments_reshuffle_count_when_pile_empty()
+    {
+        var players = new[] { new Player(0, HandOf(Card(3, CardColor.Red), Card(4, CardColor.Red))) };
+        var discard = new[] { Card(5, CardColor.Blue), Card(6, CardColor.Green), Card(8, CardColor.Yellow) };
+        var round = new RoundState(players, Array.Empty<Card>(), discard, 0, new SeededRandom(1), reshuffles: 1);
+
+        Assert.That(round.CanDraw, Is.True);
+        var after = round.Draw();
+        Assert.That(after.ReshuffleCount, Is.EqualTo(2));
+    }
+
     // ── 바닥 더미 소진 재셔플: 버림 더미 맨 위 1장 남기고 나머지 셔플 (rules.md §3) ──
 
     [Test]

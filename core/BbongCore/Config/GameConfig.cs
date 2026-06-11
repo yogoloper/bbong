@@ -19,6 +19,7 @@ public sealed record GameConfig(
     public const int MaxPlayers = 6;          // 방 최대 인원 (§9-1)
     public const int PongTimerSeconds = 2;    // 뽕 입력 창 (§4-1)
     public const int TurnTimerSeconds = 5;    // 자기 턴 버림 제한 (§3)
+    public const int MaxReshuffles = 2;       // 바닥 더미 재셔플 한도. 초과 소진 시 강제 종료 (§3, §8)
 
     // ── 가변 설정 기본값 ──
     public const int DefaultStopLimit = 10;   // 스톱 2장 합 한도 (§6)

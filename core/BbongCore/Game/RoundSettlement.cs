@@ -9,6 +9,10 @@ namespace BbongCore.Game;
 /// </summary>
 public static class RoundSettlement
 {
+    /// <summary>강제 종료(바닥 더미 재셔플 한도 초과 소진): 전원 남은 손패 합(rules.md §3, §8).</summary>
+    public static int[] SettleByExhaustion(RoundState round) =>
+        round.Players.Select(p => p.Hand.Sum()).ToArray();
+
     /// <summary>6장 족보 종료: 승자는 족보 점수, 나머지는 남은 손패 합(rules.md §5, §8).</summary>
     public static int[] SettleByMeld(RoundState round, int winnerSeat, MeldResult meld) =>
         round.Players

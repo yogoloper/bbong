@@ -13,20 +13,30 @@ public sealed class RoundState
     private readonly List<Card> _drawPile;
     private readonly List<Card> _discardPile;
     private readonly IRandom _random;
+    private readonly int _reshuffles;
 
     internal RoundState(
         IEnumerable<Player> players,
         IEnumerable<Card> drawPile,
         IEnumerable<Card> discardPile,
         int currentSeat,
-        IRandom random)
+        IRandom random,
+        int reshuffles = 0)
     {
         _players = players.ToList();
         _drawPile = drawPile.ToList();
         _discardPile = discardPile.ToList();
         CurrentSeat = currentSeat;
         _random = random;
+        _reshuffles = reshuffles;
     }
+
+    /// <summary>지금까지 바닥 더미를 재셔플한 횟수(rules.md §3).</summary>
+    public int ReshuffleCount => _reshuffles;
+
+    /// <summary>드로우 가능 여부: 바닥에 카드가 있거나, 재셔플 한도 내에서 버림 더미로 채울 수 있을 때.</summary>
+    public bool CanDraw =>
+        _drawPile.Count > 0 || (_reshuffles < GameConfig.MaxReshuffles && _discardPile.Count > 1);
 
     public IReadOnlyList<Player> Players => _players;
 
@@ -63,12 +73,25 @@ public sealed class RoundState
     /// <summary>현재 플레이어가 바닥 더미 맨 위 1장을 손에 넣습니다(rules.md §3). 턴 유지.</summary>
     public RoundState Draw()
     {
-        var (drawPile, discardPile) = _drawPile.Count == 0 ? Reshuffle() : (_drawPile, _discardPile);
+        var drawPile = _drawPile;
+        var discardPile = _discardPile;
+        var reshuffles = _reshuffles;
+
+        if (drawPile.Count == 0)
+        {
+            if (reshuffles >= GameConfig.MaxReshuffles)
+            {
+                throw new InvalidOperationException("재셔플 한도 초과로 더 뽑을 수 없습니다(강제 종료 필요).");
+            }
+
+            (drawPile, discardPile) = Reshuffle();
+            reshuffles++;
+        }
 
         var top = drawPile[0];
         var newPlayers = ReplaceCurrent(CurrentPlayer.WithHand(CurrentPlayer.Hand.Draw(top)));
 
-        return new RoundState(newPlayers, drawPile.Skip(1), discardPile, CurrentSeat, _random);
+        return new RoundState(newPlayers, drawPile.Skip(1), discardPile, CurrentSeat, _random, reshuffles);
     }
 
     /// <summary>현재 플레이어가 카드 1장을 버림 더미에 올리고 다음 좌석으로 넘깁니다(rules.md §3).</summary>
@@ -77,7 +100,7 @@ public sealed class RoundState
         var newPlayers = ReplaceCurrent(CurrentPlayer.WithHand(CurrentPlayer.Hand.Discard(card)));
         var newDiscard = _discardPile.Append(card); // 맨 위 = 마지막 원소
 
-        return new RoundState(newPlayers, _drawPile, newDiscard, NextSeat(CurrentSeat), _random);
+        return new RoundState(newPlayers, _drawPile, newDiscard, NextSeat(CurrentSeat), _random, _reshuffles);
     }
 
     // ── 뽕 (rules.md §4) ──
@@ -112,7 +135,7 @@ public sealed class RoundState
         if (afterRemove.Hand.Count == 0)
         {
             // 둘째 뽕: 손 소진 → 추가 버림 없음, 판 종료(§4-3)
-            return new RoundState(ReplaceAt(seat, afterRemove), _drawPile, discardPile, NextSeat(seat), _random);
+            return new RoundState(ReplaceAt(seat, afterRemove), _drawPile, discardPile, NextSeat(seat), _random, _reshuffles);
         }
 
         if (cardToDiscardAfter is not { } extra)
@@ -121,7 +144,7 @@ public sealed class RoundState
         }
 
         var afterDiscard = afterRemove.WithHand(afterRemove.Hand.Discard(extra));
-        return new RoundState(ReplaceAt(seat, afterDiscard), _drawPile, discardPile.Append(extra), NextSeat(seat), _random);
+        return new RoundState(ReplaceAt(seat, afterDiscard), _drawPile, discardPile.Append(extra), NextSeat(seat), _random, _reshuffles);
     }
 
     /// <summary>자기 턴, 6장 상태에서 같은 숫자 3장을 들고 있으면 자연뽕 가능(rules.md §4-2).</summary>
@@ -142,7 +165,8 @@ public sealed class RoundState
             _drawPile,
             _discardPile.Append(cardToDiscardAfter),
             NextSeat(CurrentSeat),
-            _random);
+            _random,
+            _reshuffles);
     }
 
     // ── 내부 헬퍼 ──

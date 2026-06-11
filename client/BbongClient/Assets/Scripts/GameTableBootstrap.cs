@@ -268,6 +268,12 @@ namespace Bbong.Client
                     yield break;
                 }
 
+                if (!_round.CanDraw)
+                {
+                    EndRound(RoundSettlement.SettleByExhaustion(_round), "바닥 더미 소진(재셔플 2회 초과) → 강제 종료", seat);
+                    yield break;
+                }
+
                 _round = _round.Draw();
                 Refresh();
                 yield return new WaitForSeconds(BotDelay);
@@ -396,6 +402,12 @@ namespace Bbong.Client
         /// <summary>내 턴 자동 드로우 → 족보면 종료, 아니면 버림 대기(NeedDiscard).</summary>
         private void AutoDrawMe()
         {
+            if (!_round.CanDraw)
+            {
+                EndRound(RoundSettlement.SettleByExhaustion(_round), "바닥 더미 소진(재셔플 2회 초과) → 강제 종료", MySeat);
+                return;
+            }
+
             _round = _round.Draw();
             PlayDraw();
             var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);

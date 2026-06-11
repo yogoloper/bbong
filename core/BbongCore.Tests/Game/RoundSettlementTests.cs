@@ -60,6 +60,21 @@ public class RoundSettlementTests
         Assert.That(scores, Is.EqualTo(new[] { 39, 0, 6 }));
     }
 
+    // ── 강제 종료(바닥 소진): 전원 손패 합 ──
+
+    [Test]
+    public void SettleByExhaustion_everyone_scores_hand_sum()
+    {
+        var round = Round(
+            new Player(0, HandOf(3, 7, 9)),  // 19
+            new Player(1, HandOf(2, 4)),     // 6
+            new Player(2, HandOf(5)));       // 5
+
+        var scores = RoundSettlement.SettleByExhaustion(round);
+
+        Assert.That(scores, Is.EqualTo(new[] { 19, 6, 5 }));
+    }
+
     // ── 스톱 종료 (rules.md §6, §8) ──
 
     [Test]

@@ -23,6 +23,7 @@ public class GameConfigTests
         Assert.That(GameConfig.StopBagajiPenalty, Is.EqualTo(30));
         Assert.That(GameConfig.PongTimerSeconds, Is.EqualTo(2));
         Assert.That(GameConfig.TurnTimerSeconds, Is.EqualTo(5));
+        Assert.That(GameConfig.MaxReshuffles, Is.EqualTo(2));
     }
 
     [Test]
