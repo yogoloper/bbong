@@ -1,4 +1,5 @@
 using System.Linq;
+using BbongCore.Config;
 
 namespace BbongCore.Game;
 
@@ -9,7 +10,7 @@ public static class StopResolver
     /// 스톱 가능: 뽕한 유저가 2명 이상이고, seat 본인도 뽕했으며,
     /// 손패 합이 한도(기본 10) 이하일 때(rules.md §6-1, §6-2).
     /// </summary>
-    public static bool CanStop(RoundState round, int seat, int stopLimit = 10)
+    public static bool CanStop(RoundState round, int seat, int stopLimit = GameConfig.DefaultStopLimit)
     {
         var pongedCount = round.Players.Count(p => p.HasPonged);
         var player = round.Players[seat];

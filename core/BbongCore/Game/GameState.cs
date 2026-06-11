@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BbongCore.Config;
 
 namespace BbongCore.Game;
 
@@ -29,7 +30,7 @@ public sealed class GameState
 
     public bool IsSetOver => RoundsPlayed >= SetRounds;
 
-    public static GameState Start(int playerCount, int setRounds = 5) =>
+    public static GameState Start(int playerCount, int setRounds = GameConfig.DefaultSetRounds) =>
         new(new int[playerCount], roundsPlayed: 0, setRounds);
 
     /// <summary>한 판 정산 결과(좌석별 점수)를 누적 빚에 더하고 판 수를 1 올립니다.</summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Cards;
+using BbongCore.Config;
 
 namespace BbongCore.Game;
 
@@ -43,7 +44,7 @@ public sealed class RoundState
     /// </summary>
     public static RoundState Deal(Deck deck, int playerCount, IRandom random, int dealerSeat = 0)
     {
-        const int handSize = 5;
+        const int handSize = GameConfig.HandSize;
 
         var cards = deck.Shuffle(random).Cards;
 
