@@ -459,6 +459,8 @@ namespace Bbong.Client
 
         private void SetNextLabel(string label) => _nextBtn.GetComponentInChildren<Text>().text = label;
 
+        private int TopDiscardNumber() => _round.DiscardPile[_round.DiscardPile.Count - 1].Number;
+
         private string CardLabel(Card c) => $"{c.Number}{ColorLetter[(int)c.Color]}";
 
         private void SetLog(string message) => _log.text = message;
