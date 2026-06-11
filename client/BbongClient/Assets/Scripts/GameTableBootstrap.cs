@@ -49,6 +49,7 @@ namespace Bbong.Client
         private int _naturalPongNumber;
         private int _seed = 1;
         private Coroutine _pongTimer;
+        private Coroutine _botLoop;
 
         private Font _font;
         private Transform _opponentsRow;
@@ -75,7 +76,7 @@ namespace Bbong.Client
                 dealerSeat: _roundIndex % PlayerCount);
             _state = UiState.NeedDraw;
             SetLog($"{_roundIndex + 1}판 시작.");
-            StartCoroutine(BotLoop());
+            RunBots();
         }
 
         private void EndRound(int[] scores, string reason)
@@ -104,6 +105,17 @@ namespace Bbong.Client
         }
 
         // ── 봇 자동 진행 (코루틴, 천천히) ──
+
+        /// <summary>봇 루프를 항상 단일로 유지(이전 코루틴 중지). 중복 실행 → 드로우 2번 버그 방지.</summary>
+        private void RunBots()
+        {
+            if (_botLoop != null)
+            {
+                StopCoroutine(_botLoop);
+            }
+
+            _botLoop = StartCoroutine(BotLoop());
+        }
 
         private IEnumerator BotLoop()
         {
@@ -301,7 +313,7 @@ namespace Bbong.Client
                 // 아무도 안 뽕 → 정상 흐름 재개
             }
 
-            StartCoroutine(BotLoop());
+            RunBots();
         }
 
         private void OnNaturalPong()
@@ -319,6 +331,11 @@ namespace Bbong.Client
 
         private void OnNext()
         {
+            if (_state != UiState.RoundOver && _state != UiState.SetOver)
+            {
+                return; // 더블클릭 가드
+            }
+
             if (_state == UiState.SetOver)
             {
                 _game = GameState.Start(PlayerCount);
@@ -337,7 +354,7 @@ namespace Bbong.Client
                     SetLog($"내 버림 {CardLabel(card)}");
                     Refresh();
                     TryBotPong(MySeat);
-                    StartCoroutine(BotLoop());
+                    RunBots();
                     break;
 
                 case UiState.PongDiscardSelect:
@@ -348,7 +365,7 @@ namespace Bbong.Client
 
                     _round = _round.Pong(MySeat, card);
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
-                    StartCoroutine(BotLoop());
+                    RunBots();
                     break;
 
                 case UiState.NaturalPongSelect:
@@ -359,7 +376,7 @@ namespace Bbong.Client
 
                     _round = _round.NaturalPong(_naturalPongNumber, card);
                     SetLog($"자연뽕 완료. {_naturalPongNumber} 3장 고정");
-                    StartCoroutine(BotLoop());
+                    RunBots();
                     break;
             }
         }
