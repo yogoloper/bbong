@@ -15,7 +15,7 @@ namespace Bbong.Client
 {
     /// <summary>
     /// 코드 생성 카드 테이블 + 게임 흐름(Phase 3). 4인(사람 P0 + 봇 3).
-    /// 드로우/버림 · 뽕/자연뽕 · 스톱 · 5판 세트 점수/판돈. 봇 턴은 코루틴으로 천천히 진행.
+    /// 드로우/버림 · 뽕/자연뽕 · 스톱 · 게임(5판) 점수/판돈. 봇 턴은 코루틴으로 천천히 진행.
     /// </summary>
     public sealed class GameTableBootstrap : MonoBehaviour
     {
@@ -113,7 +113,7 @@ namespace Bbong.Client
                 var winners = _game.WinnerSeats();
                 var payouts = StakePot.Distribute(Stake, PlayerCount, winners);
                 var who = string.Join(", ", winners.Select(s => $"P{s}"));
-                SetLog($"{reason}\n[{detail}]\n누적 {cumulative}\n=== 세트 종료 === 1등 {who}  판돈 P{MySeat}={payouts[MySeat]}");
+                SetLog($"{reason}\n[{detail}]\n누적 {cumulative}\n=== 게임 종료(5판) === 1등 {who}  판돈 P{MySeat}={payouts[MySeat]}");
                 _state = UiState.SetOver;
             }
             else
