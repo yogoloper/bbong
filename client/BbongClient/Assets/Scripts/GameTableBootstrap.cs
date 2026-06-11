@@ -19,7 +19,7 @@ namespace Bbong.Client
     /// </summary>
     public sealed class GameTableBootstrap : MonoBehaviour
     {
-        private enum UiState { NeedDraw, NeedDiscard, PongWindow, PongDiscardSelect, NaturalPongSelect, RoundOver, SetOver }
+        private enum UiState { NeedDraw, NeedDiscard, PongWindow, PongDiscardSelect, NaturalPongSelect, Resolving, RoundOver, SetOver }
 
         private const int PlayerCount = 4;
         private const int MySeat = 0;
@@ -47,6 +47,7 @@ namespace Bbong.Client
         private int _pongNumber;
         private int _pongDiscarderSeat;
         private int _naturalPongNumber;
+        private bool _drawnThisTurn; // 턴당 드로우 1회 보장(버튼 이중 발화 방어)
         private int _seed = 1;
         private Coroutine _pongTimer;
         private Coroutine _botLoop;
@@ -131,6 +132,7 @@ namespace Bbong.Client
                 if (seat == MySeat)
                 {
                     _state = UiState.NeedDraw;
+                    _drawnThisTurn = false; // 새 내 턴 → 드로우 허용
                     Refresh();
                     yield break;
                 }
@@ -253,11 +255,12 @@ namespace Bbong.Client
 
         private void OnDraw()
         {
-            if (_state != UiState.NeedDraw)
+            if (_state != UiState.NeedDraw || _drawnThisTurn)
             {
                 return;
             }
 
+            _drawnThisTurn = true;
             _round = _round.Draw();
             var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
             if (meld.Type != MeldType.None)
@@ -307,13 +310,10 @@ namespace Bbong.Client
                 return;
             }
 
+            _state = UiState.Resolving; // 재진입 방지(코루틴 실행 전 second-fire 차단)
             StopPongTimer();
             SetLog("패스");
-            if (!TryBotPong(_pongDiscarderSeat))
-            {
-                // 아무도 안 뽕 → 정상 흐름 재개
-            }
-
+            TryBotPong(_pongDiscarderSeat);
             RunBots();
         }
 
@@ -351,9 +351,9 @@ namespace Bbong.Client
             switch (_state)
             {
                 case UiState.NeedDiscard:
+                    _state = UiState.Resolving; // 더블클릭 → 두 장 버림 방지
                     _round = _round.Discard(card);
                     SetLog($"내 버림 {CardLabel(card)}");
-                    Refresh();
                     TryBotPong(MySeat);
                     RunBots();
                     break;
@@ -364,6 +364,7 @@ namespace Bbong.Client
                         return;
                     }
 
+                    _state = UiState.Resolving;
                     _round = _round.Pong(MySeat, card);
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
                     RunBots();
@@ -375,6 +376,7 @@ namespace Bbong.Client
                         return;
                     }
 
+                    _state = UiState.Resolving;
                     _round = _round.NaturalPong(_naturalPongNumber, card);
                     SetLog($"자연뽕 완료. {_naturalPongNumber} 3장 고정");
                     RunBots();
