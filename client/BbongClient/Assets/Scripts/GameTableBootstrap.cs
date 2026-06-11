@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Ai;
 using BbongCore.Cards;
@@ -133,6 +134,7 @@ namespace Bbong.Client
 
                 var discard = _bots[seat].ChooseDiscard(_round.CurrentPlayer.Hand);
                 _round = _round.Discard(discard);
+                SetLog($"P{seat} 버림 {CardLabel(discard)}");
 
                 if (AfterDiscard(seat, allowHumanPong: true))
                 {
@@ -463,7 +465,22 @@ namespace Bbong.Client
 
         private string CardLabel(Card c) => $"{c.Number}{ColorLetter[(int)c.Color]}";
 
-        private void SetLog(string message) => _log.text = message;
+        private readonly List<string> _events = new();
+
+        private void SetLog(string message)
+        {
+            foreach (var line in message.Split('\n'))
+            {
+                _events.Add(line);
+            }
+
+            while (_events.Count > 9)
+            {
+                _events.RemoveAt(0);
+            }
+
+            _log.text = string.Join("\n", _events);
+        }
 
         private static void Stretch(RectTransform rt) => Anchor(rt, Vector2.zero, Vector2.one);
 
