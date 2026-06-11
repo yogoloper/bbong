@@ -506,7 +506,7 @@ namespace Bbong.Client
 
         private void OnNaturalPong()
         {
-            if (_state != UiState.NeedDiscard || !_round.CanNaturalPong())
+            if (_state != UiState.NeedDiscard || _round.CurrentSeat != MySeat || !_round.CanNaturalPong())
             {
                 return;
             }
@@ -613,7 +613,7 @@ namespace Bbong.Client
             };
 
             _stopBtn.gameObject.SetActive(_state == UiState.StopDecision);
-            _naturalBtn.gameObject.SetActive(_state == UiState.NeedDiscard && _round.CanNaturalPong());
+            _naturalBtn.gameObject.SetActive(_state == UiState.NeedDiscard && _round.CurrentSeat == MySeat && _round.CanNaturalPong());
             _pongBtn.gameObject.SetActive(_state == UiState.PongWindow);
             _passBtn.gameObject.SetActive(_state == UiState.PongWindow || _state == UiState.StopDecision);
             SetButtonLabel(_passBtn, _state == UiState.StopDecision ? "계속" : "패스");
