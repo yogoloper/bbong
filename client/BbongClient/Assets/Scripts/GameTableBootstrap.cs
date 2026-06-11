@@ -779,27 +779,53 @@ namespace Bbong.Client
                 return;
             }
 
-            // 하나의 타임라인: 단일 버림 + 뽕/자연뽕(겹침)을 발생 순서대로. 최근 12개만 표시.
-            const float w = 78f, h = 117f;
-            var start = Mathf.Max(0, _timeline.Count - 12);
+            // 하나의 타임라인: 단일 버림 + 뽕/자연뽕(겹침)을 발생 순서대로.
+            // 영역 폭에 맞춰 오른쪽(최신)부터 들어가는 만큼만 표시.
+            const float w = 78f, h = 117f, gap = 8f, gGap = 16f, gStep = 24f;
+            var area = ((RectTransform)_discardRow).rect.width;
+            if (area <= 1f)
+            {
+                area = 1000f; // 첫 프레임 레이아웃 전 대비
+            }
+
+            float EntryWidth(int idx)
+            {
+                var e = _timeline[idx];
+                return e.group ? (e.cards.Count - 1) * gStep + w + gGap : w + gap;
+            }
+
+            var startIdx = _timeline.Count;
+            var sum = 0f;
+            for (var i = _timeline.Count - 1; i >= 0; i--)
+            {
+                var ew = EntryWidth(i);
+                if (sum + ew > area - 16f && i != _timeline.Count - 1)
+                {
+                    break;
+                }
+
+                sum += ew;
+                startIdx = i;
+            }
+
             var px = 8f;
             GameObject last = null;
-            for (var i = start; i < _timeline.Count; i++)
+            for (var i = startIdx; i < _timeline.Count; i++)
             {
                 var (cards, group) = _timeline[i];
                 if (group)
                 {
                     for (var j = 0; j < cards.Count; j++)
                     {
-                        last = PlaceCard(cards[j], w, h, px + j * 24f, (j - (cards.Count - 1) / 2f) * -6f);
+                        last = PlaceCard(cards[j], w, h, px + j * gStep, (j - (cards.Count - 1) / 2f) * -6f);
                     }
 
-                    px += (cards.Count - 1) * 24f + w + 16f; // 그룹 폭 + 간격
+                    px += (cards.Count - 1) * gStep + w + gGap;
                 }
                 else
                 {
                     last = PlaceCard(cards[0], w, h, px, 0f);
-                    px += w + 8f;
+                    px += w + gap;
                 }
             }
 
