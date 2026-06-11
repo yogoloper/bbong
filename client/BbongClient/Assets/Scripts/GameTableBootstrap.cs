@@ -63,7 +63,6 @@ namespace Bbong.Client
         private Transform _discardRow;
         private Transform _handRow;
         private Text _info;
-        private Text _log;
         private Text _scoreboard;            // 상시 점수 전광판(누적)
         private GameObject _scorePopup;      // 판 종료 중앙 전광판(표)
         private Text _scoreTitle;
@@ -72,7 +71,6 @@ namespace Bbong.Client
         private Coroutine _scoreFade;
         private readonly List<int[]> _roundHistory = new(); // 게임 내 판별 점수
         private Button _stopBtn, _pongBtn, _passBtn, _naturalBtn, _nextBtn;
-        private readonly List<string> _events = new();
 
         private AudioSource _audio;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop;
@@ -665,9 +663,6 @@ namespace Bbong.Client
             _discardRow = discardGo.transform;
             Anchor((RectTransform)_discardRow, new Vector2(0.03f, 0.595f), new Vector2(0.97f, 0.755f));
 
-            _log = CreateText(root, "", 24, TextAnchor.UpperCenter);
-            Anchor(_log.rectTransform, new Vector2(0.04f, 0.44f), new Vector2(0.96f, 0.59f));
-
             var bar = CreateRow(root, new Vector2(0.03f, 0.30f), new Vector2(0.97f, 0.42f), 14).transform;
             _stopBtn = CreateButton(bar, "스톱", OnStop);
             _naturalBtn = CreateButton(bar, "자연뽕", OnNaturalPong);
@@ -1076,21 +1071,7 @@ namespace Bbong.Client
 
         private string CardLabel(Card c) => $"{c.Number}{ColorLetter[(int)c.Color]}";
 
-        private void SetLog(string message)
-        {
-            foreach (var line in message.Split('\n'))
-            {
-                _events.Add(line);
-            }
-
-            while (_events.Count > 9)
-            {
-                _events.RemoveAt(0);
-            }
-
-            _log.text = string.Join("\n", _events);
-            Debug.Log($"[BBONG] {message.Replace("\n", " | ")}");
-        }
+        private void SetLog(string message) => Debug.Log($"[BBONG] {message.Replace("\n", " | ")}"); // 콘솔 전용
 
         private static void Stretch(RectTransform rt) => Anchor(rt, Vector2.zero, Vector2.one);
 
