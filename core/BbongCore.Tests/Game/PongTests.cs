@@ -136,4 +136,33 @@ public class PongTests
         Assert.That(after.Players[0].PongCount, Is.EqualTo(1));
         Assert.That(after.CurrentSeat, Is.EqualTo(1)); // 다음 좌석으로
     }
+
+    [Test]
+    public void CanNaturalPong_true_with_three_card_hand_all_same()
+    {
+        // 뽕 후 손패 2장 → 드로우 3장이 전부 같은 숫자(7) → 자연뽕 가능(6장 아님)
+        var players = new[]
+        {
+            new Player(0, HandOf(C(7, CardColor.Red), C(7, CardColor.Blue), C(7, CardColor.Green)), PongCount: 1)
+        };
+        var round = new RoundState(players, Array.Empty<Card>(), Array.Empty<Card>(), 0, new SeededRandom(1));
+
+        Assert.That(round.CanNaturalPong(), Is.True);
+    }
+
+    [Test]
+    public void NaturalPong_with_three_card_hand_empties_hand_no_discard()
+    {
+        var players = new[]
+        {
+            new Player(0, HandOf(C(7, CardColor.Red), C(7, CardColor.Blue), C(7, CardColor.Green)), PongCount: 1),
+            new Player(1, HandOf(C(1, CardColor.Red), C(3, CardColor.Red)))
+        };
+        var round = new RoundState(players, Array.Empty<Card>(), Array.Empty<Card>(), 0, new SeededRandom(1));
+
+        var after = round.NaturalPong(number: 7, cardToDiscardAfter: null);
+
+        Assert.That(after.Players[0].Hand.Count, Is.EqualTo(0)); // 손 소진
+        Assert.That(after.CurrentSeat, Is.EqualTo(1));
+    }
 }

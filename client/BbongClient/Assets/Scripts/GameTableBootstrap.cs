@@ -291,6 +291,17 @@ namespace Bbong.Client
                     var number = TripleNumber(_round.CurrentPlayer.Hand);
                     var laid = _round.CurrentPlayer.Hand.Cards.Where(c => c.Number == number).Take(3).ToList();
                     var rest = new Hand(_round.CurrentPlayer.Hand.Cards.Where(c => c.Number != number));
+
+                    if (rest.Count == 0)
+                    {
+                        // 3장 전부 같은 숫자 → 손 소진 자연뽕 종료
+                        _round = _round.NaturalPong(number, null);
+                        AddGroup(laid);
+                        PlayPong();
+                        EndRound(RoundSettlement.SettleByHandClear(_round, seat), $"P{seat} 자연뽕 손 소진", seat);
+                        yield break;
+                    }
+
                     var toss = _bots[seat].ChoosePongDiscard(rest);
                     _round = _round.NaturalPong(number, toss);
                     SetLog($"P{seat} 자연뽕! {number} 3장 고정");
@@ -300,7 +311,6 @@ namespace Bbong.Client
                     Refresh();
                     yield return new WaitForSeconds(BotDelay);
 
-                    // 자연뽕의 추가 버림도 내가 뽕 가능
                     if (_round.CanPong(MySeat))
                     {
                         OpenPongWindow(seat);
@@ -541,6 +551,20 @@ namespace Bbong.Client
             }
 
             _naturalPongNumber = TripleNumber(_round.Players[MySeat].Hand);
+            var laid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _naturalPongNumber).Take(3).ToList();
+            var rest = _round.Players[MySeat].Hand.Cards.Count(c => c.Number != _naturalPongNumber);
+
+            if (rest == 0)
+            {
+                // 3장 전부 같은 숫자 → 손 소진 자연뽕 종료
+                _state = UiState.Resolving;
+                _round = _round.NaturalPong(_naturalPongNumber, null);
+                AddGroup(laid);
+                PlayPong();
+                EndRound(RoundSettlement.SettleByHandClear(_round, MySeat), $"P{MySeat}(나) 자연뽕 손 소진", MySeat);
+                return;
+            }
+
             _state = UiState.NaturalPongSelect;
             SetLog($"자연뽕! {_naturalPongNumber} 외 버릴 카드 클릭");
             Refresh();

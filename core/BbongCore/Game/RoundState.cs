@@ -147,23 +147,39 @@ public sealed class RoundState
         return new RoundState(ReplaceAt(seat, afterDiscard), _drawPile, discardPile.Append(extra), NextSeat(seat), _random, _reshuffles);
     }
 
-    /// <summary>자기 턴, 6장 상태에서 같은 숫자 3장을 들고 있으면 자연뽕 가능(rules.md §4-2).</summary>
+    /// <summary>
+    /// 자기 턴(드로우 후) 같은 숫자 3장을 들고 있으면 자연뽕 가능(rules.md §4-2).
+    /// 손패 6장(일반)뿐 아니라 뽕 후 3장 상태에서도 성립.
+    /// </summary>
     public bool CanNaturalPong() =>
-        CurrentPlayer.Hand.Count == 6 &&
         CurrentPlayer.Hand.Cards.GroupBy(c => c.Number).Any(g => g.Count() >= 3);
 
-    /// <summary>자연뽕: 같은 숫자 3장을 나간 패로 내려놓고(6→3), 1장 더 버린 뒤(→2) 다음 좌석으로.</summary>
-    public RoundState NaturalPong(int number, Card cardToDiscardAfter)
+    /// <summary>
+    /// 자연뽕: 같은 숫자 3장을 나간 패로 내려놓고, 1장 더 버린 뒤 다음 좌석으로.
+    /// 단 3장이 손패 전부면(제거 후 0장) 손 소진으로 추가 버림 없이 판 종료.
+    /// </summary>
+    public RoundState NaturalPong(int number, Card? cardToDiscardAfter)
     {
         var player = CurrentPlayer;
         var keep = RemoveCount(player.Hand.Cards, number, 3);
         var afterRemove = player.WithHand(new Hand(keep)).RecordPong();
-        var afterDiscard = afterRemove.WithHand(afterRemove.Hand.Discard(cardToDiscardAfter));
 
+        if (afterRemove.Hand.Count == 0)
+        {
+            // 손 소진(3장 전부 같은 숫자) → 종료
+            return new RoundState(ReplaceAt(CurrentSeat, afterRemove), _drawPile, _discardPile, NextSeat(CurrentSeat), _random, _reshuffles);
+        }
+
+        if (cardToDiscardAfter is not { } extra)
+        {
+            throw new InvalidOperationException("자연뽕 이후 버릴 카드를 지정해야 합니다.");
+        }
+
+        var afterDiscard = afterRemove.WithHand(afterRemove.Hand.Discard(extra));
         return new RoundState(
             ReplaceAt(CurrentSeat, afterDiscard),
             _drawPile,
-            _discardPile.Append(cardToDiscardAfter),
+            _discardPile.Append(extra),
             NextSeat(CurrentSeat),
             _random,
             _reshuffles);
