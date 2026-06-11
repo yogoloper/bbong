@@ -191,7 +191,7 @@ namespace Bbong.Client
 
             var handPanel = CreatePanel(canvasGo.transform, new Color(0, 0, 0, 0.15f));
             Anchor(handPanel.GetComponent<RectTransform>(), new Vector2(0.03f, 0.20f), new Vector2(0.97f, 0.42f));
-            var layout = handPanel.AddComponent<HorizontalLayoutGroup>();
+            var layout = handPanel.gameObject.AddComponent<HorizontalLayoutGroup>();
             layout.spacing = 16;
             layout.childAlignment = TextAnchor.MiddleCenter;
             layout.childForceExpandWidth = false;
