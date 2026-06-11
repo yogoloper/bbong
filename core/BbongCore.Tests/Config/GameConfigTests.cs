@@ -33,6 +33,19 @@ public class GameConfigTests
     }
 
     [Test]
+    public void Nickname_validation_allows_1_to_12_chars()
+    {
+        Assert.That(GameConfig.MaxNicknameLength, Is.EqualTo(12));
+        Assert.That(GameConfig.IsValidNickname("왕눈이"), Is.True);
+        Assert.That(GameConfig.IsValidNickname("수줍은 너구리"), Is.True); // 띄어쓰기 포함 허용
+        Assert.That(GameConfig.IsValidNickname("열두글자닉네임이름입니다"), Is.True);
+        Assert.That(GameConfig.IsValidNickname("열세글자가되는닉네임이름임"), Is.False);
+        Assert.That(GameConfig.IsValidNickname(""), Is.False);
+        Assert.That(GameConfig.IsValidNickname("   "), Is.False);
+        Assert.That(GameConfig.IsValidNickname(null), Is.False);
+    }
+
+    [Test]
     public void Player_count_validation_uses_2_to_6_range()
     {
         Assert.That(GameConfig.IsValidPlayerCount(2), Is.True);

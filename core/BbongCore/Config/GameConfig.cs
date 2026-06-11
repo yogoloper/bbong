@@ -20,6 +20,7 @@ public sealed record GameConfig(
     public const int PongTimerSeconds = 2;    // 뽕 입력 창 (§4-1)
     public const int TurnTimerSeconds = 5;    // 자기 턴 버림 제한 (§3)
     public const int MaxReshuffles = 2;       // 바닥 더미 재셔플 한도. 초과 소진 시 강제 종료 (§3, §8)
+    public const int MaxNicknameLength = 12;  // 닉네임 최대 길이(띄어쓰기 포함, 표시 영역 기준)
 
     // ── 가변 설정 기본값 ──
     public const int DefaultStopLimit = 10;   // 스톱 2장 합 한도 (§6)
@@ -33,4 +34,7 @@ public sealed record GameConfig(
     public static bool IsValidPlayerCount(int count) => count >= MinPlayers && count <= MaxPlayers;
 
     public static bool IsValidStake(int stake) => StakeOptions.Contains(stake);
+
+    public static bool IsValidNickname(string? nickname) =>
+        !string.IsNullOrWhiteSpace(nickname) && nickname.Length <= MaxNicknameLength;
 }
