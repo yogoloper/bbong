@@ -70,9 +70,9 @@ namespace Bbong.Client
         private AudioSource _audio;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop;
         private Image _flash;
-        private Transform _meldReveal;       // 내려놓은 패(나간 패/족보) 노출 영역
-        private Coroutine _meldClear;
         private int _discardShownCount;
+        private readonly List<List<Card>> _laidSets = new(); // 이번 판 뽕/자연뽕 나간 패(겹침)
+        private List<Card> _meldSet;                          // 족보 완성 시 6장(버림 비우고 표시)
 
         private readonly Sprite[] _cardBg = new Sprite[4];  // 색별 둥근 그라데이션 카드 배경
 
@@ -93,7 +93,8 @@ namespace Bbong.Client
                 dealerSeat: _roundIndex % PlayerCount);
             _state = UiState.NeedDraw;
             _discardShownCount = 0;
-            ClearMeldReveal();
+            _laidSets.Clear();
+            _meldSet = null;
             SetLog($"{_roundIndex + 1}판 시작.");
             RunBots();
         }
@@ -168,7 +169,7 @@ namespace Bbong.Client
                 var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
                 if (meld.Type != MeldType.None)
                 {
-                    ShowLaidSet(_round.CurrentPlayer.Hand.Cards, true); // 6장 족보 노출(판 끝까지)
+                    _meldSet = Sorted(_round.CurrentPlayer.Hand.Cards); // 족보: 버림 비우고 표시
                     EndRound(RoundSettlement.SettleByMeld(_round, seat, meld), $"P{seat} 족보 {meld.Type}({meld.Score})");
                     yield break;
                 }
@@ -181,7 +182,7 @@ namespace Bbong.Client
                     _round = _round.NaturalPong(number, _bots[seat].ChoosePongDiscard(rest));
                     SetLog($"P{seat} 자연뽕! {number} 3장 고정");
                     PlayPong();
-                    ShowLaidSet(laid, false);
+                    _laidSets.Add(Sorted(laid));
                     Refresh();
                     yield return new WaitForSeconds(BotDelay);
                     continue;
@@ -231,7 +232,7 @@ namespace Bbong.Client
             {
                 _round = _round.Pong(seat, null);
                 PlayPong();
-                ShowLaidSet(laid, false);
+                _laidSets.Add(Sorted(laid));
                 EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"P{seat} 두 번 뽕 (P{discarderSeat} 박)");
                 return;
             }
@@ -239,7 +240,7 @@ namespace Bbong.Client
             _round = _round.Pong(seat, _bots[seat].ChoosePongDiscard(rest));
             SetLog($"P{seat} 뽕! {number} 3장 고정");
             PlayPong();
-            ShowLaidSet(laid, false);
+            _laidSets.Add(Sorted(laid));
         }
 
         // ── 뽕 창 (사람) ──
@@ -294,7 +295,7 @@ namespace Bbong.Client
             var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
             if (meld.Type != MeldType.None)
             {
-                ShowLaidSet(_round.CurrentPlayer.Hand.Cards, true); // 6장 족보 노출
+                _meldSet = Sorted(_round.CurrentPlayer.Hand.Cards); // 족보: 버림 비우고 표시
                 EndRound(RoundSettlement.SettleByMeld(_round, MySeat, meld), $"내 족보 {meld.Type}({meld.Score})");
                 return;
             }
@@ -326,7 +327,7 @@ namespace Bbong.Client
                 var laid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
                 _round = _round.Pong(MySeat, null);
                 PlayPong();
-                ShowLaidSet(laid, false);
+                _laidSets.Add(Sorted(laid));
                 EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"내 두 번 뽕 (P{_pongDiscarderSeat} 박)");
                 return;
             }
@@ -403,7 +404,7 @@ namespace Bbong.Client
                     _round = _round.Pong(MySeat, card);
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
                     PlayPong();
-                    ShowLaidSet(pongLaid, false);
+                    _laidSets.Add(Sorted(pongLaid)); Refresh();
                     RunBots();
                     break;
 
@@ -418,7 +419,7 @@ namespace Bbong.Client
                     _round = _round.NaturalPong(_naturalPongNumber, card);
                     SetLog($"자연뽕 완료. {_naturalPongNumber} 3장 고정");
                     PlayPong();
-                    ShowLaidSet(naturalLaid, false);
+                    _laidSets.Add(Sorted(naturalLaid)); Refresh();
                     RunBots();
                     break;
             }
@@ -477,7 +478,7 @@ namespace Bbong.Client
                 Destroy(child.gameObject);
             }
 
-            foreach (var card in hand.Cards.OrderBy(c => c.Number).ThenBy(c => c.Color))
+            foreach (var card in Sorted(hand.Cards))
             {
                 CreateCardButton(card);
             }
@@ -508,7 +509,11 @@ namespace Bbong.Client
             discardLabel.color = new Color(1, 1, 1, 0.7f);
             Anchor(discardLabel.rectTransform, new Vector2(0.05f, 0.755f), new Vector2(0.96f, 0.79f));
 
-            _discardRow = CreateRow(root, new Vector2(0.03f, 0.60f), new Vector2(0.97f, 0.75f), 8).transform;
+            // 버림 더미/내려놓은 패 영역(수동 배치 — 겹침/펼침 제어)
+            var discardGo = new GameObject("DiscardArea", typeof(RectTransform));
+            discardGo.transform.SetParent(root, false);
+            _discardRow = discardGo.transform;
+            Anchor((RectTransform)_discardRow, new Vector2(0.03f, 0.595f), new Vector2(0.97f, 0.755f));
 
             _log = CreateText(root, "", 24, TextAnchor.UpperCenter);
             Anchor(_log.rectTransform, new Vector2(0.04f, 0.44f), new Vector2(0.96f, 0.59f));
@@ -522,12 +527,6 @@ namespace Bbong.Client
             _nextBtn = CreateButton(bar, "다음 판", OnNext);
 
             _handRow = CreateRow(root, new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.28f), 12).transform;
-
-            // 내려놓은 패 노출 영역(버림 더미 위, 자유 배치 — 겹침/회전). 클릭 막지 않음.
-            var revealGo = new GameObject("MeldReveal", typeof(RectTransform));
-            revealGo.transform.SetParent(root, false);
-            _meldReveal = revealGo.transform;
-            Anchor((RectTransform)_meldReveal, new Vector2(0.03f, 0.595f), new Vector2(0.97f, 0.755f));
 
             // 전체 화면 플래시(연출용, 클릭 막지 않음)
             _flash = CreatePanel(root, new Color(1, 1, 1, 0));
@@ -550,61 +549,15 @@ namespace Bbong.Client
         private void PlayDiscard() => _audio.PlayOneShot(_sfxDiscard, 0.5f);
         private void PlayStop() => _audio.PlayOneShot(_sfxStop, 0.6f);
 
-        private void PlayPong() => _audio.PlayOneShot(_sfxPong, 0.8f); // 플래시는 ShowLaidSet이 담당
-
-        /// <summary>내려놓은 패를 버림 더미 영역에 정렬해 노출. persist=false면 잠시 후 자동 정리.</summary>
-        private void ShowLaidSet(IReadOnlyList<Card> cards, bool persist)
+        private void PlayPong()
         {
-            ClearMeldReveal();
-            // 숫자 오름차순 → 같은 숫자는 빨·파·노·초 순
-            var sorted = cards.OrderBy(c => c.Number).ThenBy(c => ColorRank[(int)c.Color]).ToList();
-            var n = sorted.Count;
-
-            // 뽕/자연뽕(persist=false)=겹쳐서, 족보(persist=true)=버림 패처럼 안 겹치게 나란히
-            var spacing = persist ? 158f : 78f;
-            var rotation = persist ? 0f : -7f;
-
-            for (var i = 0; i < n; i++)
-            {
-                var face = CreateCardFace(_meldReveal, sorted[i], 150, 225);
-                var rt = face.GetComponent<RectTransform>();
-                rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-                rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.sizeDelta = new Vector2(150, 225);
-                rt.anchoredPosition = new Vector2((i - (n - 1) / 2f) * spacing, 0f);
-                rt.localRotation = Quaternion.Euler(0, 0, (i - (n - 1) / 2f) * rotation);
-            }
-
-            Flash(new Color(1f, 0.95f, 0.4f, 0.45f));
-
-            if (!persist)
-            {
-                _meldClear = StartCoroutine(ClearMeldAfter(1.6f));
-            }
+            _audio.PlayOneShot(_sfxPong, 0.8f);
+            Flash(new Color(1f, 0.95f, 0.4f, 0.5f));
         }
 
-        private void ClearMeldReveal()
-        {
-            if (_meldClear != null)
-            {
-                StopCoroutine(_meldClear);
-                _meldClear = null;
-            }
-
-            foreach (Transform child in _meldReveal)
-            {
-                Destroy(child.gameObject);
-            }
-        }
-
-        private IEnumerator ClearMeldAfter(float seconds)
-        {
-            yield return new WaitForSeconds(seconds);
-            foreach (Transform child in _meldReveal)
-            {
-                Destroy(child.gameObject);
-            }
-        }
+        /// <summary>숫자 오름차순 → 같은 숫자는 빨·파·노·초 순으로 정렬.</summary>
+        private static List<Card> Sorted(IEnumerable<Card> cards) =>
+            cards.OrderBy(c => c.Number).ThenBy(c => ColorRank[(int)c.Color]).ToList();
 
         private void Flash(Color color)
         {
@@ -791,27 +744,60 @@ namespace Bbong.Client
                 Destroy(child.gameObject);
             }
 
-            var pile = _round.DiscardPile;
-            if (pile.Count == 0)
+            // 족보 완성: 버림 더미 비우고 족보 6장만 펼쳐 표시
+            if (_meldSet != null)
             {
-                var empty = CreateText(_discardRow, "(아직 버린 카드 없음)", 28, TextAnchor.MiddleCenter);
-                empty.color = new Color(1, 1, 1, 0.6f);
+                var x = 12f;
+                foreach (var card in _meldSet)
+                {
+                    PlaceCard(card, 128, 192, x, 0f);
+                    x += 136f;
+                }
+
                 return;
             }
 
+            var pile = _round.DiscardPile;
+            var px = 8f;
             var show = Mathf.Min(7, pile.Count);
             GameObject newest = null;
             for (var i = pile.Count - show; i < pile.Count; i++)
             {
-                newest = CreateCardFace(_discardRow, pile[i], 90, 140); // 맨 오른쪽 = 최신(맨 위)
+                newest = PlaceCard(pile[i], 84, 126, px, 0f); // 왼→오, 맨 오른쪽=최신
+                px += 90f;
             }
 
-            if (pile.Count > _discardShownCount && newest != null)
+            // 뽕/자연뽕 나간 패: 버림 카드 뒤에 겹친 스택으로 계속 남김
+            px += 24f;
+            foreach (var set in _laidSets)
             {
-                StartCoroutine(ScalePop(newest.transform)); // 새로 버려진 카드 팝
+                for (var j = 0; j < set.Count; j++)
+                {
+                    PlaceCard(set[j], 84, 126, px + j * 26f, (j - (set.Count - 1) / 2f) * -6f);
+                }
+
+                px += (set.Count - 1) * 26f + 90f + 18f;
+            }
+
+            if (newest != null && pile.Count > _discardShownCount)
+            {
+                StartCoroutine(ScalePop(newest.transform));
             }
 
             _discardShownCount = pile.Count;
+        }
+
+        /// <summary>버림 영역에 카드 1장을 좌측 기준 x 위치에 배치(회전 가능).</summary>
+        private GameObject PlaceCard(Card card, float w, float h, float leftX, float rot)
+        {
+            var face = CreateCardFace(_discardRow, card, w, h);
+            var rt = face.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(w, h);
+            rt.anchoredPosition = new Vector2(leftX + w / 2f, 0f);
+            rt.localRotation = Quaternion.Euler(0, 0, rot);
+            return face;
         }
 
         // ── UI 헬퍼 ──
