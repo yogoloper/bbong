@@ -76,12 +76,17 @@ namespace Bbong.Client
         private AudioSource _audio;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop;
         private Image _flash;
-        // 버림 타임라인: 발생 순서대로. group=true면 뽕/자연뽕(겹쳐 표시), false면 단일 버림.
-        private readonly List<(List<Card> cards, bool group)> _timeline = new();
+        private Text _callout;               // 뽕/자연뽕 콜아웃("8뽕!")
+        private CanvasGroup _calloutGroup;
+        private Coroutine _calloutFx;
+        // 버림 타임라인: 발생 순서대로. group=true면 뽕/자연뽕 고정 패(위쪽 정렬), false면 단일 버림(중앙 더미).
+        // pos/rot은 버릴 때 1회 추첨(매 Refresh마다 더미가 들썩이지 않도록 고정).
+        private readonly List<(List<Card> cards, bool group, Vector2 pos, float rot)> _timeline = new();
         private int _timelineShown;
         private List<Card> _meldSet; // 족보 완성 시 6장(버림 비우고 표시)
 
         private readonly Sprite[] _cardBg = new Sprite[4];  // 색별 둥근 그라데이션 카드 배경
+        private Sprite _haloSprite;                          // 마지막 버림 강조용 흰 둥근 스프라이트
 
         private void Start()
         {
@@ -300,7 +305,7 @@ namespace Bbong.Client
                         // 3장 전부 같은 숫자 → 손 소진 자연뽕 종료
                         _round = _round.NaturalPong(number, null);
                         AddGroup(laid);
-                        PlayPong();
+                        PlayPong($"{number}자연뽕!");
                         EndRound(RoundSettlement.SettleByHandClear(_round, seat), $"P{seat} 자연뽕 손 소진", seat);
                         yield break;
                     }
@@ -308,7 +313,7 @@ namespace Bbong.Client
                     var toss = _bots[seat].ChoosePongDiscard(rest);
                     _round = _round.NaturalPong(number, toss);
                     SetLog($"P{seat} 자연뽕! {number} 3장 고정");
-                    PlayPong();
+                    PlayPong($"{number}자연뽕!");
                     AddGroup(laid);
                     AddDiscard(toss);
                     Refresh();
@@ -376,7 +381,7 @@ namespace Bbong.Client
             if (rest.Count == 0)
             {
                 _round = _round.Pong(seat, null);
-                PlayPong();
+                PlayPong($"{number}뽕!");
                 AddGroup(laid);
                 EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"P{seat} 손 모두 털기(두 번 뽕) · P{discarderSeat} 박 +20", seat);
                 return;
@@ -385,7 +390,7 @@ namespace Bbong.Client
             var toss = _bots[seat].ChoosePongDiscard(rest);
             _round = _round.Pong(seat, toss);
             SetLog($"P{seat} 뽕! {number} 3장 고정");
-            PlayPong();
+            PlayPong($"{number}뽕!");
             AddGroup(laid);
             AddDiscard(toss);
         }
@@ -514,7 +519,7 @@ namespace Bbong.Client
             {
                 var laid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
                 _round = _round.Pong(MySeat, null);
-                PlayPong();
+                PlayPong($"{_pongNumber}뽕!");
                 AddGroup(laid);
                 EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"P{MySeat}(나) 손 모두 털기(두 번 뽕) · P{_pongDiscarderSeat} 박 +20", MySeat);
                 return;
@@ -563,7 +568,7 @@ namespace Bbong.Client
                 _state = UiState.Resolving;
                 _round = _round.NaturalPong(_naturalPongNumber, null);
                 AddGroup(laid);
-                PlayPong();
+                PlayPong($"{_naturalPongNumber}자연뽕!");
                 EndRound(RoundSettlement.SettleByHandClear(_round, MySeat), $"P{MySeat}(나) 자연뽕 손 소진", MySeat);
                 return;
             }
@@ -634,7 +639,7 @@ namespace Bbong.Client
                     var pongLaid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
                     _round = _round.Pong(MySeat, card);
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
-                    PlayPong();
+                    PlayPong($"{_pongNumber}뽕!");
                     AddGroup(pongLaid);
                     AddDiscard(card);
                     RunBots();
@@ -650,7 +655,7 @@ namespace Bbong.Client
                     var naturalLaid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _naturalPongNumber).Take(3).ToList();
                     _round = _round.NaturalPong(_naturalPongNumber, card);
                     SetLog($"자연뽕 완료. {_naturalPongNumber} 3장 고정");
-                    PlayPong();
+                    PlayPong($"{_naturalPongNumber}자연뽕!");
                     AddGroup(naturalLaid);
                     AddDiscard(card);
                     RunBots();
@@ -763,7 +768,7 @@ namespace Bbong.Client
             _info = CreateText(root, "", 28, TextAnchor.UpperCenter);
             Anchor(_info.rectTransform, new Vector2(0.04f, 0.795f), new Vector2(0.96f, 0.845f));
 
-            var discardLabel = CreateText(root, "버림 더미 (오른쪽이 최신)", 24, TextAnchor.MiddleLeft);
+            var discardLabel = CreateText(root, "버림 더미 (노란 테두리 = 마지막 버림)", 24, TextAnchor.MiddleLeft);
             discardLabel.color = new Color(1, 1, 1, 0.7f);
             Anchor(discardLabel.rectTransform, new Vector2(0.05f, 0.755f), new Vector2(0.96f, 0.79f));
 
@@ -817,6 +822,18 @@ namespace Bbong.Client
 
             _scorePopup.SetActive(false);
 
+            // 뽕/자연뽕 콜아웃("8뽕!") — 더미 위 중앙에 크게 떴다 사라짐
+            _callout = CreateText(root, "", 120, TextAnchor.MiddleCenter);
+            _callout.fontStyle = FontStyle.Bold;
+            _callout.color = new Color(1f, 0.92f, 0.35f);
+            _callout.raycastTarget = false;
+            AddOutline(_callout);
+            Anchor(_callout.rectTransform, new Vector2(0.05f, 0.58f), new Vector2(0.95f, 0.76f));
+            _calloutGroup = _callout.gameObject.AddComponent<CanvasGroup>();
+            _calloutGroup.alpha = 0f;
+            _calloutGroup.blocksRaycasts = false;
+            _calloutGroup.interactable = false;
+
             // 전체 화면 플래시(연출용, 클릭 막지 않음)
             _flash = CreatePanel(root, new Color(1, 1, 1, 0));
             Stretch(_flash.rectTransform);
@@ -838,19 +855,60 @@ namespace Bbong.Client
         private void PlayDiscard() => _audio.PlayOneShot(_sfxDiscard, 0.5f);
         private void PlayStop() => _audio.PlayOneShot(_sfxStop, 0.6f);
 
-        private void PlayPong()
+        private void PlayPong(string callout)
         {
             _audio.PlayOneShot(_sfxPong, 0.8f);
             Flash(new Color(1f, 0.95f, 0.4f, 0.5f));
+            ShowCallout(callout);
+        }
+
+        private void ShowCallout(string message)
+        {
+            _callout.text = message;
+            if (_calloutFx != null)
+            {
+                StopCoroutine(_calloutFx);
+            }
+
+            _calloutFx = StartCoroutine(CalloutFx());
+        }
+
+        /// <summary>콜아웃 연출: 크게 등장 → 잠시 유지 → 페이드아웃.</summary>
+        private IEnumerator CalloutFx()
+        {
+            _calloutGroup.alpha = 1f;
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.15f)
+            {
+                _callout.transform.localScale = Vector3.one * Mathf.Lerp(1.6f, 1f, t);
+                yield return null;
+            }
+
+            _callout.transform.localScale = Vector3.one;
+            yield return new WaitForSeconds(0.7f);
+
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.35f)
+            {
+                _calloutGroup.alpha = 1f - t;
+                yield return null;
+            }
+
+            _calloutGroup.alpha = 0f;
         }
 
         /// <summary>숫자 오름차순 → 같은 숫자는 빨·파·노·초 순으로 정렬.</summary>
         private static List<Card> Sorted(IEnumerable<Card> cards) =>
             cards.OrderBy(c => c.Number).ThenBy(c => ColorRank[(int)c.Color]).ToList();
 
-        private void AddDiscard(Card card) => _timeline.Add((new List<Card> { card }, false));
+        /// <summary>중앙 밀집 무작위(삼각분포). 균등분포보다 자연스러운 무더기를 만듭니다.</summary>
+        private static float Tri(float range) => (Random.Range(-range, range) + Random.Range(-range, range)) / 2f;
 
-        private void AddGroup(IEnumerable<Card> cards) => _timeline.Add((Sorted(cards), true));
+        /// <summary>단일 버림: 중앙 더미에 무작위 위치·기울기로 던져 놓기(실제 카드판 느낌).</summary>
+        private void AddDiscard(Card card) => _timeline.Add((new List<Card> { card }, false,
+            new Vector2(Tri(110f), Tri(34f)), Tri(28f)));
+
+        /// <summary>뽕/자연뽕 고정 패: 더미 위로 같이 던짐(한 지점에 살짝 펼쳐서).</summary>
+        private void AddGroup(IEnumerable<Card> cards) => _timeline.Add((Sorted(cards), true,
+            new Vector2(Tri(90f), Tri(20f)), Tri(16f)));
 
         private void Flash(Color color)
         {
@@ -989,6 +1047,8 @@ namespace Bbong.Client
                 var bottom = Color.Lerp(c, Color.black, 0.20f);  // 아래쪽 어둡게
                 _cardBg[i] = RoundedGradientSprite(120, 168, 22, top, bottom);
             }
+
+            _haloSprite = RoundedGradientSprite(120, 168, 22, Color.white, Color.white);
         }
 
         /// <summary>둥근 그라데이션 카드 스프라이트(흰 테두리 포함, 9-slice).</summary>
@@ -1043,80 +1103,80 @@ namespace Bbong.Client
                 var mx = 12f;
                 foreach (var card in _meldSet)
                 {
-                    PlaceCard(card, 128, 192, mx, 0f);
+                    PlaceCard(card, 128, 192, new Vector2(0f, 0.5f), new Vector2(mx + 64f, 0f), 0f);
                     mx += 136f;
                 }
 
                 return;
             }
 
-            // 하나의 타임라인: 단일 버림 + 뽕/자연뽕(겹침)을 발생 순서대로.
-            // 영역 폭에 맞춰 오른쪽(최신)부터 들어가는 만큼만 표시.
-            const float w = 78f, h = 117f, gap = 8f, gGap = 16f, gStep = 24f;
-            var area = ((RectTransform)_discardRow).rect.width;
-            if (area <= 1f)
-            {
-                area = 1000f; // 첫 프레임 레이아웃 전 대비
-            }
-
-            float EntryWidth(int idx)
-            {
-                var e = _timeline[idx];
-                return e.group ? (e.cards.Count - 1) * gStep + w + gGap : w + gap;
-            }
-
-            var startIdx = _timeline.Count;
-            var sum = 0f;
-            for (var i = _timeline.Count - 1; i >= 0; i--)
-            {
-                var ew = EntryWidth(i);
-                if (sum + ew > area - 16f && i != _timeline.Count - 1)
-                {
-                    break;
-                }
-
-                sum += ew;
-                startIdx = i;
-            }
-
-            var px = 8f;
+            // 전부 중앙 무작위 더미: 발생 순서대로 쌓아 마지막 던진 카드가 맨 위.
+            // 뽕/자연뽕 3장도 같은 지점에 살짝 펼쳐 던짐(j별 고정 오프셋 → Refresh마다 동일).
+            const float w = 78f, h = 117f;
+            var heapAnchor = new Vector2(0.5f, 0.45f);
             GameObject last = null;
-            for (var i = startIdx; i < _timeline.Count; i++)
+            foreach (var (cards, group, pos, rot) in _timeline)
             {
-                var (cards, group) = _timeline[i];
                 if (group)
                 {
                     for (var j = 0; j < cards.Count; j++)
                     {
-                        last = PlaceCard(cards[j], w, h, px + j * gStep, (j - (cards.Count - 1) / 2f) * -6f);
+                        var fan = j - (cards.Count - 1) / 2f;
+                        last = PlaceCard(cards[j], w, h, heapAnchor,
+                            pos + new Vector2(fan * 26f, j * 3f), rot + fan * 9f);
                     }
-
-                    px += (cards.Count - 1) * gStep + w + gGap;
                 }
                 else
                 {
-                    last = PlaceCard(cards[0], w, h, px, 0f);
-                    px += w + gap;
+                    last = PlaceCard(cards[0], w, h, heapAnchor, pos, rot);
                 }
             }
 
-            if (last != null && _timeline.Count > _timelineShown)
+            if (last != null)
             {
-                StartCoroutine(ScalePop(last.transform));
+                HighlightTop(last);
+
+                if (_timeline.Count > _timelineShown)
+                {
+                    StartCoroutine(ScalePop(last.transform));
+                }
             }
 
             _timelineShown = _timeline.Count;
         }
 
-        /// <summary>버림 영역에 카드 1장을 좌측 기준 x 위치에 배치(회전 가능).</summary>
-        private GameObject PlaceCard(Card card, float w, float h, float leftX, float rot)
+        /// <summary>맨 위(마지막 버림) 카드 강조: 카드 바로 아래에 노란 헤일로를 깔아 테두리처럼 보이게.</summary>
+        private void HighlightTop(GameObject top)
+        {
+            var topRt = (RectTransform)top.transform;
+            var halo = new GameObject("TopHalo", typeof(RectTransform), typeof(Image));
+            halo.transform.SetParent(_discardRow, false);
+
+            var img = halo.GetComponent<Image>();
+            img.sprite = _haloSprite;
+            img.type = Image.Type.Sliced;
+            img.color = new Color(1f, 0.92f, 0.3f, 0.95f);
+            img.raycastTarget = false;
+
+            var rt = (RectTransform)halo.transform;
+            rt.anchorMin = rt.anchorMax = topRt.anchorMin;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = topRt.sizeDelta + new Vector2(14f, 14f);
+            rt.anchoredPosition = topRt.anchoredPosition;
+            rt.localRotation = topRt.localRotation;
+
+            halo.transform.SetSiblingIndex(top.transform.GetSiblingIndex()); // 카드 바로 아래로
+        }
+
+        /// <summary>버림 영역에 카드 1장 배치. anchorRel=영역 내 기준점(0~1), pos=기준점에서의 오프셋(px).</summary>
+        private GameObject PlaceCard(Card card, float w, float h, Vector2 anchorRel, Vector2 pos, float rot)
         {
             var face = CreateCardFace(_discardRow, card, w, h);
             var rt = face.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0f, 0.5f);
+            rt.anchorMin = rt.anchorMax = anchorRel;
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(w, h);
-            rt.anchoredPosition = new Vector2(leftX + w / 2f, 0f);
+            rt.anchoredPosition = pos;
             rt.localRotation = Quaternion.Euler(0, 0, rot);
             return face;
         }
