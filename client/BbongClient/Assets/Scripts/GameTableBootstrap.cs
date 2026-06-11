@@ -63,6 +63,11 @@ namespace Bbong.Client
         private Transform _handRow;
         private Text _info;
         private Text _log;
+        private Text _scoreboard;            // 상시 점수 전광판(누적)
+        private GameObject _scorePopup;      // 판 종료 중앙 전광판
+        private Text _scorePopupText;
+        private CanvasGroup _scorePopupGroup;
+        private Coroutine _scoreFade;
         private Button _stopBtn, _pongBtn, _passBtn, _naturalBtn, _nextBtn;
         private readonly List<string> _events = new();
 
@@ -95,6 +100,11 @@ namespace Bbong.Client
             _timeline.Clear();
             _timelineShown = 0;
             _meldSet = null;
+            if (_scorePopup != null)
+            {
+                _scorePopup.SetActive(false);
+            }
+
             SetLog($"{_roundIndex + 1}판 시작.");
             RunBots();
         }
@@ -102,27 +112,67 @@ namespace Bbong.Client
         private void EndRound(int[] scores, string reason)
         {
             PlayStop();
+            var prev = _game.CumulativeDebts.ToArray(); // 이번 판 반영 전 누적
             _game = _game.ApplyRoundScores(scores);
             _roundIndex++;
 
             var detail = string.Join("  ", Enumerable.Range(0, PlayerCount).Select(s => $"P{s} {scores[s]:+0;-0;0}"));
             var cumulative = string.Join("  ", Enumerable.Range(0, PlayerCount).Select(s => $"P{s}={_game.CumulativeDebts[s]}"));
 
+            string title;
             if (_game.IsSetOver)
             {
                 var winners = _game.WinnerSeats();
                 var payouts = StakePot.Distribute(Stake, PlayerCount, winners);
                 var who = string.Join(", ", winners.Select(s => $"P{s}"));
                 SetLog($"{reason}\n[{detail}]\n누적 {cumulative}\n=== 게임 종료(5판) === 1등 {who}  판돈 P{MySeat}={payouts[MySeat]}");
+                title = $"게임 종료 — 1등 {who}";
                 _state = UiState.SetOver;
             }
             else
             {
                 SetLog($"{reason}\n[{detail}]\n누적 {cumulative}");
+                title = $"{_roundIndex}판 종료";
                 _state = UiState.RoundOver;
             }
 
+            ShowScorePopup(title, prev, scores, _game.CumulativeDebts);
             Refresh();
+        }
+
+        /// <summary>중앙 전광판: 이전+이번판=누적 줄별 표기. 잠시 후 페이드아웃.</summary>
+        private void ShowScorePopup(string title, int[] prev, int[] round, IReadOnlyList<int> cum)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(title).AppendLine();
+            for (var s = 0; s < PlayerCount; s++)
+            {
+                var me = s == MySeat ? " (나)" : "";
+                sb.AppendLine($"P{s}{me}:  {prev[s]} + {round[s]} = {cum[s]}");
+            }
+
+            _scorePopupText.text = sb.ToString();
+            _scorePopup.SetActive(true);
+            _scorePopupGroup.alpha = 1f;
+
+            if (_scoreFade != null)
+            {
+                StopCoroutine(_scoreFade);
+            }
+
+            _scoreFade = StartCoroutine(FadeScorePopup());
+        }
+
+        private IEnumerator FadeScorePopup()
+        {
+            yield return new WaitForSeconds(3f);
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 1f)
+            {
+                _scorePopupGroup.alpha = 1f - t;
+                yield return null;
+            }
+
+            _scorePopup.SetActive(false);
         }
 
         // ── 봇 자동 진행 (코루틴, 천천히) ──
@@ -456,7 +506,10 @@ namespace Bbong.Client
             var me = _round.Players[MySeat];
             _info.text =
                 $"{_roundIndex + 1}/{GameConfig.DefaultSetRounds}판   턴 P{_round.CurrentSeat}   더미 {_round.DrawPile.Count}   버림 {top}\n" +
-                $"내 손패 {me.Hand.Count}장 합 {me.Hand.Sum()}   내 누적빚 {_game.CumulativeDebts[MySeat]}";
+                $"내 손패 {me.Hand.Count}장 합 {me.Hand.Sum()}";
+
+            _scoreboard.text = "누적  " + string.Join("   ", Enumerable.Range(0, PlayerCount)
+                .Select(s => $"P{s}{(s == MySeat ? "(나)" : "")} {_game.CumulativeDebts[s]}"));
 
             _stopBtn.gameObject.SetActive(_state == UiState.StopDecision);
             _naturalBtn.gameObject.SetActive(_state == UiState.NeedDiscard && _round.CanNaturalPong());
@@ -519,7 +572,13 @@ namespace Bbong.Client
 
             Stretch(CreatePanel(root, new Color(0.12f, 0.30f, 0.20f)).rectTransform);
 
-            _opponentsRow = CreateRow(root, new Vector2(0.02f, 0.85f), new Vector2(0.98f, 0.99f), 12).transform;
+            // 상시 점수 전광판(최상단)
+            var boardBg = CreatePanel(root, new Color(0, 0, 0, 0.35f));
+            Anchor(boardBg.rectTransform, new Vector2(0.02f, 0.955f), new Vector2(0.98f, 0.998f));
+            _scoreboard = CreateText(root, "", 26, TextAnchor.MiddleCenter);
+            Anchor(_scoreboard.rectTransform, new Vector2(0.02f, 0.955f), new Vector2(0.98f, 0.998f));
+
+            _opponentsRow = CreateRow(root, new Vector2(0.02f, 0.83f), new Vector2(0.98f, 0.95f), 12).transform;
 
             _info = CreateText(root, "", 28, TextAnchor.UpperCenter);
             Anchor(_info.rectTransform, new Vector2(0.04f, 0.795f), new Vector2(0.96f, 0.845f));
@@ -545,6 +604,18 @@ namespace Bbong.Client
             _nextBtn = CreateButton(bar, "다음 판", OnNext);
 
             _handRow = CreateRow(root, new Vector2(0.02f, 0.05f), new Vector2(0.98f, 0.28f), 12).transform;
+
+            // 판 종료 중앙 전광판(떴다가 사라짐). 클릭은 통과.
+            var popupBg = CreatePanel(root, new Color(0.05f, 0.05f, 0.08f, 0.9f));
+            _scorePopup = popupBg.gameObject;
+            Anchor(popupBg.rectTransform, new Vector2(0.12f, 0.42f), new Vector2(0.88f, 0.76f));
+            popupBg.raycastTarget = false;
+            _scorePopupGroup = _scorePopup.AddComponent<CanvasGroup>();
+            _scorePopupGroup.blocksRaycasts = false;
+            _scorePopupGroup.interactable = false;
+            _scorePopupText = CreateText(popupBg.transform, "", 34, TextAnchor.MiddleCenter);
+            Stretch(_scorePopupText.rectTransform);
+            _scorePopup.SetActive(false);
 
             // 전체 화면 플래시(연출용, 클릭 막지 않음)
             _flash = CreatePanel(root, new Color(1, 1, 1, 0));
