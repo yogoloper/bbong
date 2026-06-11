@@ -182,9 +182,14 @@ namespace Bbong.Client
             if (_scoreFade != null)
             {
                 StopCoroutine(_scoreFade);
+                _scoreFade = null;
             }
 
-            _scoreFade = StartCoroutine(FadeScorePopup());
+            // 판 종료만 페이드+자동 진행. 게임 종료(SetOver)는 '새 게임' 전까지 계속 표시.
+            if (_state == UiState.RoundOver)
+            {
+                _scoreFade = StartCoroutine(FadeScorePopup());
+            }
         }
 
         private void AddCell(string text, bool emphasize)
