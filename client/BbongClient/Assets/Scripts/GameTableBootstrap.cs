@@ -24,7 +24,7 @@ namespace Bbong.Client
         private const int PlayerCount = 4;
         private const int MySeat = 0;
         private const int Stake = 1000;
-        private const float BotDelay = 0.5f;
+        private const float BotDelay = 1.5f;
         private const int PongWindowSeconds = 4;
 
         // 색약 안전 팔레트(Okabe-Ito 기반). 색은 보조, 도형이 주 구분 수단.
