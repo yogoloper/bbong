@@ -27,10 +27,13 @@ namespace Bbong.Client
         private const float BotDelay = 0.5f;
         private const int PongWindowSeconds = 4;
 
+        // 색약 안전 팔레트(Okabe-Ito 기반). 색은 보조, 도형이 주 구분 수단.
         private static readonly Color[] Palette =
         {
-            new Color(0.85f, 0.23f, 0.23f), new Color(0.20f, 0.45f, 0.85f),
-            new Color(0.20f, 0.62f, 0.35f), new Color(0.90f, 0.75f, 0.15f)
+            new Color(0.835f, 0.369f, 0.000f), // Red  → 주황빨강(vermillion)
+            new Color(0.000f, 0.447f, 0.698f), // Blue → 진파랑
+            new Color(0.000f, 0.620f, 0.451f), // Green→ 청록
+            new Color(0.902f, 0.624f, 0.000f)  // Yellow→ 호박색(amber)
         };
 
         private static readonly string[] ColorLetter = { "R", "B", "G", "Y" };
@@ -66,8 +69,8 @@ namespace Bbong.Client
         private Image _flash;
         private int _discardShownCount;
 
-        private Sprite _cardBase;            // 둥근 흰 카드 배경(9-slice)
-        private readonly Sprite[] _shapes = new Sprite[4]; // 색별 도형(색약 대응)
+        private readonly Sprite[] _cardBg = new Sprite[4];  // 색별 둥근 그라데이션 카드 배경
+        private readonly Sprite[] _shapes = new Sprite[4];  // 색별 도형(색약 주 구분 수단)
 
         private void Start()
         {
@@ -597,20 +600,19 @@ namespace Bbong.Client
         }
 
         /// <summary>
-        /// 카드 한 장의 시각 표현(둥근 흰 카드 + 색별 도형 워터마크 + 큰 숫자 + 모서리 핍).
-        /// 손패·버림 더미 공용. 색약 대응으로 색마다 도형이 다름.
+        /// 카드 한 장(색 배경 그라데이션 + 흰 테두리 + 흰 숫자(외곽선) + 양 모서리 흰 도형).
+        /// 색약 대응: 도형이 주 구분 수단, 색은 보조. 손패·버림 공용.
         /// </summary>
         private GameObject CreateCardFace(Transform parent, Card card, float width, float height)
         {
             var colorIndex = (int)card.Color;
-            var col = Palette[colorIndex];
 
             var go = new GameObject($"Card_{card.Number}{ColorLetter[colorIndex]}",
                 typeof(RectTransform), typeof(Image), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
 
             var bg = go.GetComponent<Image>();
-            bg.sprite = _cardBase;
+            bg.sprite = _cardBg[colorIndex];
             bg.type = Image.Type.Sliced;
             bg.color = Color.white;
 
@@ -618,26 +620,34 @@ namespace Bbong.Client
             le.preferredWidth = width;
             le.preferredHeight = height;
 
-            // 중앙 워터마크 도형(옅게)
-            var watermark = AddImage(go.transform, _shapes[colorIndex], new Color(col.r, col.g, col.b, 0.15f));
-            Anchor(watermark.rectTransform, new Vector2(0.22f, 0.20f), new Vector2(0.78f, 0.80f));
-
-            // 중앙 숫자(굵게, 카드 색)
-            var number = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.42f), TextAnchor.MiddleCenter);
-            number.color = col;
+            // 중앙 큰 숫자(흰색 + 검은 외곽선 → 어떤 배경에서도 또렷)
+            var number = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.46f), TextAnchor.MiddleCenter);
+            number.color = Color.white;
             number.fontStyle = FontStyle.Bold;
             Stretch(number.rectTransform);
+            AddOutline(number);
 
-            // 좌상단 핍: 작은 숫자 + 도형
-            var pipNum = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.14f), TextAnchor.UpperLeft);
-            pipNum.color = col;
+            // 좌상단 핍(숫자+도형), 우하단 핍(도형) — 도형으로 색 구분
+            var pipNum = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.15f), TextAnchor.UpperLeft);
+            pipNum.color = Color.white;
             pipNum.fontStyle = FontStyle.Bold;
-            Anchor(pipNum.rectTransform, new Vector2(0.10f, 0.78f), new Vector2(0.55f, 0.97f));
+            Anchor(pipNum.rectTransform, new Vector2(0.10f, 0.79f), new Vector2(0.6f, 0.98f));
+            AddOutline(pipNum);
 
-            var pipShape = AddImage(go.transform, _shapes[colorIndex], col);
-            Anchor(pipShape.rectTransform, new Vector2(0.12f, 0.62f), new Vector2(0.32f, 0.77f));
+            var topShape = AddImage(go.transform, _shapes[colorIndex], Color.white);
+            Anchor(topShape.rectTransform, new Vector2(0.11f, 0.63f), new Vector2(0.34f, 0.80f));
+
+            var bottomShape = AddImage(go.transform, _shapes[colorIndex], Color.white);
+            Anchor(bottomShape.rectTransform, new Vector2(0.66f, 0.05f), new Vector2(0.89f, 0.22f));
 
             return go;
+        }
+
+        private static void AddOutline(Text text)
+        {
+            var outline = text.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0, 0, 0, 0.65f);
+            outline.effectDistance = new Vector2(2, -2);
         }
 
         private Image AddImage(Transform parent, Sprite sprite, Color color)
@@ -656,18 +666,22 @@ namespace Bbong.Client
 
         private void GenerateArt()
         {
-            _cardBase = RoundedSprite(120, 168, 22, Color.white);
             for (var i = 0; i < 4; i++)
             {
+                var c = Palette[i];
+                var top = Color.Lerp(c, Color.white, 0.22f);     // 위쪽 밝게
+                var bottom = Color.Lerp(c, Color.black, 0.20f);  // 아래쪽 어둡게
+                _cardBg[i] = RoundedGradientSprite(120, 168, 22, top, bottom);
                 _shapes[i] = ShapeSprite(i, 64);
             }
         }
 
-        /// <summary>둥근 모서리 사각형 스프라이트(9-slice border로 어떤 크기에도 모서리 유지).</summary>
-        private static Sprite RoundedSprite(int w, int h, int radius, Color fill)
+        /// <summary>둥근 그라데이션 카드 스프라이트(흰 테두리 포함, 9-slice).</summary>
+        private static Sprite RoundedGradientSprite(int w, int h, int radius, Color top, Color bottom)
         {
             var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
             var pixels = new Color[w * h];
+            const float borderW = 4f;
             for (var y = 0; y < h; y++)
             {
                 for (var x = 0; x < w; x++)
@@ -675,8 +689,16 @@ namespace Bbong.Client
                     var cx = Mathf.Clamp(x, radius, w - 1 - radius);
                     var cy = Mathf.Clamp(y, radius, h - 1 - radius);
                     var dist = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-                    var a = Mathf.Clamp01(radius - dist + 0.5f); // 모서리 안티앨리어싱
-                    pixels[y * w + x] = new Color(fill.r, fill.g, fill.b, fill.a * a);
+                    var edge = radius - dist;                 // 가장자리까지 거리(코너·직선 공통)
+                    var alpha = Mathf.Clamp01(edge + 0.5f);   // 모서리 AA
+
+                    var fill = Color.Lerp(bottom, top, y / (float)h);
+                    if (edge < borderW)
+                    {
+                        fill = Color.Lerp(fill, Color.white, 0.8f); // 흰 테두리
+                    }
+
+                    pixels[y * w + x] = new Color(fill.r, fill.g, fill.b, alpha);
                 }
             }
 
