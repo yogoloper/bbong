@@ -70,7 +70,6 @@ namespace Bbong.Client
         private int _discardShownCount;
 
         private readonly Sprite[] _cardBg = new Sprite[4];  // 색별 둥근 그라데이션 카드 배경
-        private readonly Sprite[] _shapes = new Sprite[4];  // 색별 도형(색약 주 구분 수단)
 
         private void Start()
         {
@@ -620,27 +619,33 @@ namespace Bbong.Client
             le.preferredWidth = width;
             le.preferredHeight = height;
 
-            // 중앙 큰 숫자(흰색 + 검은 외곽선 → 어떤 배경에서도 또렷)
-            var number = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.46f), TextAnchor.MiddleCenter);
-            number.color = Color.white;
-            number.fontStyle = FontStyle.Bold;
-            Stretch(number.rectTransform);
-            AddOutline(number);
+            var num = card.Number.ToString();
+            var letter = ColorLetter[colorIndex];
+            var pip = Mathf.RoundToInt(height * 0.15f);
 
-            // 좌상단 핍(숫자+도형), 우하단 핍(도형) — 도형으로 색 구분
-            var pipNum = CreateText(go.transform, card.Number.ToString(), Mathf.RoundToInt(height * 0.15f), TextAnchor.UpperLeft);
-            pipNum.color = Color.white;
-            pipNum.fontStyle = FontStyle.Bold;
-            Anchor(pipNum.rectTransform, new Vector2(0.10f, 0.79f), new Vector2(0.6f, 0.98f));
-            AddOutline(pipNum);
+            // 중앙 큰 숫자(흰색 + 검은 외곽선)
+            var center = CreateText(go.transform, num, Mathf.RoundToInt(height * 0.5f), TextAnchor.MiddleCenter);
+            center.color = Color.white;
+            center.fontStyle = FontStyle.Bold;
+            Stretch(center.rectTransform);
+            AddOutline(center);
 
-            var topShape = AddImage(go.transform, _shapes[colorIndex], Color.white);
-            Anchor(topShape.rectTransform, new Vector2(0.11f, 0.63f), new Vector2(0.34f, 0.80f));
-
-            var bottomShape = AddImage(go.transform, _shapes[colorIndex], Color.white);
-            Anchor(bottomShape.rectTransform, new Vector2(0.66f, 0.05f), new Vector2(0.89f, 0.22f));
+            // 네 모서리: 숫자/이니셜 (대각 대칭)
+            Pip(go.transform, num, pip, TextAnchor.UpperLeft, new Vector2(0.10f, 0.78f), new Vector2(0.5f, 0.97f));
+            Pip(go.transform, letter, pip, TextAnchor.UpperRight, new Vector2(0.5f, 0.78f), new Vector2(0.90f, 0.97f));
+            Pip(go.transform, letter, pip, TextAnchor.LowerLeft, new Vector2(0.10f, 0.03f), new Vector2(0.5f, 0.22f));
+            Pip(go.transform, num, pip, TextAnchor.LowerRight, new Vector2(0.5f, 0.03f), new Vector2(0.90f, 0.22f));
 
             return go;
+        }
+
+        private void Pip(Transform parent, string content, int size, TextAnchor anchor, Vector2 min, Vector2 max)
+        {
+            var t = CreateText(parent, content, size, anchor);
+            t.color = Color.white;
+            t.fontStyle = FontStyle.Bold;
+            Anchor(t.rectTransform, min, max);
+            AddOutline(t);
         }
 
         private static void AddOutline(Text text)
@@ -648,18 +653,6 @@ namespace Bbong.Client
             var outline = text.gameObject.AddComponent<Outline>();
             outline.effectColor = new Color(0, 0, 0, 0.65f);
             outline.effectDistance = new Vector2(2, -2);
-        }
-
-        private Image AddImage(Transform parent, Sprite sprite, Color color)
-        {
-            var go = new GameObject("Img", typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(parent, false);
-            var img = go.GetComponent<Image>();
-            img.sprite = sprite;
-            img.color = color;
-            img.raycastTarget = false;
-            img.preserveAspect = true;
-            return img;
         }
 
         // ── 절차적 카드 아트 ──
@@ -672,7 +665,6 @@ namespace Bbong.Client
                 var top = Color.Lerp(c, Color.white, 0.22f);     // 위쪽 밝게
                 var bottom = Color.Lerp(c, Color.black, 0.20f);  // 아래쪽 어둡게
                 _cardBg[i] = RoundedGradientSprite(120, 168, 22, top, bottom);
-                _shapes[i] = ShapeSprite(i, 64);
             }
         }
 
@@ -706,47 +698,6 @@ namespace Bbong.Client
             tex.Apply();
             var border = new Vector4(radius, radius, radius, radius);
             return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
-        }
-
-        /// <summary>색 인덱스별 도형(0 원, 1 사각, 2 삼각, 3 마름모). 흰색으로 그려 Image.color로 틴트.</summary>
-        private static Sprite ShapeSprite(int shape, int size)
-        {
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
-            var pixels = new Color[size * size];
-            var c = (size - 1) / 2f;
-            var r = size * 0.42f;
-            for (var y = 0; y < size; y++)
-            {
-                for (var x = 0; x < size; x++)
-                {
-                    var dx = x - c;
-                    var dy = y - c;
-                    bool inside;
-                    switch (shape)
-                    {
-                        case 1: // 사각형
-                            inside = Mathf.Abs(dx) <= r * 0.85f && Mathf.Abs(dy) <= r * 0.85f;
-                            break;
-                        case 2: // 삼각형(위쪽 꼭짓점)
-                            var ny = (c - y) / (r * 1.4f);          // 위로 갈수록 +
-                            var halfWidth = (1f - ny) * r;          // 아래로 넓어짐
-                            inside = ny <= 1f && ny >= -0.4f && Mathf.Abs(dx) <= halfWidth;
-                            break;
-                        case 3: // 마름모
-                            inside = Mathf.Abs(dx) + Mathf.Abs(dy) <= r;
-                            break;
-                        default: // 원
-                            inside = dx * dx + dy * dy <= r * r;
-                            break;
-                    }
-
-                    pixels[y * size + x] = new Color(1, 1, 1, inside ? 1f : 0f);
-                }
-            }
-
-            tex.SetPixels(pixels);
-            tex.Apply();
-            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
         private void CreateCardButton(Card card)
