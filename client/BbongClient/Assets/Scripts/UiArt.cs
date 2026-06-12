@@ -18,9 +18,51 @@ namespace Bbong.Client
         public static Sprite Button => _button ??= RoundedGradient(96, 96, 24,
             Color.white, new Color(0.86f, 0.86f, 0.86f));
 
-        /// <summary>카드 뒷면: 남색 그라데이션(상대 손패 수 표현용).</summary>
-        public static Sprite CardBack => _cardBack ??= RoundedGradient(60, 84, 12,
-            new Color(0.24f, 0.32f, 0.58f), new Color(0.11f, 0.15f, 0.33f));
+        /// <summary>카드 뒷면: 남색 그라데이션 + 다이아 격자 + 금색 안쪽 테두리.</summary>
+        public static Sprite CardBack => _cardBack ??= CreateCardBack(90, 126, 14);
+
+        private static Sprite CreateCardBack(int w, int h, int radius)
+        {
+            var top = new Color(0.27f, 0.35f, 0.63f);
+            var bottom = new Color(0.10f, 0.14f, 0.32f);
+            var lattice = new Color(0.44f, 0.52f, 0.80f);
+            var gold = new Color(0.84f, 0.70f, 0.34f);
+
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color[w * h];
+            for (var y = 0; y < h; y++)
+            {
+                for (var x = 0; x < w; x++)
+                {
+                    var cx = Mathf.Clamp(x, radius, w - 1 - radius);
+                    var cy = Mathf.Clamp(y, radius, h - 1 - radius);
+                    var dist = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                    var edge = radius - dist;
+                    var alpha = Mathf.Clamp01(edge + 0.5f);
+
+                    var fill = Color.Lerp(bottom, top, y / (float)h);
+                    if (edge >= 9f && ((x + y) % 16 < 2 || (x - y + 4096) % 16 < 2))
+                    {
+                        fill = Color.Lerp(fill, lattice, 0.55f); // 다이아 격자
+                    }
+
+                    if (edge >= 5f && edge < 8f)
+                    {
+                        fill = gold; // 안쪽 금테
+                    }
+                    else if (edge < 3f)
+                    {
+                        fill = Color.Lerp(fill, Color.white, 0.85f); // 바깥 흰 테두리
+                    }
+
+                    pixels[y * w + x] = new Color(fill.r, fill.g, fill.b, alpha);
+                }
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+        }
 
         /// <summary>둥근 모서리 세로 그라데이션 스프라이트(흰 테두리 포함, 9-slice).</summary>
         public static Sprite RoundedGradient(int w, int h, int radius, Color top, Color bottom)

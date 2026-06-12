@@ -24,6 +24,7 @@ namespace Bbong.Client
 
         private const int MySeat = 0;
         private const float BotDelay = 0.5f;
+        private const float TossDelay = 0.35f; // 뽕 내려놓기 → 추가 버림 사이 간격(단계 연출)
         private const int PongWindowSeconds = 4;
 
         public int PlayerCount { get; set; } = 4;
@@ -374,6 +375,10 @@ namespace Bbong.Client
                     SetLog($"P{seat} 자연뽕! {number} 3장 고정");
                     PlayPong($"{SeatName(seat)}\n{number}자연뽕!");
                     AddGroup(laid);
+                    Refresh();
+                    yield return new WaitForSeconds(TossDelay); // 내려놓기 먼저, 버림은 한 박자 뒤
+
+                    PlayDiscard();
                     AddDiscard(toss);
                     Refresh();
                     yield return new WaitForSeconds(BotDelay);
@@ -447,11 +452,26 @@ namespace Bbong.Client
             }
 
             var toss = _bots[seat].ChoosePongDiscard(rest);
-            _round = _round.Pong(seat, toss);
+            _round = _round.Pong(seat, toss); // 코어는 즉시 반영, 버림 표시만 지연
             SetLog($"P{seat} 뽕! {number} 3장 고정");
             PlayPong($"{SeatName(seat)}\n{number}뽕!");
             AddGroup(laid);
+            Refresh();
+            StartCoroutine(TossAfterPong(toss));
+        }
+
+        /// <summary>봇 뽕의 추가 버림을 한 박자 뒤에 표시(내려놓기 → 버림 단계 연출).</summary>
+        private IEnumerator TossAfterPong(Card toss)
+        {
+            yield return new WaitForSeconds(TossDelay);
+            if (_state == UiState.RoundOver || _state == UiState.SetOver)
+            {
+                yield break; // 그 사이 판이 끝났으면 다음 판에서 더미가 리셋됨
+            }
+
+            PlayDiscard();
             AddDiscard(toss);
+            Refresh();
         }
 
         // ── 뽕 창 (사람) ──
@@ -872,15 +892,15 @@ namespace Bbong.Client
 
                 Anchor(t.rectTransform, new Vector2(0f, 0.55f), new Vector2(1f, 1f));
 
-                // 닉네임 아래 뒤집힌 카드로 손패 수 표현
+                // 닉네임 아래 뒤집힌 카드로 손패 수 표현(겹침 없이 나란히, 6장까지 수용)
                 var count = _round.Players[seat].Hand.Count;
-                const float bw = 44f, bh = 62f, step = 26f;
+                const float bw = 36f, bh = 50f, step = bw + 3f;
                 var total = (count - 1) * step + bw;
                 for (var j = 0; j < count; j++)
                 {
                     var back = CreatePanel(panel.transform, Color.white);
                     back.sprite = UiArt.CardBack;
-                    back.type = Image.Type.Sliced;
+                    back.type = Image.Type.Simple; // 격자 패턴 왜곡 없이 통째로 축소
                     var brt = back.rectTransform;
                     brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.31f);
                     brt.pivot = new Vector2(0.5f, 0.5f);
