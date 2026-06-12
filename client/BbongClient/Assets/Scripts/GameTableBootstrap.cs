@@ -25,7 +25,7 @@ namespace Bbong.Client
         private const int MySeat = 0;
         private const float BotDelay = 0.5f;
         private const float TossDelay = 0.35f; // 뽕 내려놓기 → 추가 버림 사이 간격(단계 연출)
-        private const int PongWindowSeconds = 4;
+        private const int PongWindowSeconds = 5;
 
         public int PlayerCount { get; set; } = 4;
 
@@ -868,13 +868,19 @@ namespace Bbong.Client
             var center = new Vector2(0.50f, 0.58f);
             var radius = new Vector2(0.40f, 0.30f);
 
+            // 뽕 대기 중엔 아무도 포커싱하지 않고, 뽕을 실제 선언했을 때만 선언자를 포커싱.
+            // 창이 시간 초과로 닫히면 상태가 바뀌면서 원래 턴 대상자에게 포커스가 넘어간다.
+            var focusSeat = _state == UiState.PongWindow ? -1
+                : _state == UiState.PongDiscardSelect ? MySeat
+                : _round.CurrentSeat;
+
             for (var seat = 0; seat < PlayerCount; seat++)
             {
                 var angle = (-90f + seat * 360f / PlayerCount) * Mathf.Deg2Rad;
                 var anchor = center + new Vector2(Mathf.Cos(angle) * radius.x, Mathf.Sin(angle) * radius.y);
 
                 var mine = seat == MySeat;
-                var highlight = _round.CurrentSeat == seat;
+                var highlight = focusSeat == seat;
                 var panel = CreatePanel(_seatsArea, highlight ? new Color(0.9f, 0.8f, 0.2f, 0.55f) : new Color(0, 0, 0, 0.35f));
                 var rt = panel.rectTransform;
                 rt.anchorMin = rt.anchorMax = anchor;
