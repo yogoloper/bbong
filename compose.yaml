@@ -2,6 +2,8 @@
 # 앱(server)은 컨테이너 밖에서 dotnet run으로 실행하고, 여기 띄운 PG/Redis에 localhost로 접속.
 # 비밀번호 등은 .env에서 주입(커밋 안 함). 운영 인프라는 매니지드 호스팅 별도.
 
+name: bbong  # 프로젝트명(네트워크·볼륨 접두사). 미지정 시 디렉토리명("06bbong")이 됨
+
 services:
   postgres:
     image: postgres:16
