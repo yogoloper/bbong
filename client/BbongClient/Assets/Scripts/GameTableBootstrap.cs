@@ -953,7 +953,7 @@ namespace Bbong.Client
             GenerateArt();
 
             var felt = CreatePanel(root, Color.white);
-            felt.sprite = UiArt.Felt;
+            felt.sprite = UiArt.Backdrop; // 메뉴 화면과 톤 통일(네이비). 카드/더미는 그 위에.
             Stretch(felt.rectTransform);
 
             // 좌석 패널: 테이블 중심 기준 타원 배치(나=아래, 반시계 방향)

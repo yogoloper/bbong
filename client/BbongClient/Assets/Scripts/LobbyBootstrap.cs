@@ -23,7 +23,6 @@ namespace Bbong.Client
 
         private Font _font;
         private GameObject _canvasGo;
-        private Text _wallet;
         private Text _summary;
         private Button _startBtn;
         private readonly List<(int value, Button button)> _playerChoices = new();
@@ -79,22 +78,19 @@ namespace Bbong.Client
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand; // 화면비 달라도 글씨 비대 방지
             var root = _canvasGo.transform;
 
-            var felt = CreatePanel(root, Color.white);
-            felt.sprite = UiArt.Felt;
-            Stretch(felt.rectTransform);
+            var bg = CreatePanel(root, Color.white);
+            bg.sprite = UiArt.Backdrop;
+            Stretch(bg.rectTransform);
 
-            var title = CreateText(root, "나이롱뽕", 96, TextAnchor.MiddleCenter);
+            UiKit.TopBar(root); // 공통 상단바(다른 화면과 통일)
+
+            var title = CreateText(root, "연습 게임", 60, TextAnchor.MiddleCenter);
             title.fontStyle = FontStyle.Bold;
-            Anchor(title.rectTransform, new Vector2(0.05f, 0.80f), new Vector2(0.95f, 0.95f));
+            Anchor(title.rectTransform, new Vector2(0.05f, 0.79f), new Vector2(0.95f, 0.875f));
 
-            var subtitle = CreateText(root, "방 만들기", 40, TextAnchor.MiddleCenter);
-            subtitle.color = new Color(1f, 1f, 1f, 0.75f);
-            Anchor(subtitle.rectTransform, new Vector2(0.05f, 0.73f), new Vector2(0.95f, 0.785f));
-
-            _wallet = CreateText(root, "", 36, TextAnchor.MiddleCenter);
-            _wallet.fontStyle = FontStyle.Bold;
-            _wallet.color = new Color(0.5f, 0.95f, 0.6f);
-            Anchor(_wallet.rectTransform, new Vector2(0.05f, 0.665f), new Vector2(0.95f, 0.725f));
+            var subtitle = CreateText(root, "컴퓨터와 연습 — 우승해도 포인트 없음", 30, TextAnchor.MiddleCenter);
+            subtitle.color = new Color(1f, 1f, 1f, 0.7f);
+            Anchor(subtitle.rectTransform, new Vector2(0.05f, 0.73f), new Vector2(0.95f, 0.78f));
 
             var playerLabel = CreateText(root, "인원", 40, TextAnchor.MiddleCenter);
             Anchor(playerLabel.rectTransform, new Vector2(0.05f, 0.585f), new Vector2(0.95f, 0.635f));
@@ -118,9 +114,8 @@ namespace Bbong.Client
             _summary.color = new Color(1f, 0.92f, 0.4f);
             Anchor(_summary.rectTransform, new Vector2(0.05f, 0.165f), new Vector2(0.95f, 0.23f));
 
-            _startBtn = CreateButton(root, "게임 시작", OnStartGame);
-            Anchor((RectTransform)_startBtn.transform, new Vector2(0.40f, 0.025f), new Vector2(0.60f, 0.145f));
-            _startBtn.GetComponentInChildren<Text>().fontSize = 48;
+            _startBtn = UiKit.CtaButton(root, "게임 시작",
+                new Vector2(0.40f, 0.025f), new Vector2(0.60f, 0.145f), OnStartGame, 48);
 
             UiKit.BackButton(root, OnBack);
         }
@@ -142,8 +137,6 @@ namespace Bbong.Client
 
         private void RefreshSelection()
         {
-            _wallet.text = $"{PlayerWallet.Balance:N0} 포인트";
-
             foreach (var (value, button) in _playerChoices)
             {
                 button.GetComponent<Image>().color = value == _playerCount ? SelectedColor : UnselectedColor;
