@@ -2,8 +2,9 @@ using System;
 using System.Security.Claims;
 using BbongServer.Application;
 using BbongServer.Infrastructure.Auth;
-using BbongServer.Infrastructure.InMemory;
+using BbongServer.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,9 +17,14 @@ jwt.Key = builder.Configuration["Jwt:Key"]
           ?? "dev-only-insecure-signing-key-change-me-32+bytes";
 
 builder.Services.AddSingleton(jwt);
-// 첫 골격: 인메모리 저장소(싱글톤으로 상태 유지). 후속 EF Core + PostgreSQL로 교체.
-builder.Services.AddSingleton<IAccountStore, InMemoryAccountStore>();
-builder.Services.AddSingleton<ILedgerStore, InMemoryLedgerStore>();
+
+// PostgreSQL: appsettings → 환경변수 → (개발 전용) fallback. 운영은 BBONG_DB_CONN.
+var connectionString = builder.Configuration.GetConnectionString("Postgres")
+                       ?? Environment.GetEnvironmentVariable("BBONG_DB_CONN")
+                       ?? "Host=localhost;Port=5432;Database=bbong;Username=bbong;Password=bbong_dev";
+builder.Services.AddDbContext<BbongDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddScoped<IAccountStore, EfAccountStore>();
+builder.Services.AddScoped<ILedgerStore, EfLedgerStore>();
 builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
 builder.Services.AddScoped<AccountService>();
 
@@ -27,6 +33,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// 시작 시 마이그레이션 적용(통합 테스트는 DbContext를 교체하므로 null → 스킵).
+using (var scope = app.Services.CreateScope())
+{
+    scope.ServiceProvider.GetService<BbongDbContext>()?.Database.Migrate();
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 

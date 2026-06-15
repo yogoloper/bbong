@@ -4,7 +4,13 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using BbongServer.Application;
+using BbongServer.Infrastructure.InMemory;
+using BbongServer.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NUnit.Framework;
 
 namespace BbongServer.Tests.Api;
@@ -14,8 +20,18 @@ public class AuthEndpointsTests
 {
     private WebApplicationFactory<Program> _factory = null!;
 
+    // 엔드포인트 동작만 검증 — 저장소를 인메모리로 교체해 PostgreSQL 없이도 빠르게 통과.
     [SetUp]
-    public void SetUp() => _factory = new WebApplicationFactory<Program>();
+    public void SetUp() => _factory = new WebApplicationFactory<Program>()
+        .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<DbContextOptions<BbongDbContext>>();
+            services.RemoveAll<BbongDbContext>();
+            services.RemoveAll<IAccountStore>();
+            services.RemoveAll<ILedgerStore>();
+            services.AddSingleton<IAccountStore, InMemoryAccountStore>();
+            services.AddSingleton<ILedgerStore, InMemoryLedgerStore>();
+        }));
 
     [TearDown]
     public void TearDown() => _factory.Dispose();
