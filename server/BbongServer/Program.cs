@@ -146,10 +146,38 @@ app.MapGet("/me", async (ClaimsPrincipal user, IAccountStore accounts, ILedgerSt
     });
 }).RequireAuthorization();
 
+// 닉네임 변경
+app.MapPatch("/me/nickname", async (ClaimsPrincipal user, RenameRequest req, AccountService accounts) =>
+{
+    var sub = user.FindFirstValue(ClaimTypes.NameIdentifier)
+              ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var account = await accounts.RenameAsync(userId, req.Nickname);
+        return Results.Ok(new { nickname = account.Nickname });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (InvalidOperationException)
+    {
+        return Results.NotFound();
+    }
+}).RequireAuthorization();
+
 app.Run();
 
 /// <summary>소셜 로그인/승격 요청 본문.</summary>
 public sealed record SocialLoginRequest(SocialProvider Provider, string IdToken);
+
+/// <summary>닉네임 변경 요청 본문.</summary>
+public sealed record RenameRequest(string Nickname);
 
 // 통합 테스트(WebApplicationFactory)에서 진입점 참조용
 public partial class Program;

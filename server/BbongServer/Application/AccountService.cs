@@ -72,6 +72,22 @@ public sealed class AccountService
         return account;
     }
 
+    /// <summary>닉네임 변경. 코어 GameConfig 규칙으로 서버 재검증(클라 신뢰 안 함).</summary>
+    public async Task<UserAccount> RenameAsync(Guid userId, string nickname)
+    {
+        if (!BbongCore.Config.GameConfig.IsValidNickname(nickname))
+        {
+            throw new ArgumentException($"닉네임은 1~{BbongCore.Config.GameConfig.MaxNicknameLength}자여야 합니다.", nameof(nickname));
+        }
+
+        var account = await _accounts.GetByIdAsync(userId)
+            ?? throw new InvalidOperationException("계정을 찾을 수 없습니다.");
+
+        account.Rename(nickname);
+        await _accounts.SaveAsync(account);
+        return account;
+    }
+
     private async Task PersistNewAsync(UserAccount account)
     {
         var wallet = new Wallet(account.Id);

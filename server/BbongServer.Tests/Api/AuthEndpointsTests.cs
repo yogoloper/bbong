@@ -91,6 +91,34 @@ public class AuthEndpointsTests
     }
 
     [Test]
+    public async Task Rename_changes_nickname_and_persists()
+    {
+        var client = _factory.CreateClient();
+        var guest = await (await client.PostAsync("/auth/guest", null)).Content.ReadFromJsonAsync<JsonElement>();
+        var token = guest.GetProperty("accessToken").GetString();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var patch = await client.PatchAsJsonAsync("/me/nickname", new { nickname = "명랑한 수달" });
+        Assert.That(patch.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var me = await client.GetFromJsonAsync<JsonElement>("/me");
+        Assert.That(me.GetProperty("nickname").GetString(), Is.EqualTo("명랑한 수달"));
+    }
+
+    [Test]
+    public async Task Rename_with_invalid_nickname_is_bad_request()
+    {
+        var client = _factory.CreateClient();
+        var guest = await (await client.PostAsync("/auth/guest", null)).Content.ReadFromJsonAsync<JsonElement>();
+        var token = guest.GetProperty("accessToken").GetString();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var patch = await client.PatchAsJsonAsync("/me/nickname", new { nickname = "" });
+
+        Assert.That(patch.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
     public async Task Link_promotes_guest_to_social()
     {
         var client = _factory.CreateClient();
