@@ -48,7 +48,7 @@ namespace Bbong.Client
             }
 
             UiKit.CreateButton(root, "매칭 시작", new Vector2(0.34f, 0.22f), new Vector2(0.66f, 0.32f), OnMatch, 44);
-            UiKit.CreateButton(root, "뒤로", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.11f), Back, 32);
+            UiKit.BackButton(root, Back);
 
             _status = UiKit.CreateText(root, "", 30, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.12f), new Vector2(0.9f, 0.2f));

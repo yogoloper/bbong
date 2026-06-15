@@ -40,7 +40,7 @@ namespace Bbong.Client
             UiKit.CreateText(root, "(통계·게임 기록은 온라인 플레이 후 집계 — Phase 5)", 24, TextAnchor.MiddleCenter,
                 new Vector2(0.2f, 0.24f), new Vector2(0.8f, 0.29f)).color = new Color(1, 1, 1, 0.4f);
 
-            UiKit.CreateButton(root, "뒤로", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.11f), Back, 32);
+            UiKit.BackButton(root, Back);
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.13f), new Vector2(0.9f, 0.21f));

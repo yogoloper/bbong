@@ -110,6 +110,14 @@ namespace Bbong.Client
             return input;
         }
 
+        /// <summary>화면 왼쪽 상단 고정 뒤로가기 버튼(모든 화면 통일 위치).</summary>
+        public static Button BackButton(Transform root, UnityEngine.Events.UnityAction onBack)
+        {
+            var btn = CreateButton(root, "← 뒤로", new Vector2(0.015f, 0.90f), new Vector2(0.12f, 0.975f), onBack, 32);
+            btn.transform.SetAsLastSibling(); // 항상 최상위(다른 패널에 안 가림)
+            return btn;
+        }
+
         public static void Stretch(RectTransform rt) => Anchor(rt, Vector2.zero, Vector2.one);
 
         public static void Anchor(RectTransform rt, Vector2 min, Vector2 max)

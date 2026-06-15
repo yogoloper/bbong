@@ -32,7 +32,7 @@ namespace Bbong.Client
                 new Vector2(0.3f, 0.43f), new Vector2(0.7f, 0.53f),
                 () => _status.text = "초대코드 입력 → 대기실 입장 (Phase 5)", 38);
 
-            UiKit.CreateButton(root, "뒤로", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.11f), Back, 32);
+            UiKit.BackButton(root, Back);
 
             _status = UiKit.CreateText(root, "", 30, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.26f), new Vector2(0.9f, 0.36f));

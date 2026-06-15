@@ -35,7 +35,7 @@ namespace Bbong.Client
             _bankruptBtn = UiKit.CreateButton(root, "구제 광고 10,000P (잔액 부족 시)",
                 new Vector2(0.3f, 0.41f), new Vector2(0.7f, 0.51f), OnBankrupt, 30);
 
-            UiKit.CreateButton(root, "뒤로", new Vector2(0.03f, 0.03f), new Vector2(0.15f, 0.11f), Back, 32);
+            UiKit.BackButton(root, Back);
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.26f), new Vector2(0.9f, 0.36f));

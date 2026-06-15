@@ -121,7 +121,12 @@ namespace Bbong.Client
             _startBtn = CreateButton(root, "게임 시작", OnStartGame);
             Anchor((RectTransform)_startBtn.transform, new Vector2(0.40f, 0.025f), new Vector2(0.60f, 0.145f));
             _startBtn.GetComponentInChildren<Text>().fontSize = 48;
+
+            UiKit.BackButton(root, OnBack);
         }
+
+        /// <summary>메인 로비로 돌아가기(연습 설정 취소).</summary>
+        private void OnBack() => UiKit.GoTo<MainLobbyBootstrap>(_canvasGo, this);
 
         /// <summary>선택지 버튼 1개 생성 + 선택 강조/비활성 표시용 등록.</summary>
         private void CreateChoice(Transform parent, string label, int value,
