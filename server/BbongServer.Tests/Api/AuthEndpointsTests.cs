@@ -29,9 +29,11 @@ public class AuthEndpointsTests
             services.RemoveAll<BbongDbContext>();
             services.RemoveAll<IAccountStore>();
             services.RemoveAll<ILedgerStore>();
+            services.RemoveAll<IAdRewardStore>();
             services.RemoveAll<ISocialTokenVerifier>();
             services.AddSingleton<IAccountStore, InMemoryAccountStore>();
             services.AddSingleton<ILedgerStore, InMemoryLedgerStore>();
+            services.AddSingleton<IAdRewardStore, InMemoryAdRewardStore>();
             services.AddSingleton<ISocialTokenVerifier, BbongServer.Infrastructure.Social.DevBypassSocialVerifier>();
         }));
 
@@ -116,6 +118,22 @@ public class AuthEndpointsTests
         var patch = await client.PatchAsJsonAsync("/me/nickname", new { nickname = "" });
 
         Assert.That(patch.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task Standard_ad_reward_adds_2000_then_cooldown_blocks()
+    {
+        var client = _factory.CreateClient();
+        var guest = await (await client.PostAsync("/auth/guest", null)).Content.ReadFromJsonAsync<JsonElement>();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", guest.GetProperty("accessToken").GetString());
+
+        var first = await client.PostAsJsonAsync("/shop/ad-reward", new { kind = "Standard" });
+        var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.That(firstBody.GetProperty("balance").GetInt64(), Is.EqualTo(12_000)); // 10000 + 2000
+
+        var second = await client.PostAsJsonAsync("/shop/ad-reward", new { kind = "Standard" });
+        Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest)); // 쿨다운
     }
 
     [Test]

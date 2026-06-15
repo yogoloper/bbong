@@ -29,7 +29,15 @@ public class GameConfigTests
     [Test]
     public void Stake_options_match_spec()
     {
-        Assert.That(GameConfig.StakeOptions, Is.EqualTo(new[] { 100, 500, 1000, 5000, 10000 }));
+        Assert.That(GameConfig.StakeOptions, Is.EqualTo(new[] { 100, 500, 1000, 2000, 5000, 10000 }));
+    }
+
+    [Test]
+    public void Bankruptcy_threshold_is_min_stake()
+    {
+        // 잔액이 최소 입장료(100) 이하면 파산 → 구제 광고 대상
+        Assert.That(GameConfig.BankruptcyThreshold, Is.EqualTo(100));
+        Assert.That(GameConfig.BankruptcyThreshold, Is.EqualTo(GameConfig.StakeOptions[0]));
     }
 
     [Test]

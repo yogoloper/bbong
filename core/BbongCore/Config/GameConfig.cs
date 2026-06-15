@@ -27,7 +27,10 @@ public sealed record GameConfig(
     public const int DefaultSetRounds = 5;    // 1세트 판 수 (§8)
 
     /// <summary>방 생성 시 선택 가능한 입장료(판돈) (§9-1).</summary>
-    public static readonly IReadOnlyList<int> StakeOptions = new[] { 100, 500, 1000, 5000, 10000 };
+    public static readonly IReadOnlyList<int> StakeOptions = new[] { 100, 500, 1000, 2000, 5000, 10000 };
+
+    /// <summary>파산 기준 = 최소 입장료. 잔액이 이 값 이하면 구제 광고 대상(서버 Shop 정책).</summary>
+    public const int BankruptcyThreshold = 100;
 
     public static GameConfig Default { get; } = new();
 

@@ -14,6 +14,8 @@ public sealed class BbongDbContext : DbContext
 
     public DbSet<LedgerRow> Ledger => Set<LedgerRow>();
 
+    public DbSet<AdRewardRow> AdRewards => Set<AdRewardRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<UserAccount>(account =>
@@ -38,6 +40,15 @@ public sealed class BbongDbContext : DbContext
             ledger.Property(e => e.Id).ValueGeneratedOnAdd();
             ledger.Property(e => e.Reason).HasConversion<string>(); // enum을 가독성 위해 문자열로
             ledger.HasIndex(e => e.UserId); // 잔액 계산 = 유저별 조회
+        });
+
+        modelBuilder.Entity<AdRewardRow>(reward =>
+        {
+            reward.ToTable("ad_rewards");
+            reward.HasKey(e => e.Id);
+            reward.Property(e => e.Id).ValueGeneratedOnAdd();
+            reward.Property(e => e.Kind).HasConversion<string>();
+            reward.HasIndex(e => new { e.UserId, e.Kind, e.ClaimedAt }); // 쿨다운·일일 제한 조회
         });
     }
 }

@@ -4,6 +4,8 @@ using System.Security.Claims;
 using System.Text.Json.Serialization;
 using BbongServer.Application;
 using BbongServer.Domain.Auth;
+using BbongServer.Domain.Shop;
+using BbongServer.Infrastructure;
 using BbongServer.Infrastructure.Auth;
 using BbongServer.Infrastructure.Persistence;
 using BbongServer.Infrastructure.Social;
@@ -33,8 +35,11 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
 builder.Services.AddDbContext<BbongDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddScoped<IAccountStore, EfAccountStore>();
 builder.Services.AddScoped<ILedgerStore, EfLedgerStore>();
+builder.Services.AddScoped<IAdRewardStore, EfAdRewardStore>();
+builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
 builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<ShopService>();
 
 // 소셜 검증기: 개발은 bypass(앱 등록 전), 운영은 실제 provider 검증기로 교체 예정.
 var socialBypass = string.Equals(
@@ -171,10 +176,43 @@ app.MapPatch("/me/nickname", async (ClaimsPrincipal user, RenameRequest req, Acc
     }
 }).RequireAuthorization();
 
+// 광고 보상 수령(시청 완료 가정 — 실제 SSV 서버검증은 후속). 새 잔액 반환.
+app.MapPost("/shop/ad-reward", async (ClaimsPrincipal user, AdRewardRequest req, ShopService shop, ILedgerStore ledger) =>
+{
+    var sub = user.FindFirstValue(ClaimTypes.NameIdentifier)
+              ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        if (req.Kind == AdRewardKind.Standard)
+        {
+            await shop.ClaimStandardAsync(userId);
+        }
+        else
+        {
+            await shop.ClaimBankruptcyAsync(userId);
+        }
+
+        var wallet = await ledger.LoadWalletAsync(userId);
+        return Results.Ok(new { balance = wallet.Balance });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).RequireAuthorization();
+
 app.Run();
 
 /// <summary>소셜 로그인/승격 요청 본문.</summary>
 public sealed record SocialLoginRequest(SocialProvider Provider, string IdToken);
+
+/// <summary>광고 보상 수령 요청 본문(Standard | Bankruptcy).</summary>
+public sealed record AdRewardRequest(AdRewardKind Kind);
 
 /// <summary>닉네임 변경 요청 본문.</summary>
 public sealed record RenameRequest(string Nickname);
