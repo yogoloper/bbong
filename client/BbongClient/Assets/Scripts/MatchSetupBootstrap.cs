@@ -21,11 +21,11 @@ namespace Bbong.Client
 
         private void Build()
         {
-            var (canvas, root) = UiKit.CreateScreen("MatchSetupCanvas");
+            var (canvas, root) = UiKit.CreateScreen("MatchSetupCanvas", topBar: true);
             _canvas = canvas;
 
-            UiKit.CreateText(root, "맞춤게임", 64, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.86f), new Vector2(0.9f, 0.97f)).fontStyle = FontStyle.Bold;
+            UiKit.CreateText(root, "맞춤게임", 56, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.87f)).fontStyle = FontStyle.Bold;
 
             UiKit.CreateText(root, "인원", 36, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.72f), new Vector2(0.9f, 0.78f));
@@ -47,7 +47,7 @@ namespace Bbong.Client
                     () => { _stake = s; }, 28);
             }
 
-            UiKit.CreateButton(root, "매칭 시작", new Vector2(0.34f, 0.22f), new Vector2(0.66f, 0.32f), OnMatch, 44);
+            UiKit.CtaButton(root, "매칭 시작", new Vector2(0.34f, 0.2f), new Vector2(0.66f, 0.31f), OnMatch, 44);
             UiKit.BackButton(root, Back);
 
             _status = UiKit.CreateText(root, "", 30, TextAnchor.MiddleCenter,

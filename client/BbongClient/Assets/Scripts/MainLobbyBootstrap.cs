@@ -16,37 +16,40 @@ namespace Bbong.Client
 
         private void Build()
         {
-            var (canvas, root) = UiKit.CreateScreen("MainLobbyCanvas");
+            var (canvas, root) = UiKit.CreateScreen("MainLobbyCanvas", topBar: true);
             _canvas = canvas;
 
-            // 상단 바: 닉네임 + 포인트
-            var bar = UiKit.CreatePanel(root, new Color(0, 0, 0, 0.35f));
-            UiKit.Anchor(bar.rectTransform, new Vector2(0.02f, 0.88f), new Vector2(0.98f, 0.98f));
-            UiKit.CreateText(root, Session.Nickname, 40, TextAnchor.MiddleLeft,
-                new Vector2(0.05f, 0.88f), new Vector2(0.6f, 0.98f));
-            var points = UiKit.CreateText(root, $"{Session.Balance:N0} 포인트", 40, TextAnchor.MiddleRight,
-                new Vector2(0.4f, 0.88f), new Vector2(0.95f, 0.98f));
-            points.color = new Color(0.5f, 0.95f, 0.6f);
+            // 5개 모드 카드 — 가로 한 줄(루미큐브식 카드 레이아웃 차용)
+            var titles = new[] { "맞춤게임", "연습", "친구와 함께", "포인트 얻기", "프로필" };
+            var descs = new[] { "실유저와 포인트 대결", "컴퓨터와 연습", "포인트 없이 친구끼리", "광고 보고 포인트", "닉네임·통계" };
+            UnityEngine.Events.UnityAction[] actions = { OnMatch, OnPractice, OnFriend, OnShop, OnProfile };
 
-            // 5개 모드 — 큰 버튼 그리드
-            Mode(root, "맞춤게임", "실유저와 포인트 대결", new Vector2(0.06f, 0.50f), new Vector2(0.48f, 0.82f), OnMatch);
-            Mode(root, "연습", "컴퓨터와 연습", new Vector2(0.52f, 0.50f), new Vector2(0.94f, 0.82f), OnPractice);
-            Mode(root, "친구와 함께", "초대코드로 방 만들기", new Vector2(0.06f, 0.16f), new Vector2(0.37f, 0.46f), OnFriend);
-            Mode(root, "상점", "광고로 포인트 받기", new Vector2(0.40f, 0.16f), new Vector2(0.60f, 0.46f), OnShop);
-            Mode(root, "프로필", "닉네임·통계", new Vector2(0.63f, 0.16f), new Vector2(0.94f, 0.46f), OnProfile);
+            const float pad = 0.012f, top = 0.7f, bottom = 0.2f;
+            var w = (1f - pad * 6f) / 5f;
+            for (var i = 0; i < 5; i++)
+            {
+                var x0 = pad + i * (w + pad);
+                Mode(root, titles[i], descs[i], new Vector2(x0, bottom), new Vector2(x0 + w, top), actions[i]);
+            }
         }
 
         private void Mode(Transform root, string title, string desc, Vector2 min, Vector2 max,
             UnityEngine.Events.UnityAction onClick)
         {
+            // 카드 = 반투명 패널 + 클릭 버튼. 제목은 하단, 위쪽은 색 강조 영역.
             var btn = UiKit.CreateButton(root, "", min, max, onClick);
-            var t = UiKit.CreateText(btn.transform, title, 48, TextAnchor.MiddleCenter,
-                new Vector2(0f, 0.45f), new Vector2(1f, 0.95f));
-            t.color = Color.black;
+            btn.GetComponent<Image>().color = new Color(0.12f, 0.22f, 0.42f, 0.95f);
+
+            var accentTop = UiKit.CreatePanel(btn.transform, new Color(0.2f, 0.4f, 0.75f, 0.5f));
+            UiKit.Anchor(accentTop.rectTransform, new Vector2(0.08f, 0.45f), new Vector2(0.92f, 0.9f));
+
+            var t = UiKit.CreateText(btn.transform, title, 40, TextAnchor.MiddleCenter,
+                new Vector2(0f, 0.25f), new Vector2(1f, 0.42f));
+            t.color = Color.white;
             t.fontStyle = FontStyle.Bold;
-            var d = UiKit.CreateText(btn.transform, desc, 26, TextAnchor.MiddleCenter,
-                new Vector2(0f, 0.08f), new Vector2(1f, 0.42f));
-            d.color = new Color(0.25f, 0.25f, 0.25f);
+            var d = UiKit.CreateText(btn.transform, desc, 22, TextAnchor.MiddleCenter,
+                new Vector2(0f, 0.08f), new Vector2(1f, 0.24f));
+            d.color = new Color(1f, 1f, 1f, 0.6f);
         }
 
         private void OnMatch() => UiKit.GoTo<MatchSetupBootstrap>(_canvas, this);

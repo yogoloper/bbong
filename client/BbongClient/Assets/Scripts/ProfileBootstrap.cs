@@ -20,11 +20,11 @@ namespace Bbong.Client
 
         private void Build()
         {
-            var (canvas, root) = UiKit.CreateScreen("ProfileCanvas");
+            var (canvas, root) = UiKit.CreateScreen("ProfileCanvas", topBar: true);
             _canvas = canvas;
 
-            UiKit.CreateText(root, "프로필", 64, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.86f), new Vector2(0.9f, 0.97f)).fontStyle = FontStyle.Bold;
+            UiKit.CreateText(root, "프로필", 56, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.87f)).fontStyle = FontStyle.Bold;
 
             UiKit.CreateText(root, "닉네임", 32, TextAnchor.MiddleLeft,
                 new Vector2(0.2f, 0.7f), new Vector2(0.8f, 0.76f));

@@ -10,6 +10,9 @@ namespace Bbong.Client
         private static Sprite _felt;
         private static Sprite _button;
         private static Sprite _cardBack;
+        private static Sprite _backdrop;
+        private static Sprite _greenButton;
+        private static Sprite _pill;
 
         /// <summary>테이블 펠트 배경: 중앙이 밝은 방사형 그라데이션 + 미세 그레인.</summary>
         public static Sprite Felt => _felt ??= CreateFelt(512);
@@ -20,6 +23,17 @@ namespace Bbong.Client
 
         /// <summary>카드 뒷면: 남색 그라데이션 + 다이아 격자 + 금색 안쪽 테두리.</summary>
         public static Sprite CardBack => _cardBack ??= CreateCardBack(90, 126, 14);
+
+        /// <summary>메뉴 화면 배경: 진한 네이비 세로 그라데이션 + 별 점.</summary>
+        public static Sprite Backdrop => _backdrop ??= CreateBackdrop(512);
+
+        /// <summary>CTA(주요 액션) 버튼: 초록 그라데이션 둥근 캡슐.</summary>
+        public static Sprite GreenButton => _greenButton ??= RoundedGradient(96, 96, 28,
+            new Color(0.45f, 0.78f, 0.30f), new Color(0.22f, 0.52f, 0.16f));
+
+        /// <summary>둥근 캡슐(상단바·태그용). 반투명 남색.</summary>
+        public static Sprite Pill => _pill ??= RoundedGradient(64, 64, 30,
+            new Color(0.12f, 0.20f, 0.38f), new Color(0.08f, 0.14f, 0.28f));
 
         private static Sprite CreateCardBack(int w, int h, int radius)
         {
@@ -94,6 +108,36 @@ namespace Bbong.Client
             tex.Apply();
             var border = new Vector4(radius, radius, radius, radius);
             return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
+        }
+
+        private static Sprite CreateBackdrop(int size)
+        {
+            var top = new Color(0.09f, 0.16f, 0.34f);
+            var bottom = new Color(0.03f, 0.06f, 0.16f);
+
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color[size * size];
+            for (var y = 0; y < size; y++)
+            {
+                for (var x = 0; x < size; x++)
+                {
+                    var fill = Color.Lerp(bottom, top, y / (float)size);
+
+                    // 결정적 해시로 드문 별 점
+                    var n = Mathf.Sin(x * 127.1f + y * 311.7f) * 43758.5453f;
+                    var r = n - Mathf.Floor(n);
+                    if (r > 0.9985f)
+                    {
+                        fill = Color.Lerp(fill, Color.white, 0.7f);
+                    }
+
+                    pixels[y * size + x] = new Color(fill.r, fill.g, fill.b, 1f);
+                }
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
         }
 
         private static Sprite CreateFelt(int size)

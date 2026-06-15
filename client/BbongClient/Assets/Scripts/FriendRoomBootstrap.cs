@@ -17,13 +17,13 @@ namespace Bbong.Client
 
         private void Build()
         {
-            var (canvas, root) = UiKit.CreateScreen("FriendRoomCanvas");
+            var (canvas, root) = UiKit.CreateScreen("FriendRoomCanvas", topBar: true);
             _canvas = canvas;
 
-            UiKit.CreateText(root, "친구와 함께", 64, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.84f), new Vector2(0.9f, 0.96f)).fontStyle = FontStyle.Bold;
-            UiKit.CreateText(root, "포인트 없이 친구들과 한 판", 30, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.76f), new Vector2(0.9f, 0.82f)).color = new Color(1, 1, 1, 0.7f);
+            UiKit.CreateText(root, "친구와 함께", 56, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.76f), new Vector2(0.9f, 0.86f)).fontStyle = FontStyle.Bold;
+            UiKit.CreateText(root, "포인트 없이 친구들과 한 판 (입장료 없음)", 28, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.68f), new Vector2(0.9f, 0.74f)).color = new Color(1, 1, 1, 0.7f);
 
             UiKit.CreateButton(root, "방 만들기 (호스트)",
                 new Vector2(0.3f, 0.56f), new Vector2(0.7f, 0.66f),

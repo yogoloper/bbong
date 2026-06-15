@@ -29,8 +29,8 @@ namespace Bbong.Client
             }
         }
 
-        /// <summary>화면용 전체 캔버스 + 펠트 배경 생성. 루트 Transform 반환.</summary>
-        public static (GameObject canvasGo, Transform root) CreateScreen(string name)
+        /// <summary>화면용 전체 캔버스 + 네이비 배경 생성. topBar=true면 공통 상단바(닉네임·포인트).</summary>
+        public static (GameObject canvasGo, Transform root) CreateScreen(string name, bool topBar = false)
         {
             var canvasGo = new GameObject(name, typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasGo.GetComponent<Canvas>();
@@ -40,11 +40,59 @@ namespace Bbong.Client
             scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
 
-            var felt = CreatePanel(canvasGo.transform, Color.white);
-            felt.sprite = UiArt.Felt;
-            Stretch(felt.rectTransform);
+            var bg = CreatePanel(canvasGo.transform, Color.white);
+            bg.sprite = UiArt.Backdrop;
+            Stretch(bg.rectTransform);
+
+            if (topBar)
+            {
+                TopBar(canvasGo.transform);
+            }
 
             return (canvasGo, canvasGo.transform);
+        }
+
+        /// <summary>공통 상단바: 좌측 아바타+닉네임, 우측 보유 포인트.</summary>
+        public static void TopBar(Transform root)
+        {
+            var panel = CreatePanel(root, new Color(0, 0, 0, 0.35f));
+            Anchor(panel.rectTransform, new Vector2(0f, 0.9f), new Vector2(1f, 1f));
+
+            var avatar = CreatePanel(root, new Color(0.3f, 0.55f, 0.9f));
+            avatar.sprite = UiArt.Pill;
+            avatar.type = Image.Type.Sliced;
+            Anchor(avatar.rectTransform, new Vector2(0.012f, 0.915f), new Vector2(0.05f, 0.985f));
+            var initial = string.IsNullOrEmpty(Session.Nickname) ? "?" : Session.Nickname[..1];
+            CreateText(avatar.transform, initial, 38, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one)
+                .fontStyle = FontStyle.Bold;
+
+            CreateText(root, Session.Nickname, 34, TextAnchor.MiddleLeft,
+                new Vector2(0.06f, 0.9f), new Vector2(0.5f, 1f));
+
+            var pts = CreateText(root, $"{Session.Balance:N0} P", 38, TextAnchor.MiddleRight,
+                new Vector2(0.6f, 0.9f), new Vector2(0.98f, 1f));
+            pts.color = Accent;
+            pts.fontStyle = FontStyle.Bold;
+        }
+
+        /// <summary>주요 액션(게임 시작 등) 초록 CTA 버튼.</summary>
+        public static Button CtaButton(Transform parent, string label, Vector2 min, Vector2 max,
+            UnityEngine.Events.UnityAction onClick, int fontSize = 48)
+        {
+            var go = new GameObject("Cta", typeof(RectTransform), typeof(Image), typeof(Button));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = UiArt.GreenButton;
+            img.type = Image.Type.Sliced;
+            img.color = Color.white;
+            Anchor(go.GetComponent<RectTransform>(), min, max);
+
+            var text = CreateText(go.transform, label, fontSize, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            text.color = Color.white;
+            text.fontStyle = FontStyle.Bold;
+
+            go.GetComponent<Button>().onClick.AddListener(onClick);
+            return go.GetComponent<Button>();
         }
 
         public static Image CreatePanel(Transform parent, Color color)

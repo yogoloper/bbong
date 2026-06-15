@@ -20,31 +20,45 @@ namespace Bbong.Client
 
         private void Build()
         {
-            var (canvas, root) = UiKit.CreateScreen("ShopCanvas");
+            var (canvas, root) = UiKit.CreateScreen("ShopCanvas", topBar: true);
             _canvas = canvas;
 
-            UiKit.CreateText(root, "상점", 64, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.86f), new Vector2(0.9f, 0.97f)).fontStyle = FontStyle.Bold;
+            UiKit.CreateText(root, "포인트 얻기", 60, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.76f), new Vector2(0.9f, 0.86f)).fontStyle = FontStyle.Bold;
 
-            _balance = UiKit.CreateText(root, "", 44, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.74f), new Vector2(0.9f, 0.83f));
-            _balance.color = new Color(0.5f, 0.95f, 0.6f);
-
-            _standardBtn = UiKit.CreateButton(root, "광고 보고 2,000P",
-                new Vector2(0.3f, 0.54f), new Vector2(0.7f, 0.64f), OnStandard, 38);
-            _bankruptBtn = UiKit.CreateButton(root, "구제 광고 10,000P (잔액 부족 시)",
-                new Vector2(0.3f, 0.41f), new Vector2(0.7f, 0.51f), OnBankrupt, 30);
+            // 광고 카드 2개(루미큐브 코인 카드 레이아웃 차용)
+            AdCard(root, "광고 보고\n2,000P", "30분마다", new Vector2(0.24f, 0.34f), new Vector2(0.49f, 0.68f), OnStandard, out _standardBtn);
+            AdCard(root, "구제 광고\n10,000P", "잔액 부족 시 · 하루 3번", new Vector2(0.51f, 0.34f), new Vector2(0.76f, 0.68f), OnBankrupt, out _bankruptBtn);
 
             UiKit.BackButton(root, Back);
 
+            _balance = UiKit.CreateText(root, "", 36, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.7f), new Vector2(0.9f, 0.75f));
+            _balance.color = UiKit.Accent;
+
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.26f), new Vector2(0.9f, 0.36f));
+                new Vector2(0.1f, 0.22f), new Vector2(0.9f, 0.3f));
             _status.color = new Color(1f, 0.8f, 0.5f);
 
             RenderBalance();
         }
 
-        private void RenderBalance() => _balance.text = $"{Session.Balance:N0} 포인트";
+        /// <summary>광고 카드: 제목 + 조건. 클릭 = 보상 수령.</summary>
+        private void AdCard(Transform root, string title, string sub, Vector2 min, Vector2 max,
+            UnityEngine.Events.UnityAction onClick, out Button btn)
+        {
+            btn = UiKit.CreateButton(root, "", min, max, onClick);
+            btn.GetComponent<Image>().color = new Color(0.12f, 0.22f, 0.42f, 0.95f);
+            var t = UiKit.CreateText(btn.transform, title, 40, TextAnchor.MiddleCenter,
+                new Vector2(0f, 0.38f), new Vector2(1f, 0.92f));
+            t.color = Color.white;
+            t.fontStyle = FontStyle.Bold;
+            var s = UiKit.CreateText(btn.transform, sub, 22, TextAnchor.MiddleCenter,
+                new Vector2(0f, 0.1f), new Vector2(1f, 0.34f));
+            s.color = new Color(1f, 1f, 1f, 0.6f);
+        }
+
+        private void RenderBalance() => _balance.text = $"현재 {Session.Balance:N0} P";
 
         private void OnStandard() => Claim("Standard", "광고 시청 완료 — 2,000P 적립!");
         private void OnBankrupt() => Claim("Bankruptcy", "구제 완료 — 10,000P 적립!");
