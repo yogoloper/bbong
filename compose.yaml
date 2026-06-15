@@ -1,0 +1,38 @@
+# BBONG 개발 인프라 (Phase 4~5). `docker compose up -d`로 기동.
+# 앱(server)은 컨테이너 밖에서 dotnet run으로 실행하고, 여기 띄운 PG/Redis에 localhost로 접속.
+# 비밀번호 등은 .env에서 주입(커밋 안 함). 운영 인프라는 매니지드 호스팅 별도.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: bbong-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bbong}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bbong_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-bbong}
+    ports:
+      - "5432:5432"
+    volumes:
+      - bbong_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bbong} -d ${POSTGRES_DB:-bbong}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: bbong-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - bbong_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  bbong_pgdata:
+  bbong_redisdata:

@@ -15,6 +15,9 @@ obj/
 # OS
 .DS_Store
 
+# Local env secrets (compose) — .env.example is committed
+.env
+
 # Unity (Phase 3+)
 [Ll]ibrary/
 [Tt]emp/
