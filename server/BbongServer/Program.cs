@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Security.Claims;
 using BbongServer.Application;
 using BbongServer.Infrastructure.Auth;
@@ -6,6 +7,10 @@ using BbongServer.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
+
+// 개발 편의: 루트 .env가 있으면 환경변수로 로드(레포 루트로 거슬러 탐색).
+// 운영은 .env 없이 호스팅 시크릿 매니저가 환경변수를 직접 주입.
+DotNetEnv.Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
