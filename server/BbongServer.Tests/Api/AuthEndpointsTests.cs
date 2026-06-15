@@ -29,8 +29,10 @@ public class AuthEndpointsTests
             services.RemoveAll<BbongDbContext>();
             services.RemoveAll<IAccountStore>();
             services.RemoveAll<ILedgerStore>();
+            services.RemoveAll<ISocialTokenVerifier>();
             services.AddSingleton<IAccountStore, InMemoryAccountStore>();
             services.AddSingleton<ILedgerStore, InMemoryLedgerStore>();
+            services.AddSingleton<ISocialTokenVerifier, BbongServer.Infrastructure.Social.DevBypassSocialVerifier>();
         }));
 
     [TearDown]
@@ -72,5 +74,36 @@ public class AuthEndpointsTests
         var response = await client.GetAsync("/me");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    [Test]
+    public async Task Social_login_returns_non_guest_account()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/auth/social",
+            new { provider = "Google", idToken = "google-sub-x" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.That(body.GetProperty("isGuest").GetBoolean(), Is.False);
+        Assert.That(body.GetProperty("accessToken").GetString(), Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task Link_promotes_guest_to_social()
+    {
+        var client = _factory.CreateClient();
+        var guest = await (await client.PostAsync("/auth/guest", null)).Content.ReadFromJsonAsync<JsonElement>();
+        var token = guest.GetProperty("accessToken").GetString();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await client.PostAsJsonAsync("/auth/link",
+            new { provider = "Kakao", idToken = "kakao-sub-y" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.That(body.GetProperty("isGuest").GetBoolean(), Is.False);
+        Assert.That(body.GetProperty("userId").GetGuid(), Is.EqualTo(guest.GetProperty("userId").GetGuid()));
     }
 }

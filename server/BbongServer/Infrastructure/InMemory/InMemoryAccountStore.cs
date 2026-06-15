@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading.Tasks;
 using BbongServer.Application;
 using BbongServer.Domain.Accounts;
+using BbongServer.Domain.Auth;
 
 namespace BbongServer.Infrastructure.InMemory;
 
@@ -19,4 +21,8 @@ public sealed class InMemoryAccountStore : IAccountStore
 
     public Task<UserAccount?> GetByIdAsync(Guid id) =>
         Task.FromResult(_accounts.TryGetValue(id, out var account) ? account : null);
+
+    public Task<UserAccount?> GetBySocialAsync(SocialProvider provider, string subject) =>
+        Task.FromResult(_accounts.Values.FirstOrDefault(a =>
+            a.Provider == provider && a.SocialSubject == subject));
 }

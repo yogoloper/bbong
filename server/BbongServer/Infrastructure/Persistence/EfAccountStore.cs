@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using BbongServer.Application;
 using BbongServer.Domain.Accounts;
+using BbongServer.Domain.Auth;
 using Microsoft.EntityFrameworkCore;
 
 namespace BbongServer.Infrastructure.Persistence;
@@ -30,4 +31,7 @@ public sealed class EfAccountStore : IAccountStore
 
     public async Task<UserAccount?> GetByIdAsync(Guid id) =>
         await _db.Accounts.FirstOrDefaultAsync(a => a.Id == id);
+
+    public async Task<UserAccount?> GetBySocialAsync(SocialProvider provider, string subject) =>
+        await _db.Accounts.FirstOrDefaultAsync(a => a.Provider == provider && a.SocialSubject == subject);
 }

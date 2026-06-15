@@ -18,7 +18,15 @@ public class AccountServiceTests
     {
         _accounts = new InMemoryAccountStore();
         _ledger = new InMemoryLedgerStore();
-        _service = new AccountService(_accounts, _ledger);
+        _service = new AccountService(_accounts, _ledger, new StubSocialVerifier());
+    }
+
+    // 게스트 등록 테스트는 소셜을 안 쓰므로 호출되면 실패하는 스텁.
+    private sealed class StubSocialVerifier : BbongServer.Application.ISocialTokenVerifier
+    {
+        public System.Threading.Tasks.Task<BbongServer.Domain.Auth.SocialIdentity> VerifyAsync(
+            BbongServer.Domain.Auth.SocialProvider provider, string idToken) =>
+            throw new System.NotSupportedException();
     }
 
     [Test]

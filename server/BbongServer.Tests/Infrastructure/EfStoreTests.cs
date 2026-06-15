@@ -25,7 +25,7 @@ public class EfStoreTests
     [Test]
     public async Task Account_persists_and_loads_by_id()
     {
-        var account = new UserAccount(Guid.NewGuid(), isGuest: true, "테스트 너구리", DateTimeOffset.UtcNow);
+        var account = UserAccount.NewGuest(Guid.NewGuid(), "테스트 너구리", DateTimeOffset.UtcNow);
 
         await using (var ctx = NewContext())
         {

@@ -1,9 +1,12 @@
 using System;
 using System.IO;
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using BbongServer.Application;
+using BbongServer.Domain.Auth;
 using BbongServer.Infrastructure.Auth;
 using BbongServer.Infrastructure.Persistence;
+using BbongServer.Infrastructure.Social;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -33,9 +36,19 @@ builder.Services.AddScoped<ILedgerStore, EfLedgerStore>();
 builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
 builder.Services.AddScoped<AccountService>();
 
+// 소셜 검증기: 개발은 bypass(앱 등록 전), 운영은 실제 provider 검증기로 교체 예정.
+var socialBypass = string.Equals(
+    Environment.GetEnvironmentVariable("BBONG_SOCIAL_DEV_BYPASS"), "true", StringComparison.OrdinalIgnoreCase);
+builder.Services.AddSingleton<ISocialTokenVerifier>(_ =>
+    socialBypass ? new DevBypassSocialVerifier() : new NotConfiguredSocialVerifier());
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options => options.TokenValidationParameters = jwt.ValidationParameters());
 builder.Services.AddAuthorization();
+
+// enum을 JSON 문자열로(요청의 provider="Google" 바인딩, 응답 가독성)
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 var app = builder.Build();
 
@@ -59,6 +72,53 @@ app.MapPost("/auth/guest", async (AccountService accounts, ITokenIssuer tokens) 
         nickname = account.Nickname
     });
 });
+
+// 소셜 로그인 → 기존 계정 반환 또는 신규 생성 + 토큰 발급
+app.MapPost("/auth/social", async (SocialLoginRequest req, AccountService accounts, ITokenIssuer tokens) =>
+{
+    try
+    {
+        var account = await accounts.LoginWithSocialAsync(req.Provider, req.IdToken);
+        return Results.Ok(new
+        {
+            accessToken = tokens.IssueAccessToken(account.Id),
+            userId = account.Id,
+            nickname = account.Nickname,
+            isGuest = account.IsGuest
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// 게스트 → 소셜 승격(기존 id·잔액 유지). 로그인 필요.
+app.MapPost("/auth/link", async (ClaimsPrincipal user, SocialLoginRequest req, AccountService accounts, ITokenIssuer tokens) =>
+{
+    var sub = user.FindFirstValue(ClaimTypes.NameIdentifier)
+              ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var account = await accounts.LinkSocialAsync(userId, req.Provider, req.IdToken);
+        return Results.Ok(new
+        {
+            userId = account.Id,
+            nickname = account.Nickname,
+            isGuest = account.IsGuest,
+            provider = account.Provider
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).RequireAuthorization();
 
 // 내 프로필 + 잔액(로그인 직후 로드)
 app.MapGet("/me", async (ClaimsPrincipal user, IAccountStore accounts, ILedgerStore ledger) =>
@@ -87,6 +147,9 @@ app.MapGet("/me", async (ClaimsPrincipal user, IAccountStore accounts, ILedgerSt
 }).RequireAuthorization();
 
 app.Run();
+
+/// <summary>소셜 로그인/승격 요청 본문.</summary>
+public sealed record SocialLoginRequest(SocialProvider Provider, string IdToken);
 
 // 통합 테스트(WebApplicationFactory)에서 진입점 참조용
 public partial class Program;
