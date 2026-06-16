@@ -52,10 +52,30 @@ namespace Bbong.Client
             return (canvasGo, canvasGo.transform);
         }
 
-        /// <summary>공통 상단바: 좌측 아바타+닉네임, 우측 보유 포인트.</summary>
+        /// <summary>스프라이트 아이콘(클릭 통과). 비율 유지.</summary>
+        public static Image CreateIcon(Transform parent, Sprite sprite, Vector2 min, Vector2 max)
+        {
+            var go = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = sprite;
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            Anchor(go.GetComponent<RectTransform>(), min, max);
+            return img;
+        }
+
+        /// <summary>공통 상단바: 좌측 아바타+닉네임, 우측 코인 + 보유 포인트.</summary>
         public static void TopBar(Transform root)
         {
             var panel = CreatePanel(root, new Color(0, 0, 0, 0.35f));
+            if (UiArt.Panel9 != null)
+            {
+                panel.sprite = UiArt.Panel9;
+                panel.type = Image.Type.Sliced;
+                panel.color = new Color(1f, 1f, 1f, 0.92f);
+            }
+
             Anchor(panel.rectTransform, new Vector2(0f, 0.9f), new Vector2(1f, 1f));
 
             var avatar = CreatePanel(root, new Color(0.3f, 0.55f, 0.9f));
@@ -69,8 +89,13 @@ namespace Bbong.Client
             CreateText(root, Session.Nickname, 34, TextAnchor.MiddleLeft,
                 new Vector2(0.06f, 0.9f), new Vector2(0.5f, 1f));
 
-            var pts = CreateText(root, $"{Session.Balance:N0} P", 38, TextAnchor.MiddleRight,
-                new Vector2(0.6f, 0.9f), new Vector2(0.98f, 1f));
+            if (UiArt.Coin != null)
+            {
+                CreateIcon(root, UiArt.Coin, new Vector2(0.78f, 0.915f), new Vector2(0.815f, 0.985f));
+            }
+
+            var pts = CreateText(root, $"{Session.Balance:N0}", 38, TextAnchor.MiddleLeft,
+                new Vector2(0.82f, 0.9f), new Vector2(0.98f, 1f));
             pts.color = Accent;
             pts.fontStyle = FontStyle.Bold;
         }

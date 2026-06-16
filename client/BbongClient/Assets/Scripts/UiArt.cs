@@ -13,6 +13,9 @@ namespace Bbong.Client
         private static Sprite _backdrop;
         private static Sprite _greenButton;
         private static Sprite _pill;
+        private static Sprite _panel9;
+        private static Sprite _coin;
+        private static bool _coinLoaded;
 
         /// <summary>테이블 펠트 배경: 중앙이 밝은 방사형 그라데이션 + 미세 그레인.</summary>
         public static Sprite Felt => _felt ??= CreateFelt(512);
@@ -34,6 +37,24 @@ namespace Bbong.Client
         /// <summary>둥근 캡슐(상단바·태그용). 반투명 남색.</summary>
         public static Sprite Pill => _pill ??= RoundedGradient(64, 64, 30,
             new Color(0.12f, 0.20f, 0.38f), new Color(0.08f, 0.14f, 0.28f));
+
+        /// <summary>Kenney UI(CC0) 파란 패널 9-slice(상단바·정보 패널). 없으면 null(호출부 단색 폴백).</summary>
+        public static Sprite Panel9 => _panel9 ??= LoadSliced("UI/panel", 18);
+
+        /// <summary>Kenney(CC0) 골드 코인 아이콘. 없으면 null.</summary>
+        public static Sprite Coin
+        {
+            get
+            {
+                if (!_coinLoaded)
+                {
+                    _coin = Resources.Load<Sprite>("UI/coin");
+                    _coinLoaded = true;
+                }
+
+                return _coin;
+            }
+        }
 
         private static Sprite CreateCardBack(int w, int h, int radius)
         {
