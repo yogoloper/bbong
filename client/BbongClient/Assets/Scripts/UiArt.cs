@@ -17,9 +17,9 @@ namespace Bbong.Client
         /// <summary>테이블 펠트 배경: 중앙이 밝은 방사형 그라데이션 + 미세 그레인.</summary>
         public static Sprite Felt => _felt ??= CreateFelt(512);
 
-        /// <summary>버튼 배경: 흰색 둥근 그라데이션(Image.color 틴트로 상태 표현).</summary>
-        public static Sprite Button => _button ??= RoundedGradient(96, 96, 24,
-            Color.white, new Color(0.86f, 0.86f, 0.86f));
+        /// <summary>버튼 배경: Kenney UI(CC0) 회색 9-slice. Image.color 틴트로 색/상태 표현. 없으면 절차 폴백.</summary>
+        public static Sprite Button => _button ??= LoadSliced("UI/btn_grey", 12)
+            ?? RoundedGradient(96, 96, 24, Color.white, new Color(0.86f, 0.86f, 0.86f));
 
         /// <summary>카드 뒷면: 남색 그라데이션 + 다이아 격자 + 금색 안쪽 테두리.</summary>
         public static Sprite CardBack => _cardBack ??= CreateCardBack(90, 126, 14);
@@ -27,9 +27,9 @@ namespace Bbong.Client
         /// <summary>메뉴 화면 배경: 진한 네이비 세로 그라데이션 + 별 점.</summary>
         public static Sprite Backdrop => _backdrop ??= CreateBackdrop(512);
 
-        /// <summary>CTA(주요 액션) 버튼: 초록 그라데이션 둥근 캡슐.</summary>
-        public static Sprite GreenButton => _greenButton ??= RoundedGradient(96, 96, 28,
-            new Color(0.45f, 0.78f, 0.30f), new Color(0.22f, 0.52f, 0.16f));
+        /// <summary>CTA(주요 액션) 버튼: Kenney UI(CC0) 갈색/골드 9-slice. 없으면 초록 절차 폴백.</summary>
+        public static Sprite GreenButton => _greenButton ??= LoadSliced("UI/btn_brown", 12)
+            ?? RoundedGradient(96, 96, 28, new Color(0.45f, 0.78f, 0.30f), new Color(0.22f, 0.52f, 0.16f));
 
         /// <summary>둥근 캡슐(상단바·태그용). 반투명 남색.</summary>
         public static Sprite Pill => _pill ??= RoundedGradient(64, 64, 30,
@@ -76,6 +76,24 @@ namespace Bbong.Client
             tex.SetPixels(pixels);
             tex.Apply();
             return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+        }
+
+        /// <summary>
+        /// Resources의 PNG(Kenney CC0)를 9-slice 스프라이트로 런타임 생성.
+        /// 에디터 임포트 설정(스프라이트 border)에 의존하지 않도록 텍스처에서 직접 만든다.
+        /// 임포트 안 됐으면 null 반환(호출부가 절차 생성으로 폴백).
+        /// </summary>
+        private static Sprite LoadSliced(string resourcePath, int border)
+        {
+            var loaded = Resources.Load<Sprite>(resourcePath);
+            var tex = loaded != null ? loaded.texture : Resources.Load<Texture2D>(resourcePath);
+            if (tex == null)
+            {
+                return null;
+            }
+
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f),
+                100f, 0, SpriteMeshType.FullRect, new Vector4(border, border, border, border));
         }
 
         /// <summary>둥근 모서리 세로 그라데이션 스프라이트(흰 테두리 포함, 9-slice).</summary>
