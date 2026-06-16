@@ -51,12 +51,12 @@ namespace Bbong.Client
             _prize.color = UiKit.Accent;
             _prize.fontStyle = FontStyle.Bold;
 
-            UiKit.CtaButton(root, "매칭 시작", new Vector2(0.36f, 0.17f), new Vector2(0.64f, 0.28f), OnMatch, 44);
-            UiKit.BackButton(root, Back);
-
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.16f));
+                new Vector2(0.1f, 0.2f), new Vector2(0.9f, 0.28f));
             _status.color = new Color(1f, 0.8f, 0.5f);
+
+            UiKit.PrimaryCta(root, "매칭 시작", OnMatch);
+            UiKit.BackButton(root, Back);
         }
 
         /// <summary>선택지 버튼들을 가로 가운데 정렬로 배치 + 선택 강조 등록.</summary>

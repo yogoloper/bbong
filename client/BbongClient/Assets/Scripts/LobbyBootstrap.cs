@@ -108,8 +108,7 @@ namespace Bbong.Client
             _summary.color = new Color(1f, 0.92f, 0.4f);
             Anchor(_summary.rectTransform, new Vector2(0.05f, 0.165f), new Vector2(0.95f, 0.23f));
 
-            _startBtn = UiKit.CtaButton(root, "게임 시작",
-                new Vector2(0.40f, 0.025f), new Vector2(0.60f, 0.145f), OnStartGame, 48);
+            _startBtn = UiKit.PrimaryCta(root, "게임 시작", OnStartGame);
 
             UiKit.BackButton(root, OnBack);
         }

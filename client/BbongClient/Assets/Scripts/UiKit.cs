@@ -100,16 +100,20 @@ namespace Bbong.Client
             pts.fontStyle = FontStyle.Bold;
         }
 
-        /// <summary>주요 액션(게임 시작 등) 초록 CTA 버튼.</summary>
+        /// <summary>화면 하단 중앙 고정 주요 CTA(게임 시작/매칭 시작 등 전 화면 통일).</summary>
+        public static Button PrimaryCta(Transform root, string label, UnityEngine.Events.UnityAction onClick) =>
+            CtaButton(root, label, new Vector2(0.34f, 0.05f), new Vector2(0.66f, 0.16f), onClick, 46);
+
+        /// <summary>주요 액션(게임 시작 등) CTA 버튼. 일반 버튼과 같은 모양 + 골드 강조색(테마 일치).</summary>
         public static Button CtaButton(Transform parent, string label, Vector2 min, Vector2 max,
             UnityEngine.Events.UnityAction onClick, int fontSize = 48)
         {
             var go = new GameObject("Cta", typeof(RectTransform), typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
             var img = go.GetComponent<Image>();
-            img.sprite = UiArt.GreenButton;
+            img.sprite = UiArt.Button; // 일반 버튼과 동일한 Kenney 9-slice
             img.type = Image.Type.Sliced;
-            img.color = Color.white;
+            img.color = new Color(0.24f, 0.5f, 0.88f); // 우주 배경과 같은 블루 계열(배경보다 밝게 강조)
             Anchor(go.GetComponent<RectTransform>(), min, max);
 
             var text = CreateText(go.transform, label, fontSize, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
