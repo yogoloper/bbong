@@ -1,22 +1,30 @@
+using System;
+using System.Collections.Generic;
 using BbongCore.Config;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Bbong.Client
 {
-    /// <summary>맞춤게임 설정(인원·입장료 선택). 매칭/게임서버는 Phase 5 — 지금은 흐름 placeholder.</summary>
+    /// <summary>맞춤게임 설정(인원·입장료, 선택 강조). 매칭/게임서버는 Phase 5 — 흐름 placeholder.</summary>
     public sealed class MatchSetupBootstrap : MonoBehaviour
     {
         private static readonly Color Selected = new(1f, 0.85f, 0.3f);
+        private static readonly Color Unselected = new(0.95f, 0.95f, 0.95f);
+
         private GameObject _canvas;
         private int _players = 4;
         private int _stake = 1000;
+        private Text _prize;
         private Text _status;
+        private readonly List<(int value, Button button)> _playerChoices = new();
+        private readonly List<(int value, Button button)> _stakeChoices = new();
 
         private void Start()
         {
             UiKit.EnsureEventSystem();
             Build();
+            RefreshSelection();
         }
 
         private void Build()
@@ -28,31 +36,60 @@ namespace Bbong.Client
                 new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.87f)).fontStyle = FontStyle.Bold;
 
             UiKit.CreateText(root, "인원", 36, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.72f), new Vector2(0.9f, 0.78f));
-            for (var i = 0; i < GameConfig.MaxPlayers - GameConfig.MinPlayers + 1; i++)
-            {
-                var n = GameConfig.MinPlayers + i;
-                var x0 = 0.2f + i * 0.1f;
-                UiKit.CreateButton(root, $"{n}", new Vector2(x0, 0.62f), new Vector2(x0 + 0.08f, 0.71f),
-                    () => { _players = n; }, 34);
-            }
+                new Vector2(0.1f, 0.69f), new Vector2(0.9f, 0.74f));
+            var playerCount = GameConfig.MaxPlayers - GameConfig.MinPlayers + 1;
+            PlaceChoices(root, 0.58f, 0.67f, 0.09f, playerCount,
+                i => GameConfig.MinPlayers + i, n => $"{n}", _playerChoices, v => _players = v);
 
             UiKit.CreateText(root, "입장료", 36, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.50f), new Vector2(0.9f, 0.56f));
-            for (var i = 0; i < GameConfig.StakeOptions.Count; i++)
-            {
-                var s = GameConfig.StakeOptions[i];
-                var x0 = 0.12f + i * 0.13f;
-                UiKit.CreateButton(root, $"{s:N0}", new Vector2(x0, 0.40f), new Vector2(x0 + 0.12f, 0.49f),
-                    () => { _stake = s; }, 28);
-            }
+                new Vector2(0.1f, 0.5f), new Vector2(0.9f, 0.55f));
+            PlaceChoices(root, 0.39f, 0.48f, 0.1f, GameConfig.StakeOptions.Count,
+                i => GameConfig.StakeOptions[i], s => $"{s:N0}", _stakeChoices, v => _stake = v);
 
-            UiKit.CtaButton(root, "매칭 시작", new Vector2(0.34f, 0.2f), new Vector2(0.66f, 0.31f), OnMatch, 44);
+            _prize = UiKit.CreateText(root, "", 38, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.3f), new Vector2(0.9f, 0.37f));
+            _prize.color = UiKit.Accent;
+            _prize.fontStyle = FontStyle.Bold;
+
+            UiKit.CtaButton(root, "매칭 시작", new Vector2(0.36f, 0.17f), new Vector2(0.64f, 0.28f), OnMatch, 44);
             UiKit.BackButton(root, Back);
 
-            _status = UiKit.CreateText(root, "", 30, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.12f), new Vector2(0.9f, 0.2f));
+            _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.16f));
             _status.color = new Color(1f, 0.8f, 0.5f);
+        }
+
+        /// <summary>선택지 버튼들을 가로 가운데 정렬로 배치 + 선택 강조 등록.</summary>
+        private void PlaceChoices(Transform root, float y0, float y1, float w, int count,
+            Func<int, int> valueAt, Func<int, string> format,
+            List<(int value, Button button)> registry, Action<int> onPick)
+        {
+            const float gap = 0.012f;
+            var start = 0.5f - (count * w + (count - 1) * gap) / 2f;
+            for (var i = 0; i < count; i++)
+            {
+                var v = valueAt(i);
+                var x0 = start + i * (w + gap);
+                var btn = UiKit.CreateButton(root, format(v), new Vector2(x0, y0), new Vector2(x0 + w, y1),
+                    () => { onPick(v); RefreshSelection(); }, 28);
+                registry.Add((v, btn));
+            }
+        }
+
+        private void RefreshSelection()
+        {
+            foreach (var (value, button) in _playerChoices)
+            {
+                button.GetComponent<Image>().color = value == _players ? Selected : Unselected;
+            }
+
+            foreach (var (value, button) in _stakeChoices)
+            {
+                button.GetComponent<Image>().color = value == _stake ? Selected : Unselected;
+            }
+
+            // winner-takes-all → 총상금 = 입장료 × 인원
+            _prize.text = $"총상금 {(_stake * (long)_players):N0}";
         }
 
         private void OnMatch() =>

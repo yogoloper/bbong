@@ -31,6 +31,8 @@ namespace Bbong.Client
 
         public int Stake { get; set; } = 1000;
 
+        public BotDifficulty Difficulty { get; set; } = BotDifficulty.Normal;
+
         // 색약 안전 팔레트(Okabe-Ito 기반). 색은 보조, 도형이 주 구분 수단.
         private static readonly Color[] Palette =
         {
@@ -113,7 +115,7 @@ namespace Bbong.Client
             _seed = Random.Range(1, 1_000_000); // Play마다 다른 패(고정 시드 버그 수정)
             _font = Resources.Load<Font>("Fonts/Pretendard-SemiBold")
                     ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            _bots = Enumerable.Range(0, PlayerCount).Select(_ => new Bot(BotDifficulty.Normal)).ToArray();
+            _bots = Enumerable.Range(0, PlayerCount).Select(_ => new Bot(Difficulty)).ToArray();
 
             _names = new string[PlayerCount];
             var used = new HashSet<string>();

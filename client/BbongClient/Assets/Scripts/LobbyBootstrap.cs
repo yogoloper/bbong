@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BbongCore.Ai;
 using BbongCore.Config;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -16,17 +17,22 @@ namespace Bbong.Client
     {
         private static readonly Color SelectedColor = new(1f, 0.85f, 0.3f);
         private static readonly Color UnselectedColor = new(0.95f, 0.95f, 0.95f);
-        private static readonly Color DisabledColor = new(0.45f, 0.45f, 0.45f);
+
+        // 봇 난이도 표시명(쉬움/보통/어려움)
+        private static readonly (BotDifficulty value, string label)[] Difficulties =
+        {
+            (BotDifficulty.Easy, "쉬움"), (BotDifficulty.Normal, "보통"), (BotDifficulty.Hard, "어려움")
+        };
 
         private int _playerCount = 4;
-        private int _stake = 1000;
+        private BotDifficulty _difficulty = BotDifficulty.Normal;
 
         private Font _font;
         private GameObject _canvasGo;
         private Text _summary;
         private Button _startBtn;
         private readonly List<(int value, Button button)> _playerChoices = new();
-        private readonly List<(int value, Button button)> _stakeChoices = new();
+        private readonly List<(int value, Button button)> _difficultyChoices = new();
 
         private void Start()
         {
@@ -34,33 +40,21 @@ namespace Bbong.Client
                     ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             EnsureEventSystem();
             BuildUi();
-
-            // 잔액으로 못 거는 판돈이 선택돼 있으면 감당 가능한 최대 판돈으로 조정
-            if (!PlayerWallet.CanAfford(_stake))
-            {
-                foreach (var stake in GameConfig.StakeOptions)
-                {
-                    if (PlayerWallet.CanAfford(stake))
-                    {
-                        _stake = stake;
-                    }
-                }
-            }
-
             RefreshSelection();
         }
 
         private void OnStartGame()
         {
-            if (!GameConfig.IsValidPlayerCount(_playerCount) || !GameConfig.IsValidStake(_stake)
-                || !PlayerWallet.CanAfford(_stake))
+            if (!GameConfig.IsValidPlayerCount(_playerCount))
             {
                 return;
             }
 
+            // 연습은 판돈 없음(무료). 봇 인원·난이도만 적용.
             var table = new GameObject("GameTable").AddComponent<GameTableBootstrap>();
             table.PlayerCount = _playerCount;
-            table.Stake = _stake;
+            table.Stake = 0;
+            table.Difficulty = _difficulty;
             Destroy(_canvasGo);
             Destroy(gameObject);
         }
@@ -101,13 +95,13 @@ namespace Bbong.Client
                 CreateChoice(playerRow, $"{n}명", n, _playerChoices, v => _playerCount = v);
             }
 
-            var stakeLabel = CreateText(root, "입장료", 40, TextAnchor.MiddleCenter);
-            Anchor(stakeLabel.rectTransform, new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.43f));
+            var diffLabel = CreateText(root, "봇 난이도", 40, TextAnchor.MiddleCenter);
+            Anchor(diffLabel.rectTransform, new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.43f));
 
-            var stakeRow = CreateRow(root, new Vector2(0.25f, 0.255f), new Vector2(0.75f, 0.37f), 14).transform;
-            foreach (var stake in GameConfig.StakeOptions)
+            var diffRow = CreateRow(root, new Vector2(0.30f, 0.255f), new Vector2(0.70f, 0.37f), 14).transform;
+            foreach (var (value, label) in Difficulties)
             {
-                CreateChoice(stakeRow, $"{stake:N0}", stake, _stakeChoices, v => _stake = v);
+                CreateChoice(diffRow, label, (int)value, _difficultyChoices, v => _difficulty = (BotDifficulty)v);
             }
 
             _summary = CreateText(root, "", 36, TextAnchor.MiddleCenter);
@@ -142,20 +136,13 @@ namespace Bbong.Client
                 button.GetComponent<Image>().color = value == _playerCount ? SelectedColor : UnselectedColor;
             }
 
-            // 잔액으로 못 거는 판돈은 비활성(회색)
-            foreach (var (value, button) in _stakeChoices)
+            foreach (var (value, button) in _difficultyChoices)
             {
-                var affordable = PlayerWallet.CanAfford(value);
-                button.interactable = affordable;
-                button.GetComponent<Image>().color = !affordable ? DisabledColor
-                    : value == _stake ? SelectedColor : UnselectedColor;
+                button.GetComponent<Image>().color = value == (int)_difficulty ? SelectedColor : UnselectedColor;
             }
 
-            var canStart = PlayerWallet.CanAfford(_stake);
-            _startBtn.interactable = canStart;
-            _summary.text = canStart
-                ? $"나 + 봇 {_playerCount - 1}  ·  입장료 {_stake:N0}"
-                : "재화가 부족합니다 (Play를 다시 시작하면 충전)";
+            var label = Difficulties[System.Array.FindIndex(Difficulties, d => d.value == _difficulty)].label;
+            _summary.text = $"나 + 봇 {_playerCount - 1}  ·  난이도 {label}";
         }
 
         // ── UI 헬퍼 (GameTableBootstrap과 동일 패턴) ──
