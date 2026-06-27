@@ -313,6 +313,7 @@ namespace Bbong.Client
                 }
 
                 var seat = _round.CurrentSeat;
+                SetLog($"P{seat} 턴 시작 ({SeatName(seat)}, 남은 더미 {_round.DrawPile.Count})");
                 if (seat == MySeat)
                 {
                     // 스톱 가능하면 결정(스톱/계속), 아니면 자동 드로우 후 버림 대기
@@ -523,6 +524,7 @@ namespace Bbong.Client
         {
             var discardBefore = _round.DiscardPile.Count;
             _round = _round.Draw();
+            SetLog($"P{_round.CurrentSeat} 드로우 {CardLabel(_round.CurrentPlayer.Hand.Cards[^1])} (남은 더미 {_round.DrawPile.Count}, 손패 {_round.CurrentPlayer.Hand.Count})");
 
             if (discardBefore > 1 && _round.DiscardPile.Count < discardBefore)
             {
