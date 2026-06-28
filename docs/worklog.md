@@ -2,10 +2,12 @@
 
 > 세션 인수인계용 요약. 상세 규칙=`rules.md`, 시스템=`architecture.md`, 리스크=`considerations.md`.
 
-## 현재 상태 (2026-06-11)
+## 현재 상태 (2026-06-29)
 
-- **Phase 0 규칙** ✅ / **Phase 1 코어 엔진** ✅ / **Phase 2 AI 봇** ✅ / **Phase 3 UI/UX** ✅ 플레이 가능 빌드
-- 코어 테스트 **106개 통과**. 4인(사람+봇3) 한 게임(5판) 처음~끝 동작, 점수/판돈/전광판까지.
+- **Phase 0 규칙** ✅ / **1 코어** ✅ / **2 AI 봇** ✅ / **3 UI/UX** ✅ / **4 메타·수익화(서버)** 🚧 진행 중
+- 테스트: 코어 **111개**, 서버 **39개** (NUnit).
+- 클라: 4인(사람+봇3) 한 게임(5판) 처음~끝 동작, 점수/판돈/전광판까지. 메인 로비 + 5개 모드 화면, 매치 셋업.
+- 서버: ASP.NET Core + EF Core/PostgreSQL + JWT. 게스트/소셜 로그인·프로필·지갑·광고보상 엔드포인트 동작. docker compose로 PG/Redis 기동.
 
 ## 구조
 
@@ -16,20 +18,43 @@ core/BbongCore        순수 C#(netstandard2.1) 엔진 — 규칙 전부. dotnet
   Rules/  HandEvaluator,MeldType,MeldResult,Scoring,PlayerOutcome
   Config/ GameConfig (모든 설정 상수 단일 출처)
   Ai/     Bot,BotDifficulty (Easy/Normal/Hard)
-client/BbongClient    Unity 6000.4.10f1. GameTableBootstrap.cs 단일 스크립트가 UI 전체 코드 생성.
+client/BbongClient    Unity 6000.4.10f1 (URP). Assets/Scripts/ 부트스트랩별 화면 코드 생성.
+  GameTableBootstrap.cs  게임 테이블 UI 전체(봇 게임). 서버 불필요.
+  AuthBootstrap → MainLobbyBootstrap → Match/Profile/Shop/FriendRoom  정식 흐름(서버 필요).
+  ServerApi.cs  서버 호출(BaseUrl=localhost:5080). Session.cs 토큰 보관.
   Assets/Plugins/BbongCore/BbongCore.dll  ← 코어 빌드 산출물(커밋 대상)
+  Assets/Scenes/SampleScene  Auth(활성)+Lobby/GameTable(비활성) 부트스트랩 배선.
+server/BbongServer    ASP.NET Core(.NET8). EF Core+PostgreSQL, JWT. Database.Migrate() 자동.
+  엔드포인트: /auth/guest /auth/social /auth/link /me /me/nickname /shop/ad-reward
 demo/BbongDemo        봇 토너먼트(난이도 검증). dotnet run --project demo/BbongDemo
 scripts/sync-core-dll.sh  코어 재빌드 + DLL을 Unity로 복사 (코어 수정 시 필수)
+compose.yaml          dev 인프라 PG(5432)+Redis(6379). 서버 앱은 컨테이너 밖 dotnet run.
 ```
 
 ## 빌드/실행
 
 - 코어 테스트: `cd core && dotnet test` (.NET 8, `~/.dotnet`, PATH는 ~/.zshrc)
 - 코어 수정 → Unity 반영: **`./scripts/sync-core-dll.sh`**
-- Unity: `client/BbongClient` 열고, 빈 GameObject에 `GameTableBootstrap` 추가 후 Play
+- Unity Hub 등록 경로 = **`client/BbongClient`** (레포 루트 아님 — 루트 열면 빈 프로젝트 생김)
+- 봇 게임만: 빈 GameObject에 `GameTableBootstrap`만 붙이고 Play (서버 불필요)
+- 정식 흐름(로그인~): ① `docker compose up -d` ② `cd server/BbongServer && dotnet run` (포트 5080) ③ Unity에서 AuthBootstrap Play → 게스트 시작
 - 게임 로그: Unity Console `[BBONG]` (화면 로그는 제거됨)
 
-## 이번 세션 주요 작업 (Phase 3 + 규칙 보강)
+## 세션 (2026-06-29) — Phase 4 안정화 + 로그
+
+- **봇 타이밍 로그 추가**(GameTableBootstrap): 턴 진입(seat·이름·남은더미), 카드 드로우(카드·남은더미·손패). 기존 버림/뽕/뽕창/스톱/재셔플 로그는 그대로.
+- **서버 포트 정합**: launchSettings 5030→**5080**(클라 ServerApi.BaseUrl과 일치). 이제 `dotnet run`만으로 연결.
+- **SampleScene 배선**: 한 GameObject에 Auth(활성)+Lobby/GameTable(비활성) 부트스트랩, EngineSmokeTest 비활성.
+- 인프라 검증: docker compose(PG/Redis healthy) + 서버 5080 기동 + `/auth/guest` 200 확인.
+- 트러블슈팅: 폴더명 `06. bbong`→`06.bbong` 변경으로 Unity Hub 경로 깨짐 + 레포 루트를 열어 빈 프로젝트 생성됨 → 루트 잔여물 삭제, Hub에 `client/BbongClient` 재등록.
+
+## Phase 4 서버 (0611 이후 누적)
+
+- 스켈레톤(auth/wallet/JWT) → EF Core+PostgreSQL 영속화 → docker compose(PG/Redis) → 소셜 로그인(Google/Apple/Kakao, 게스트 승격) → 프로필 닉네임 변경 → 상점 광고보상(쿨다운·파산구제).
+- 클라 연동: 서버 로그인 + 메인 로비 5개 모드 화면, 매치 셋업, 프로필/상점 화면.
+- UI: navy→blue 테마 통일, Kenney CC0 스프라이트(버튼/패널/코인), 상단바, 모드 카드, CTA/뒤로 버튼 통일, 가로 고정, 연습봇 난이도 선택.
+
+## 이전 세션 주요 작업 (Phase 3 + 규칙 보강)
 
 UI: 코드생성 카드아트(색배경+모서리핍, 색약 안전 팔레트), 통합 버림 타임라인(겹침/폭맞춤),
 절차 효과음, 점수 전광판(상시+판종료 표팝업, 게임종료시 유지), 내 차례 안내문구, 자동 드로우(드로우 버튼 제거).
@@ -47,9 +72,10 @@ UI: 코드생성 카드아트(색배경+모서리핍, 색약 안전 팔레트), 
 
 ## 미해결 / 다음 후보
 
-- **로비/방 생성 화면**(인원·판돈 선택, architecture §4-2)
-- **실제 아트 에셋**(현재 절차생성)
-- **Phase 4**: 회원/프로필/지갑/상점/광고 (서버 ASP.NET Core)
+- **봇 타이밍 튜닝**: 새 로그로 단계별 간격(BotDelay 0.5 / TossDelay 0.35) 점검·조정.
+- **클라↔서버 게임 연동**: 현재 봇 게임은 클라 단독. 지갑/매치 결과 서버 반영 미연결.
+- **실제 아트 에셋**(카드는 여전히 절차생성)
+- **Phase 5 온라인 멀티**: 대기실/방찾기/게임서버(Realtime). 미착수.
 - 봇 스톱 성향 과함(시뮬상 78% 스톱 종료) — 다양성 튜닝 여지
 - rules.md ❓OPEN: 공동 1등 판돈 나머지 절사 처리
 
