@@ -43,4 +43,18 @@ public class StakePotTests
 
         Assert.That(payouts, Is.EqualTo(new[] { 166, 166, 166, 0, 0 }));
     }
+
+    [Test]
+    public void Share_returns_single_winner_full_pot()
+    {
+        // 서버 정산용 1인 몫 공식: 단독 1등 = 총 판돈
+        Assert.That(StakePot.Share(stakePerPlayer: 1000, playerCount: 4, winnersCount: 1), Is.EqualTo(4000));
+    }
+
+    [Test]
+    public void Share_truncates_remainder_for_co_winners()
+    {
+        // 100 × 5 = 500, 공동 3명 → 166 (절사, rules.md §9-3)
+        Assert.That(StakePot.Share(stakePerPlayer: 100, playerCount: 5, winnersCount: 3), Is.EqualTo(166));
+    }
 }
