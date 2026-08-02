@@ -42,6 +42,7 @@ builder.Services.AddScoped<IMatchStore, EfMatchStore>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<ShopService>();
 builder.Services.AddScoped<MatchService>();
+builder.Services.AddSingleton<BbongServer.Realtime.RoomRegistry>(); // 친구방(인메모리, 단일 프로세스)
 
 // 소셜 검증기: 개발은 bypass(앱 등록 전), 운영은 실제 provider 검증기로 교체 예정.
 var socialBypass = string.Equals(
@@ -67,6 +68,8 @@ using (var scope = app.Services.CreateScope())
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseWebSockets();
+BbongServer.Realtime.WsEndpoint.Map(app); // /ws — 친구방 실시간(JWT 재사용)
 
 // 게스트 등록 → 계정 생성 + 초기 지급 + 액세스 토큰 발급
 app.MapPost("/auth/guest", async (AccountService accounts, ITokenIssuer tokens) =>
