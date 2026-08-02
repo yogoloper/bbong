@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using BbongCore.Cards;
 using BbongCore.Config;
 using BbongCore.Online;
 
@@ -25,6 +26,7 @@ public sealed class Room
     private readonly List<RoomMember> _members = new();
     private readonly RoomRegistry _registry;
     private bool _loopRunning;
+    private GameSession? _session;
 
     internal Room(string code, RoomRegistry registry, Guid hostUserId)
     {
@@ -98,6 +100,23 @@ public sealed class Room
                 break;
             case StartGameCmd start:
                 HandleStart(start.UserId);
+                break;
+            case ActionCmd action:
+                HandleAction(action.UserId, action.Message);
+                break;
+            case PongTimeoutCmd timeout:
+                if (_session is not null)
+                {
+                    Apply(_session.HandlePongTimeout(timeout.Token));
+                }
+
+                break;
+            case NextRoundCmd next:
+                if (_session is not null)
+                {
+                    Apply(_session.HandleNextRound(next.Token));
+                }
+
                 break;
         }
     }
@@ -175,7 +194,57 @@ public sealed class Room
                 setRounds = new GameConfig().SetRounds
             });
         }
+
+        _session = new GameSession(nicknames, () => new SeededRandom(Random.Shared.Next()));
+        Apply(_session.StartMatch());
     }
+
+    private void HandleAction(Guid userId, object message)
+    {
+        if (Phase != RoomPhase.Playing || _session is null)
+        {
+            return;
+        }
+
+        var seat = _members.FindIndex(m => m.UserId == userId);
+        if (seat < 0)
+        {
+            return;
+        }
+
+        Apply(_session.HandleAction(seat, message));
+    }
+
+    /// <summary>세션 결과 반영: 좌석별 송신 + 타이머 예약(만료 시 커맨드 재주입).</summary>
+    private void Apply(SessionOutput output)
+    {
+        foreach (var outbound in output.Messages)
+        {
+            if (outbound.Seat is { } seat)
+            {
+                if (seat < _members.Count)
+                {
+                    Send(_members[seat].Sink, outbound.Message);
+                }
+            }
+            else
+            {
+                Broadcast(outbound.Message);
+            }
+        }
+
+        foreach (var timer in output.Timers)
+        {
+            ScheduleTimer(timer);
+        }
+    }
+
+    private void ScheduleTimer(PendingTimer timer) =>
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(timer.DelayMs);
+            Dispatch(timer.Command);
+        });
 
     // ── 공통 ──
 
