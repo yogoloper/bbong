@@ -30,7 +30,6 @@ namespace Bbong.Client
 
         public int PlayerCount { get; set; } = 4;
 
-        public int Stake { get; set; } = 1000;
 
         public BotDifficulty Difficulty { get; set; } = BotDifficulty.Normal;
 
@@ -134,7 +133,6 @@ namespace Bbong.Client
             }
             EnsureEventSystem();
             BuildUi();
-            PlayerWallet.Pay(Stake); // 입장 시 판돈 에스크로(rules.md §9)
             _game = GameState.Start(PlayerCount);
             StartRound();
         }
@@ -177,10 +175,8 @@ namespace Bbong.Client
             if (_game.IsSetOver)
             {
                 var winners = _game.WinnerSeats();
-                var payouts = StakePot.Distribute(Stake, PlayerCount, winners); // 공동 1등은 균등 분배(나머지 절사)
-                PlayerWallet.Receive(payouts[MySeat]);
                 var who = string.Join(", ", winners.Select(s => _names[s]));
-                SetLog($"━━ 게임 종료(5판) ━━ 사유: {reason} → 다음 선 P{enderSeat} | 1등 {who} 판돈 P{MySeat}={payouts[MySeat]} 보유 {PlayerWallet.Balance:N0} | 점수[{detail}] 누적[{cumulative}]");
+                SetLog($"━━ 게임 종료(5판) ━━ 사유: {reason} → 다음 선 P{enderSeat} | 1등 {who} | 점수[{detail}] 누적[{cumulative}]");
                 title = $"게임 종료 — 1등 {who}";
                 _state = UiState.SetOver;
             }
@@ -783,12 +779,6 @@ namespace Bbong.Client
 
             if (_state == UiState.SetOver)
             {
-                if (!PlayerWallet.CanAfford(Stake))
-                {
-                    return; // 버튼 비활성과 이중 방어
-                }
-
-                PlayerWallet.Pay(Stake); // 새 게임도 판돈 다시 걸기
                 _game = GameState.Start(PlayerCount);
                 _roundIndex = 0;
                 _dealerSeat = 0;
@@ -896,9 +886,7 @@ namespace Bbong.Client
             _pongBtn.gameObject.SetActive(_state == UiState.PongWindow);
             _passBtn.gameObject.SetActive(_state == UiState.PongWindow || _state == UiState.StopDecision);
             SetButtonLabel(_passBtn, _state == UiState.StopDecision ? "계속" : "패스");
-            // 새 게임은 판돈을 다시 걸 수 있을 때만
-            _nextBtn.gameObject.SetActive(_state == UiState.RoundOver
-                || (_state == UiState.SetOver && PlayerWallet.CanAfford(Stake)));
+            _nextBtn.gameObject.SetActive(_state == UiState.RoundOver || _state == UiState.SetOver);
             SetButtonLabel(_nextBtn, _state == UiState.SetOver ? "새 게임" : "다음 판");
             _lobbyBtn.gameObject.SetActive(_state == UiState.SetOver);
         }

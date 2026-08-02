@@ -10,7 +10,7 @@ namespace Bbong.Client
 {
     /// <summary>
     /// 로비/방 만들기 화면(architecture §4-2의 로컬 싱글 축소판, §4-4).
-    /// 인원(2~6)·판돈(GameConfig.StakeOptions)을 고르고 게임 시작 → GameTableBootstrap 생성.
+    /// 인원(2~6)·봇 난이도를 고르고 게임 시작 → GameTableBootstrap 생성. 연습은 판돈 없음(무료).
     /// 빈 GameObject에 이 컴포넌트 하나 붙이고 Play. 게임 종료 화면의 '로비로'로 복귀.
     /// </summary>
     public sealed class LobbyBootstrap : MonoBehaviour
@@ -53,7 +53,6 @@ namespace Bbong.Client
             // 연습은 판돈 없음(무료). 봇 인원·난이도만 적용.
             var table = new GameObject("GameTable").AddComponent<GameTableBootstrap>();
             table.PlayerCount = _playerCount;
-            table.Stake = 0;
             table.Difficulty = _difficulty;
             Destroy(_canvasGo);
             Destroy(gameObject);
