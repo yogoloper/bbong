@@ -321,6 +321,10 @@ namespace Bbong.Client
                     Refresh();
                     yield return new WaitForSeconds(TurnGapDelay);
                     _turnGap = false;
+                    if (_state == UiState.RoundOver || _state == UiState.SetOver)
+                    {
+                        yield break; // 간격 중 봇 손 털기 등으로 판이 끝났으면 진행 중단
+                    }
                 }
 
                 var seat = _round.CurrentSeat;
@@ -461,7 +465,7 @@ namespace Bbong.Client
         {
             var number = TopDiscardNumber();
             var laid = _round.Players[seat].Hand.Cards.Where(c => c.Number == number).Take(2).ToList();
-            var rest = new Hand(_round.Players[seat].Hand.Cards.Where(c => c.Number != number));
+            var rest = new Hand(_round.Players[seat].Hand.Cards.Except(laid)); // 같은 숫자 3장째도 버림 후보
             if (rest.Count == 0)
             {
                 _round = _round.Pong(seat, null);
@@ -477,7 +481,23 @@ namespace Bbong.Client
             PlayPong($"{SeatName(seat)}\n{number}뽕!");
             AddGroup(laid);
             Refresh();
+            if (_round.Players[seat].Hand.Count == 0)
+            {
+                // 추가 버림으로 손이 비면 토스 연출 후 손 털기 종료
+                StartCoroutine(EndAfterToss(toss, seat, discarderSeat));
+                return;
+            }
+
             StartCoroutine(TossAfterPong(toss));
+        }
+
+        /// <summary>봇 뽕의 추가 버림으로 손이 빈 경우: 토스 표시 후 손 털기 종료.</summary>
+        private IEnumerator EndAfterToss(Card toss, int seat, int discarderSeat)
+        {
+            yield return new WaitForSeconds(TossDelay);
+            PlayDiscard();
+            AddDiscard(toss);
+            EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} 손 털기 · {SeatName(discarderSeat)} 박 +20", seat);
         }
 
         /// <summary>봇 뽕의 추가 버림을 한 박자 뒤에 표시(내려놓기 → 버림 단계 연출).</summary>
@@ -663,19 +683,18 @@ namespace Bbong.Client
             }
 
             StopPongTimer();
-            var rest = new Hand(_round.Players[MySeat].Hand.Cards.Where(c => c.Number != _pongNumber));
-            if (rest.Count == 0)
+            var pongLaid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
+            if (_round.Players[MySeat].Hand.Count == 2)
             {
-                var laid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
+                // 손 전체가 뽕 2장 → 추가 버림 없이 손 소진(같은 숫자 3장째가 있으면 선택 화면으로)
                 _round = _round.Pong(MySeat, null);
                 PlayPong($"{SeatName(MySeat)}\n{_pongNumber}뽕!");
-                AddGroup(laid);
+                AddGroup(pongLaid);
                 EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(MySeat)} 손 털기 · {SeatName(_pongDiscarderSeat)} 박 +20", MySeat);
                 return;
             }
 
             // 실제 판처럼 "뽕!" 외치는 순간 3장 고정분을 즉시 내려놓고, 버림은 그다음 동작
-            var pongLaid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
             _pendingLaid.Clear();
             _pendingLaid.AddRange(pongLaid);
             AddGroup(pongLaid);
@@ -820,6 +839,13 @@ namespace Bbong.Client
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
                     PlayDiscard();
                     AddDiscard(card);
+                    if (_round.Players[MySeat].Hand.Count == 0)
+                    {
+                        // 추가 버림까지 내고 손이 비면 손 털기 종료
+                        EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(MySeat)} 손 털기 · {SeatName(_pongDiscarderSeat)} 박 +20", MySeat);
+                        break;
+                    }
+
                     _turnGap = true;
                     RunBots();
                     break;

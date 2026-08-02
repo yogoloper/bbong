@@ -122,6 +122,24 @@ public class PongTests
         Assert.That(after.DiscardPile[^1], Is.EqualTo(C(9, CardColor.Blue))); // 세 번째 9가 새 맨 위
     }
 
+    [Test]
+    public void Pong_with_three_card_hand_all_same_discards_third_to_empty_hand()
+    {
+        // 손패 3장 전부 9 → 9 뽕(2장) + 세 번째 9 버림 → 손 0장(손 털기)
+        var players = new[]
+        {
+            new Player(0, HandOf(C(2, CardColor.Red), C(5, CardColor.Red))),
+            new Player(1, HandOf(C(9, CardColor.Green), C(9, CardColor.Yellow), C(9, CardColor.Blue)), PongCount: 1)
+        };
+        var discard = new[] { C(9, CardColor.Red) };
+        var round = new RoundState(players, Array.Empty<Card>(), discard, currentSeat: 1, new SeededRandom(1));
+
+        var after = round.Pong(1, cardToDiscardAfter: C(9, CardColor.Blue));
+
+        Assert.That(after.Players[1].Hand.Count, Is.EqualTo(0));
+        Assert.That(after.Players[1].PongCount, Is.EqualTo(2));
+    }
+
     // ── 자연뽕 (rules.md §4-2) ──
 
     [Test]
