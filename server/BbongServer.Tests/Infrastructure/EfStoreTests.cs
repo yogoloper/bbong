@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using BbongServer.Domain.Accounts;
+using BbongServer.Domain.Matches;
 using BbongServer.Domain.Wallet;
 using BbongServer.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -38,6 +39,31 @@ public class EfStoreTests
             Assert.That(loaded, Is.Not.Null);
             Assert.That(loaded!.Nickname, Is.EqualTo("테스트 너구리"));
             Assert.That(loaded.IsGuest, Is.True);
+        }
+    }
+
+    [Test]
+    public async Task Match_persists_and_updates_status()
+    {
+        var match = Match.Start(Guid.NewGuid(), Guid.NewGuid(), stake: 1000, playerCount: 4, DateTimeOffset.UtcNow);
+
+        await using (var ctx = NewContext())
+        {
+            await new EfMatchStore(ctx).SaveAsync(match);
+        }
+
+        match.Settle(won: true, winnersCount: 1, DateTimeOffset.UtcNow);
+        await using (var ctx = NewContext())
+        {
+            await new EfMatchStore(ctx).UpdateAsync(match);
+        }
+
+        await using (var ctx = NewContext())
+        {
+            var loaded = await new EfMatchStore(ctx).GetByIdAsync(match.Id);
+            Assert.That(loaded, Is.Not.Null);
+            Assert.That(loaded!.Status, Is.EqualTo(MatchStatus.Settled));
+            Assert.That(loaded.SettledAt, Is.Not.Null);
         }
     }
 

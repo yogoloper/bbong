@@ -1,4 +1,5 @@
 using BbongServer.Domain.Accounts;
+using BbongServer.Domain.Matches;
 using Microsoft.EntityFrameworkCore;
 
 namespace BbongServer.Infrastructure.Persistence;
@@ -15,6 +16,8 @@ public sealed class BbongDbContext : DbContext
     public DbSet<LedgerRow> Ledger => Set<LedgerRow>();
 
     public DbSet<AdRewardRow> AdRewards => Set<AdRewardRow>();
+
+    public DbSet<Match> Matches => Set<Match>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,6 +52,17 @@ public sealed class BbongDbContext : DbContext
             reward.Property(e => e.Id).ValueGeneratedOnAdd();
             reward.Property(e => e.Kind).HasConversion<string>();
             reward.HasIndex(e => new { e.UserId, e.Kind, e.ClaimedAt }); // 쿨다운·일일 제한 조회
+        });
+
+        modelBuilder.Entity<Match>(match =>
+        {
+            match.ToTable("matches");
+            match.HasKey(m => m.Id);
+            match.Property(m => m.Stake);       // get-only 프로퍼티는 명시 매핑(생성자 바인딩용)
+            match.Property(m => m.PlayerCount);
+            match.Property(m => m.CreatedAt);
+            match.Property(m => m.Status).HasConversion<string>();
+            match.HasIndex(m => m.UserId); // 유저별 매치 조회
         });
     }
 }

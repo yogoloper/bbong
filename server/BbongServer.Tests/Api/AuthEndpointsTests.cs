@@ -30,10 +30,12 @@ public class AuthEndpointsTests
             services.RemoveAll<IAccountStore>();
             services.RemoveAll<ILedgerStore>();
             services.RemoveAll<IAdRewardStore>();
+            services.RemoveAll<IMatchStore>();
             services.RemoveAll<ISocialTokenVerifier>();
             services.AddSingleton<IAccountStore, InMemoryAccountStore>();
             services.AddSingleton<ILedgerStore, InMemoryLedgerStore>();
             services.AddSingleton<IAdRewardStore, InMemoryAdRewardStore>();
+            services.AddSingleton<IMatchStore, InMemoryMatchStore>();
             services.AddSingleton<ISocialTokenVerifier, BbongServer.Infrastructure.Social.DevBypassSocialVerifier>();
         }));
 

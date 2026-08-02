@@ -38,8 +38,10 @@ builder.Services.AddScoped<ILedgerStore, EfLedgerStore>();
 builder.Services.AddScoped<IAdRewardStore, EfAdRewardStore>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
+builder.Services.AddScoped<IMatchStore, EfMatchStore>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<ShopService>();
+builder.Services.AddScoped<MatchService>();
 
 // 소셜 검증기: 개발은 bypass(앱 등록 전), 운영은 실제 provider 검증기로 교체 예정.
 var socialBypass = string.Equals(
@@ -206,6 +208,52 @@ app.MapPost("/shop/ad-reward", async (ClaimsPrincipal user, AdRewardRequest req,
     }
 }).RequireAuthorization();
 
+// 매치 시작: 판돈 에스크로 차감 후 매치 생성(싱글 봇전, 정산은 /match/{id}/result)
+app.MapPost("/match/start", async (ClaimsPrincipal user, MatchStartRequest req, MatchService matches) =>
+{
+    var sub = user.FindFirstValue(ClaimTypes.NameIdentifier)
+              ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var (matchId, balance) = await matches.StartAsync(userId, req.Stake, req.PlayerCount);
+        return Results.Ok(new { matchId, balance });
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).RequireAuthorization();
+
+// 매치 정산: 승리 시 몫 적립(공동 1등 절사), 1회만. 남의/없는 매치는 404.
+app.MapPost("/match/{id:guid}/result", async (ClaimsPrincipal user, Guid id, MatchResultRequest req, MatchService matches) =>
+{
+    var sub = user.FindFirstValue(ClaimTypes.NameIdentifier)
+              ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var (payout, balance) = await matches.SettleAsync(userId, id, req.Won, req.WinnersCount);
+        return Results.Ok(new { payout, balance });
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).RequireAuthorization();
+
 app.Run();
 
 /// <summary>소셜 로그인/승격 요청 본문.</summary>
@@ -216,6 +264,12 @@ public sealed record AdRewardRequest(AdRewardKind Kind);
 
 /// <summary>닉네임 변경 요청 본문.</summary>
 public sealed record RenameRequest(string Nickname);
+
+/// <summary>매치 시작 요청 본문(판돈은 GameConfig.StakeOptions 중 하나).</summary>
+public sealed record MatchStartRequest(int Stake, int PlayerCount);
+
+/// <summary>매치 정산 요청 본문(공동 1등 수 포함 — 몫은 절사).</summary>
+public sealed record MatchResultRequest(bool Won, int WinnersCount);
 
 // 통합 테스트(WebApplicationFactory)에서 진입점 참조용
 public partial class Program;
