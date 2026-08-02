@@ -25,6 +25,7 @@ namespace Bbong.Client
         private const int MySeat = 0;
         private const float BotDelay = 0.5f;
         private const float TossDelay = 0.35f; // 뽕 내려놓기 → 추가 버림 사이 간격(단계 연출)
+        private const float TurnGapDelay = 0.5f; // 버림 → 다음 턴 사이 아무도 포커스 없는 간격(턴 전환 연출)
         private const int PongWindowSeconds = 5;
 
         public int PlayerCount { get; set; } = 4;
@@ -69,6 +70,7 @@ namespace Bbong.Client
         private int _roundIndex;
         private int _dealerSeat; // 다음 판 선(직전 판 끝낸 사람). 첫 판 = 0
         private UiState _state;
+        private bool _turnGap; // 턴 전환 간격 동안 좌석 포커스 숨김
         private int _pongNumber;
         private int _pongDiscarderSeat;
         private int _naturalPongNumber;
@@ -144,6 +146,7 @@ namespace Bbong.Client
             _round = RoundState.Deal(Deck.CreateStandard(), PlayerCount, new SeededRandom(_seed++),
                 dealerSeat: _dealerSeat);
             _state = UiState.NeedDiscard;
+            _turnGap = false;
             _timeline.Clear();
             _timelineShown = 0;
             _meldSet = null;
@@ -312,6 +315,14 @@ namespace Bbong.Client
                     yield break;
                 }
 
+                // 내 버림 등으로 표시된 턴 전환 간격: 잠깐 아무도 턴이 아닌 상태 연출
+                if (_turnGap)
+                {
+                    Refresh();
+                    yield return new WaitForSeconds(TurnGapDelay);
+                    _turnGap = false;
+                }
+
                 var seat = _round.CurrentSeat;
                 SetLog($"P{seat} 턴 시작 ({SeatName(seat)}, 남은 더미 {_round.DrawPile.Count})");
                 if (seat == MySeat)
@@ -383,8 +394,10 @@ namespace Bbong.Client
 
                     PlayDiscard();
                     AddDiscard(toss);
+                    _turnGap = true;
                     Refresh();
-                    yield return new WaitForSeconds(BotDelay);
+                    yield return new WaitForSeconds(TurnGapDelay);
+                    _turnGap = false;
 
                     if (_round.CanPong(MySeat))
                     {
@@ -400,8 +413,10 @@ namespace Bbong.Client
                 SetLog($"P{seat} 버림 {CardLabel(discard)}");
                 PlayDiscard();
                 AddDiscard(discard);
+                _turnGap = true;
                 Refresh();
-                yield return new WaitForSeconds(BotDelay);
+                yield return new WaitForSeconds(TurnGapDelay);
+                _turnGap = false;
 
                 if (_round.CanPong(MySeat))
                 {
@@ -412,8 +427,10 @@ namespace Bbong.Client
                 var ponger = TryBotPong(seat);
                 if (ponger >= 0)
                 {
+                    _turnGap = true;
                     Refresh();
-                    yield return new WaitForSeconds(BotDelay);
+                    yield return new WaitForSeconds(TurnGapDelay);
+                    _turnGap = false;
 
                     // 봇 뽕의 추가 버림도 내가 뽕(두 번째 뽕) 가능
                     if (_state != UiState.RoundOver && _state != UiState.SetOver && _round.CanPong(MySeat))
@@ -786,6 +803,7 @@ namespace Bbong.Client
                     SetLog($"내 버림 {CardLabel(card)}");
                     PlayDiscard();
                     AddDiscard(card);
+                    _turnGap = true; // BotLoop 진입 시 간격 소화
                     TryBotPong(MySeat);
                     RunBots();
                     break;
@@ -802,6 +820,7 @@ namespace Bbong.Client
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
                     PlayDiscard();
                     AddDiscard(card);
+                    _turnGap = true;
                     RunBots();
                     break;
 
@@ -817,6 +836,7 @@ namespace Bbong.Client
                     SetLog($"자연뽕 완료. {_naturalPongNumber} 3장 고정");
                     PlayDiscard();
                     AddDiscard(card);
+                    _turnGap = true;
                     RunBots();
                     break;
             }
@@ -874,7 +894,7 @@ namespace Bbong.Client
 
             // 뽕 대기 중엔 아무도 포커싱하지 않고, 뽕을 실제 선언했을 때만 선언자를 포커싱.
             // 창이 시간 초과로 닫히면 상태가 바뀌면서 원래 턴 대상자에게 포커스가 넘어간다.
-            var focusSeat = _state == UiState.PongWindow ? -1
+            var focusSeat = _turnGap || _state == UiState.PongWindow ? -1
                 : _state == UiState.PongDiscardSelect ? MySeat
                 : _round.CurrentSeat;
 
@@ -1440,7 +1460,7 @@ namespace Bbong.Client
 
         private string SeatName(int seat) => seat == MySeat ? $"{_names[seat]}(나)" : _names[seat];
 
-        private void SetLog(string message) => Debug.Log($"[BBONG] {message.Replace("\n", " | ")}"); // 콘솔 전용
+        private void SetLog(string message) => Debug.Log($"[BBONG {Time.time:F2}] {message.Replace("\n", " | ")}"); // 콘솔 전용, 타이밍 튜닝용 경과초 포함
 
         private static void Stretch(RectTransform rt) => Anchor(rt, Vector2.zero, Vector2.one);
 
