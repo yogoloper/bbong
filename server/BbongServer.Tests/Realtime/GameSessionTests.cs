@@ -13,21 +13,23 @@ public class GameSessionTests
 {
     private static Card C(int n, CardColor color) => new(n, color);
 
-    private static GameSession NewSession(int playerCount = 3) =>
-        new(Enumerable.Range(0, playerCount).Select(i => $"P{i}").ToArray(), () => new SeededRandom(1));
+    private static GameSession NewSession(int playerCount = 3, int setRounds = 5) =>
+        new(Enumerable.Range(0, playerCount).Select(i => $"P{i}").ToArray(), () => new SeededRandom(1), setRounds);
 
     /// <summary>rigged 상태로 턴 진입까지 실행(내부 생성자 — InternalsVisibleTo).</summary>
     private static (GameSession session, SessionOutput output) Rigged(
-        Player[] players, Card[] drawPile, Card[] discard, int currentSeat)
+        Player[] players, Card[] drawPile, Card[] discard, int currentSeat,
+        int reshuffles = 0, int setRounds = 5)
     {
-        var session = NewSession(players.Length);
-        var round = new RoundState(players, drawPile, discard, currentSeat, new SeededRandom(1));
+        var session = NewSession(players.Length, setRounds);
+        var round = new RoundState(players, drawPile, discard, currentSeat, new SeededRandom(1), reshuffles);
         var output = session.RigRoundForTest(round);
         return (session, output);
     }
 
     private static T For<T>(SessionOutput output, int seat) =>
-        output.Messages.Where(o => o.Seat == seat).Select(o => o.Message).OfType<T>().Last();
+        output.Messages.Where(o => o.Seat is null || o.Seat == seat) // 브로드캐스트 포함
+            .Select(o => o.Message).OfType<T>().Last();
 
     private static bool HasMsg<T>(SessionOutput output) =>
         output.Messages.Any(o => o.Message is T);
@@ -282,6 +284,175 @@ public class GameSessionTests
         var result = session.HandleAction(1, new PongDiscardMsg { card = CardDto.From(C(7, CardColor.Red)) });
 
         Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(1));
+    }
+
+    // ── 스톱 / 계속 ──
+
+    private static (GameSession, SessionOutput) StopScenario(int stopperSum, int rivalSum)
+    {
+        // 뽕 2명(0,1) — seat0 턴 시작 시 스톱 가능. 손패 합으로 바가지 여부 제어.
+        var stopper = new Player(0, new Hand(new[] { C(stopperSum, CardColor.Red) }), PongCount: 1);
+        var rival = new Player(1, new Hand(new[] { C(rivalSum, CardColor.Blue) }), PongCount: 1);
+        var bystander = P(2, C(11, CardColor.Red), C(12, CardColor.Red));
+        return Rigged(new[] { stopper, rival, bystander },
+            drawPile: new[] { C(6, CardColor.Green) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+    }
+
+    [Test]
+    public void Turn_with_stop_available_waits_for_decision()
+    {
+        var (_, output) = StopScenario(stopperSum: 5, rivalSum: 8);
+
+        var began = For<TurnBeganMsg>(output, 0);
+        Assert.That(began.view.phase, Is.EqualTo(RoundPhase.WaitingStop));
+        Assert.That(began.view.canStop, Is.True);
+        Assert.That(For<TurnBeganMsg>(output, 1).view.canStop, Is.False);
+        Assert.That(HasMsg<DrewCardMsg>(output), Is.False); // 결정 전 드로우 없음
+    }
+
+    [Test]
+    public void Stop_declare_ends_round_with_stopper_as_ender()
+    {
+        var (session, _) = StopScenario(stopperSum: 5, rivalSum: 8);
+
+        var result = session.HandleAction(0, new StopDeclareMsg());
+
+        Assert.That(For<StopDeclaredMsg>(result, 1).bagaji, Is.False);
+        Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Stop_bagaji_makes_lowest_ponged_hand_the_ender()
+    {
+        var (session, _) = StopScenario(stopperSum: 8, rivalSum: 3); // 더 낮은 뽕 손패 존재 → 바가지
+
+        var result = session.HandleAction(0, new StopDeclareMsg());
+
+        Assert.That(For<StopDeclaredMsg>(result, 1).bagaji, Is.True);
+        Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Continue_turn_proceeds_to_auto_draw()
+    {
+        var (session, _) = StopScenario(stopperSum: 5, rivalSum: 8);
+
+        var result = session.HandleAction(0, new ContinueTurnMsg());
+
+        Assert.That(For<DrewCardMsg>(result, 0).view.phase, Is.EqualTo(RoundPhase.WaitingDiscard));
+    }
+
+    // ── 족보 ──
+
+    [Test]
+    public void Meld_declare_ends_round()
+    {
+        // 드로우 후 1,1,2,2,3,3 = 또이또이
+        var (session, output) = Rigged(
+            new[]
+            {
+                P(0, C(1, CardColor.Red), C(1, CardColor.Blue), C(2, CardColor.Red), C(2, CardColor.Blue), C(3, CardColor.Red)),
+                P(1, C(7, CardColor.Red), C(8, CardColor.Red))
+            },
+            drawPile: new[] { C(3, CardColor.Blue) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+        Assert.That(For<DrewCardMsg>(output, 0).view.canMeld, Is.True);
+
+        var result = session.HandleAction(0, new MeldDeclareMsg());
+
+        Assert.That(For<MeldDeclaredMsg>(result, 1).seat, Is.EqualTo(0));
+        Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(0));
+    }
+
+    // ── 자연뽕 ──
+
+    [Test]
+    public void Natural_pong_with_extra_discard_continues_round()
+    {
+        // 드로우 후 9 세 장 + 2,3 → 자연뽕 선언, 2 추가 버림
+        var (session, output) = Rigged(
+            new[]
+            {
+                P(0, C(9, CardColor.Red), C(9, CardColor.Green), C(2, CardColor.Red), C(3, CardColor.Red)),
+                P(1, C(7, CardColor.Red), C(8, CardColor.Red))
+            },
+            drawPile: new[] { C(9, CardColor.Yellow), C(5, CardColor.Red) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+        Assert.That(For<DrewCardMsg>(output, 0).view.canNaturalPong, Is.True);
+
+        var result = session.HandleAction(0, new NaturalPongMsg { hasDiscard = true, card = CardDto.From(C(2, CardColor.Red)) });
+
+        Assert.That(For<NaturalPongedMsg>(result, 1).laid, Has.Length.EqualTo(3));
+        Assert.That(For<DiscardedMsg>(result, 1).card.number, Is.EqualTo(2));
+        Assert.That(For<TurnBeganMsg>(result, 1).seat, Is.EqualTo(1)); // 다음 턴
+    }
+
+    [Test]
+    public void Natural_pong_hand_clear_ends_round()
+    {
+        // 뽕 후 2장 + 드로우 = 3장 전부 같은 숫자 → 손 소진 종료
+        var (session, _) = Rigged(
+            new[]
+            {
+                new Player(0, new Hand(new[] { C(9, CardColor.Red), C(9, CardColor.Green) }), PongCount: 1),
+                P(1, C(7, CardColor.Red), C(8, CardColor.Red))
+            },
+            drawPile: new[] { C(9, CardColor.Yellow) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+
+        var result = session.HandleAction(0, new NaturalPongMsg { hasDiscard = false });
+
+        Assert.That(For<NaturalPongedMsg>(result, 1).seat, Is.EqualTo(0));
+        Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(0));
+    }
+
+    // ── 더미 소진 ──
+
+    [Test]
+    public void Exhausted_draw_pile_force_ends_round()
+    {
+        var (_, output) = Rigged(
+            new[]
+            {
+                P(0, C(1, CardColor.Red), C(2, CardColor.Red)),
+                P(1, C(3, CardColor.Red), C(4, CardColor.Red))
+            },
+            drawPile: Array.Empty<Card>(),
+            discard: new[] { C(5, CardColor.Red) },
+            currentSeat: 0,
+            reshuffles: 2); // 재셔플 한도 소진 → CanDraw false
+
+        Assert.That(For<RoundEndedMsg>(output, 0).reason, Does.Contain("소진"));
+    }
+
+    // ── 세트 종료 ──
+
+    [Test]
+    public void Last_round_end_emits_set_ended_with_winners()
+    {
+        var (session, _) = Rigged(
+            new[]
+            {
+                P(0, C(9, CardColor.Red), C(1, CardColor.Red), C(2, CardColor.Blue)),
+                new Player(1, new Hand(new[] { C(9, CardColor.Green), C(9, CardColor.Yellow) }), PongCount: 1),
+                P(2, C(4, CardColor.Red), C(5, CardColor.Red))
+            },
+            drawPile: new[] { C(6, CardColor.Red) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0,
+            setRounds: 1); // 이 판이 마지막
+        session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(9, CardColor.Red)) });
+
+        var result = session.HandleAction(1, new PongDeclareMsg());
+
+        var ended = result.Messages.Select(o => o.Message).OfType<SetEndedMsg>().Single();
+        Assert.That(ended.winnerSeats, Does.Contain(1)); // 손 턴 승자(빚 0)
+        Assert.That(result.Timers.Any(t => t.Command is NextRoundCmd), Is.False); // 다음 판 없음
     }
 
     // ── 다음 판 자동 진행 ──

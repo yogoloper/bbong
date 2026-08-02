@@ -237,6 +237,18 @@ public sealed class Room
         {
             ScheduleTimer(timer);
         }
+
+        if (output.Messages.Any(o => o.Message is SetEndedMsg))
+        {
+            ReturnToWaiting(); // 세트 종료 → 대기실 복귀(재대결 가능)
+        }
+    }
+
+    internal void ReturnToWaiting()
+    {
+        _session = null;
+        Phase = RoomPhase.Waiting;
+        BroadcastRoomUpdate();
     }
 
     private void ScheduleTimer(PendingTimer timer) =>

@@ -41,12 +41,12 @@ public sealed class GameSession
 
     private int _roundToken;
 
-    public GameSession(string[] nicknames, Func<IRandom> rngFactory)
+    public GameSession(string[] nicknames, Func<IRandom> rngFactory, int setRounds = 5)
     {
         _nicknames = nicknames;
         _rngFactory = rngFactory;
         _playerCount = nicknames.Length;
-        _game = GameState.Start(_playerCount);
+        _game = GameState.Start(_playerCount, setRounds);
     }
 
     // ── 진입점 ──
@@ -74,6 +74,18 @@ public sealed class GameSession
                 break;
             case PongDiscardMsg pongDiscard:
                 HandlePongDiscard(output, seat, pongDiscard);
+                break;
+            case StopDeclareMsg:
+                HandleStopDeclare(output, seat);
+                break;
+            case ContinueTurnMsg:
+                HandleContinueTurn(output, seat);
+                break;
+            case MeldDeclareMsg:
+                HandleMeldDeclare(output, seat);
+                break;
+            case NaturalPongMsg naturalPong:
+                HandleNaturalPong(output, seat, naturalPong);
                 break;
             default:
                 Error(output, seat, "unsupported", "지원하지 않는 요청입니다.");
@@ -318,6 +330,114 @@ public sealed class GameSession
         }
 
         AfterDiscard(output, seat, card); // 뽕의 추가 버림도 다시 뽕 대상
+    }
+
+    // ── 스톱 / 계속 / 족보 / 자연뽕 ──
+
+    private void HandleStopDeclare(SessionOutput output, int seat)
+    {
+        if (_phase != RoundPhase.WaitingStop || seat != _round.CurrentSeat || !StopResolver.CanStop(_round, seat))
+        {
+            Error(output, seat, "cannot_stop", "지금은 스톱할 수 없습니다.");
+            return;
+        }
+
+        var bagaji = StopResolver.IsBagaji(_round, seat);
+        output.ToAll(new StopDeclaredMsg { seat = seat, bagaji = bagaji });
+        var reason = bagaji ? $"{_nicknames[seat]} 바가지 (+30)" : $"{_nicknames[seat]} 스톱";
+        EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, StopEnderSeat(seat, bagaji));
+    }
+
+    private void HandleContinueTurn(SessionOutput output, int seat)
+    {
+        if (_phase != RoundPhase.WaitingStop || seat != _round.CurrentSeat)
+        {
+            Error(output, seat, "invalid_phase", "지금은 계속을 선택할 수 없습니다.");
+            return;
+        }
+
+        AutoDraw(output);
+    }
+
+    private void HandleMeldDeclare(SessionOutput output, int seat)
+    {
+        if (_phase != RoundPhase.WaitingDiscard || seat != _round.CurrentSeat || _meld.Type == MeldType.None)
+        {
+            Error(output, seat, "cannot_meld", "선언할 족보가 없습니다.");
+            return;
+        }
+
+        output.ToAll(new MeldDeclaredMsg { seat = seat, meldType = _meld.Type.ToString(), meldScore = _meld.Score });
+        EndRound(output, RoundSettlement.SettleByMeld(_round, seat, _meld),
+            $"{_nicknames[seat]} 족보 완성 [{_meld.Type} {_meld.Score}점]", seat);
+    }
+
+    private void HandleNaturalPong(SessionOutput output, int seat, NaturalPongMsg msg)
+    {
+        if (_phase != RoundPhase.WaitingDiscard || seat != _round.CurrentSeat || !_canNaturalPong)
+        {
+            Error(output, seat, "cannot_natural_pong", "자연뽕할 수 없습니다.");
+            return;
+        }
+
+        var number = _naturalPongNumber;
+        var hand = _round.Players[seat].Hand;
+        var laid = hand.Cards.Where(c => c.Number == number).Take(3).ToList();
+        var rest = hand.Cards.Except(laid).ToList();
+
+        if (rest.Count == 0)
+        {
+            // 손패 전부 같은 숫자 → 손 소진 종료
+            _round = _round.NaturalPong(number, null);
+            EmitEach(output, s => new NaturalPongedMsg
+            {
+                seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
+            });
+            EndRound(output, RoundSettlement.SettleByHandClear(_round, seat), $"{_nicknames[seat]} 자연뽕 손 털기", seat);
+            return;
+        }
+
+        if (!msg.hasDiscard)
+        {
+            Error(output, seat, "invalid_card", "자연뽕 후 버릴 카드를 지정해야 합니다.");
+            return;
+        }
+
+        var card = msg.card.ToCard();
+        if (!rest.Contains(card))
+        {
+            Error(output, seat, "invalid_card", "버릴 수 없는 카드입니다.");
+            return;
+        }
+
+        _round = _round.NaturalPong(number, card);
+        EmitEach(output, s => new NaturalPongedMsg
+        {
+            seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
+        });
+        AfterDiscard(output, seat, card); // 추가 버림도 뽕 대상
+    }
+
+    /// <summary>스톱 승자: 정상 스톱=선언자, 바가지=가장 낮은 손패 합의 뽕 게이머(클라 로직 이식).</summary>
+    private int StopEnderSeat(int stopSeat, bool bagaji)
+    {
+        if (!bagaji)
+        {
+            return stopSeat;
+        }
+
+        var winner = stopSeat;
+        var min = _round.Players[stopSeat].Hand.Sum();
+        for (var s = 0; s < _playerCount; s++)
+        {
+            if (_round.Players[s].HasPonged && _round.Players[s].Hand.Sum() < min)
+            {
+                min = _round.Players[s].Hand.Sum();
+                winner = s;
+            }
+        }
+
+        return winner;
     }
 
     private void ClosePongWindow(SessionOutput output)
