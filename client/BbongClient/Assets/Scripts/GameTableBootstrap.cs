@@ -809,9 +809,9 @@ namespace Bbong.Client
                     break;
 
                 case UiState.PongDiscardSelect:
-                    if (card.Number == _pongNumber)
+                    if (_pendingLaid.Contains(card))
                     {
-                        return;
+                        return; // 내려놓은 2장만 금지 — 같은 숫자 3장째는 버릴 수 있음
                     }
 
                     _state = UiState.Resolving;
@@ -825,9 +825,9 @@ namespace Bbong.Client
                     break;
 
                 case UiState.NaturalPongSelect:
-                    if (card.Number == _naturalPongNumber)
+                    if (_pendingLaid.Contains(card))
                     {
-                        return;
+                        return; // 내려놓은 3장만 금지 — 같은 숫자 4장째는 버릴 수 있음
                     }
 
                     _state = UiState.Resolving;

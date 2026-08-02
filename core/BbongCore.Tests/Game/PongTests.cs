@@ -102,6 +102,26 @@ public class PongTests
         Assert.That(after.Players[1].PongCount, Is.EqualTo(2));
     }
 
+    [Test]
+    public void Pong_allows_discarding_third_card_of_same_number()
+    {
+        // 9 세 장 보유 중 9 뽕 → 두 장 내려놓고 남은 세 번째 9를 추가 버림으로 낼 수 있다
+        var players = new[]
+        {
+            new Player(0, HandOf(C(2, CardColor.Red), C(5, CardColor.Red))),
+            new Player(1, HandOf(
+                C(9, CardColor.Green), C(9, CardColor.Yellow), C(9, CardColor.Blue),
+                C(1, CardColor.Red), C(3, CardColor.Red)))
+        };
+        var discard = new[] { C(9, CardColor.Red) }; // seat0가 버린 9
+        var round = new RoundState(players, Array.Empty<Card>(), discard, currentSeat: 1, new SeededRandom(1));
+
+        var after = round.Pong(1, cardToDiscardAfter: C(9, CardColor.Blue));
+
+        Assert.That(after.Players[1].Hand.Cards, Is.EquivalentTo(new[] { C(1, CardColor.Red), C(3, CardColor.Red) }));
+        Assert.That(after.DiscardPile[^1], Is.EqualTo(C(9, CardColor.Blue))); // 세 번째 9가 새 맨 위
+    }
+
     // ── 자연뽕 (rules.md §4-2) ──
 
     [Test]
@@ -135,6 +155,25 @@ public class PongTests
         Assert.That(after.Players[0].Hand.Count, Is.EqualTo(2)); // 6 - 3(자연뽕) - 1(버림)
         Assert.That(after.Players[0].PongCount, Is.EqualTo(1));
         Assert.That(after.CurrentSeat, Is.EqualTo(1)); // 다음 좌석으로
+    }
+
+    [Test]
+    public void NaturalPong_allows_discarding_fourth_card_of_same_number()
+    {
+        // 같은 숫자 4장 보유 → 3장 내려놓고 남은 네 번째를 추가 버림으로 낼 수 있다
+        var players = new[]
+        {
+            new Player(0, HandOf(
+                C(9, CardColor.Red), C(9, CardColor.Blue), C(9, CardColor.Green), C(9, CardColor.Yellow),
+                C(2, CardColor.Red), C(8, CardColor.Red))),
+            new Player(1, HandOf(C(1, CardColor.Red), C(3, CardColor.Red)))
+        };
+        var round = new RoundState(players, Array.Empty<Card>(), Array.Empty<Card>(), 0, new SeededRandom(1));
+
+        var after = round.NaturalPong(number: 9, cardToDiscardAfter: C(9, CardColor.Yellow));
+
+        Assert.That(after.Players[0].Hand.Cards, Is.EquivalentTo(new[] { C(2, CardColor.Red), C(8, CardColor.Red) }));
+        Assert.That(after.DiscardPile[^1], Is.EqualTo(C(9, CardColor.Yellow)));
     }
 
     [Test]
