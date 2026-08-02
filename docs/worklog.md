@@ -2,12 +2,13 @@
 
 > 세션 인수인계용 요약. 상세 규칙=`rules.md`, 시스템=`architecture.md`, 리스크=`considerations.md`.
 
-## 현재 상태 (2026-06-29)
+## 현재 상태 (2026-08-03)
 
 - **Phase 0 규칙** ✅ / **1 코어** ✅ / **2 AI 봇** ✅ / **3 UI/UX** ✅ / **4 메타·수익화(서버)** 🚧 진행 중
-- 테스트: 코어 **111개**, 서버 **39개** (NUnit).
-- 클라: 4인(사람+봇3) 한 게임(5판) 처음~끝 동작, 점수/판돈/전광판까지. 메인 로비 + 5개 모드 화면, 매치 셋업.
-- 서버: ASP.NET Core + EF Core/PostgreSQL + JWT. 게스트/소셜 로그인·프로필·지갑·광고보상 엔드포인트 동작. docker compose로 PG/Redis 기동.
+- 테스트: 코어 **116개**, 서버 **62개** (NUnit, PG round-trip 포함).
+- 클라: 4인(사람+봇3) 한 게임(5판) 처음~끝 동작. 메인 로비 + 5개 모드 화면. **연습(봇전)은 무료 — 로컬 지갑(PlayerWallet) 삭제**.
+- 서버: ASP.NET Core + EF Core/PostgreSQL + JWT. 게스트/소셜 로그인·프로필·지갑·광고보상 + **매치 에스크로/정산 API**. docker compose로 PG/Redis 기동.
+- 부하/정합 검증: `tools/BbongLoadSim` — 게스트 20명 동시 × 5게임, 394요청 실패 0, 잔액 정합 불일치 0.
 
 ## 구조
 
@@ -26,7 +27,9 @@ client/BbongClient    Unity 6000.4.10f1 (URP). Assets/Scripts/ 부트스트랩�
   Assets/Scenes/SampleScene  Auth(활성)+Lobby/GameTable(비활성) 부트스트랩 배선.
 server/BbongServer    ASP.NET Core(.NET8). EF Core+PostgreSQL, JWT. Database.Migrate() 자동.
   엔드포인트: /auth/guest /auth/social /auth/link /me /me/nickname /shop/ad-reward
+             /match/start(판돈 에스크로) /match/{id}/result(1회 정산, 절사=StakePot.Share)
 demo/BbongDemo        봇 토너먼트(난이도 검증). dotnet run --project demo/BbongDemo
+tools/BbongLoadSim    동시접속 부하/정합 시뮬. dotnet run --project tools/BbongLoadSim -- --users 20 --games 5
 scripts/sync-core-dll.sh  코어 재빌드 + DLL을 Unity로 복사 (코어 수정 시 필수)
 compose.yaml          dev 인프라 PG(5432)+Redis(6379). 서버 앱은 컨테이너 밖 dotnet run.
 ```
@@ -39,6 +42,16 @@ compose.yaml          dev 인프라 PG(5432)+Redis(6379). 서버 앱은 컨테�
 - 봇 게임만: 빈 GameObject에 `GameTableBootstrap`만 붙이고 Play (서버 불필요)
 - 정식 흐름(로그인~): ① `docker compose up -d` ② `cd server/BbongServer && dotnet run` (포트 5080) ③ Unity에서 AuthBootstrap Play → 게스트 시작
 - 게임 로그: Unity Console `[BBONG]` (화면 로그는 제거됨)
+
+## 세션 (2026-08-03) — 매치 API + 동시접속 검증
+
+- **연습 무료화**: 봇전 판돈/로컬 지갑(PlayerWallet) 제거. 재화는 서버 원장만 진실.
+- **매치 API**: `/match/start`(StakeEscrow 차감) → `/match/{id}/result`(1회 정산, StakePayout).
+  공동 1등 절사 = 코어 `StakePot.Share` 공유(rules.md ❓OPEN 절사로 확정). matches 테이블(AddMatches).
+- **동시접속 테스트 방안**: ① `tools/BbongLoadSim`(게스트 N명 동시, 잔액 정합 자동 검증)
+  ② Unity File > Build And Run 스탠드얼론 2개 + 에디터 1개 = 게스트 3명 동시 육안 확인.
+- 게임플레이 QoL: 턴 전환 0.5초 무포커스 연출, 뽕 추가버림 같은숫자 3장째 허용, 손털기 종료 엣지 2건 수정.
+- 한계 문서화: considerations.md **R7**(지갑 동시성 레이스, 미정산 매치, 결과 신뢰).
 
 ## 세션 (2026-06-29) — Phase 4 안정화 + 로그
 
@@ -72,12 +85,11 @@ UI: 코드생성 카드아트(색배경+모서리핍, 색약 안전 팔레트), 
 
 ## 미해결 / 다음 후보
 
-- **봇 타이밍 튜닝**: 새 로그로 단계별 간격(BotDelay 0.5 / TossDelay 0.35) 점검·조정.
-- **클라↔서버 게임 연동**: 현재 봇 게임은 클라 단독. 지갑/매치 결과 서버 반영 미연결.
+- **Phase 5 온라인 멀티**: 대기실/방찾기/게임서버(Realtime). 맞춤게임에서 매치 API 소비 시작점.
+- **R7 지갑 동시성**: advisory lock/SERIALIZABLE — 멀티 전 필수(considerations.md).
+- **미정산 매치 타임아웃 정리 잡** (후속)
 - **실제 아트 에셋**(카드는 여전히 절차생성)
-- **Phase 5 온라인 멀티**: 대기실/방찾기/게임서버(Realtime). 미착수.
 - 봇 스톱 성향 과함(시뮬상 78% 스톱 종료) — 다양성 튜닝 여지
-- rules.md ❓OPEN: 공동 1등 판돈 나머지 절사 처리
 
 ## 컴플라이언스 핵심 (잊지 말 것)
 
