@@ -36,6 +36,13 @@ public class GameSessionTests
 
     private static Player P(int seat, params Card[] cards) => new(seat, new Hand(cards));
 
+    /// <summary>턴 전환 간격 타이머를 꺼내 만료시켜 다음 턴 진입.</summary>
+    private static SessionOutput AdvanceTurnGap(GameSession session, SessionOutput output)
+    {
+        var token = ((TurnGapCmd)output.Timers.Single(t => t.Command is TurnGapCmd).Command).Token;
+        return session.HandleTurnGap(token);
+    }
+
     // ── ① 시작: 딜 + 선 자동 드로우 + 뷰 필터링 ──
 
     [Test]
@@ -100,10 +107,9 @@ public class GameSessionTests
         Assert.That(For<ErrorMsg>(result, 0).code, Is.EqualTo("invalid_card"));
     }
 
-    // ── 버림 → 뽕 없음 → 다음 턴 ──
+    // ── 버림 → 뽕 없음 → 턴 전환 간격(0.5초) → 다음 턴 ──
 
-    [Test]
-    public void Discard_without_pong_advances_turn()
+    private static (GameSession, SessionOutput) DiscardWithoutPongScenario()
     {
         var (session, _) = Rigged(
             new[]
@@ -115,12 +121,52 @@ public class GameSessionTests
             discard: Array.Empty<Card>(),
             currentSeat: 0);
 
-        var result = session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(5, CardColor.Red)) });
+        var output = session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(5, CardColor.Red)) });
+        return (session, output);
+    }
+
+    [Test]
+    public void Discard_without_pong_schedules_turn_gap()
+    {
+        var (_, result) = DiscardWithoutPongScenario();
 
         Assert.That(For<DiscardedMsg>(result, 1).card.number, Is.EqualTo(5));
-        Assert.That(For<TurnBeganMsg>(result, 1).seat, Is.EqualTo(1)); // 다음 턴
-        Assert.That(For<DrewCardMsg>(result, 1).view.myHand, Has.Length.EqualTo(3));
-        Assert.That(result.Timers, Is.Empty);
+        Assert.That(For<DiscardedMsg>(result, 1).view.phase, Is.EqualTo(RoundPhase.TurnGap));
+        Assert.That(HasMsg<TurnBeganMsg>(result), Is.False); // 간격 동안 턴 진행 없음
+
+        var timer = result.Timers.Single();
+        Assert.That(timer.Command, Is.InstanceOf<TurnGapCmd>());
+        Assert.That(timer.DelayMs, Is.EqualTo(RealtimeConfig.TurnGapMs));
+    }
+
+    [Test]
+    public void Turn_gap_timeout_begins_next_turn()
+    {
+        var (session, result) = DiscardWithoutPongScenario();
+
+        var next = AdvanceTurnGap(session, result);
+
+        Assert.That(For<TurnBeganMsg>(next, 1).seat, Is.EqualTo(1));
+        Assert.That(For<DrewCardMsg>(next, 1).view.myHand, Has.Length.EqualTo(3));
+    }
+
+    [Test]
+    public void Stale_turn_gap_timeout_is_ignored()
+    {
+        var (session, result) = DiscardWithoutPongScenario();
+        var token = ((TurnGapCmd)result.Timers.Single().Command).Token;
+
+        Assert.That(session.HandleTurnGap(token - 1).Messages, Is.Empty);
+    }
+
+    [Test]
+    public void Discard_during_turn_gap_is_rejected()
+    {
+        var (session, _) = DiscardWithoutPongScenario();
+
+        var result = session.HandleAction(1, new DiscardMsg { card = CardDto.From(C(3, CardColor.Red)) });
+
+        Assert.That(For<ErrorMsg>(result, 1).code, Is.EqualTo("invalid_phase"));
     }
 
     // ── 뽕 창 ──
@@ -173,7 +219,9 @@ public class GameSessionTests
 
         var tossed = session.HandleAction(1, new PongDiscardMsg { card = CardDto.From(C(2, CardColor.Red)) });
         Assert.That(For<DiscardedMsg>(tossed, 0).card.number, Is.EqualTo(2));
-        Assert.That(For<TurnBeganMsg>(tossed, 0).seat, Is.EqualTo(2)); // 뽕 선언자(1) 다음 좌석
+
+        var next = AdvanceTurnGap(session, tossed);
+        Assert.That(For<TurnBeganMsg>(next, 0).seat, Is.EqualTo(2)); // 뽕 선언자(1) 다음 좌석
     }
 
     [Test]
@@ -208,7 +256,10 @@ public class GameSessionTests
         var result = session.HandleAction(1, new PongPassMsg());
 
         Assert.That(HasMsg<PongWindowClosedMsg>(result), Is.True);
-        Assert.That(For<TurnBeganMsg>(result, 0).seat, Is.EqualTo(1)); // 코어는 버림 시점에 이미 턴 전진
+        Assert.That(HasMsg<TurnBeganMsg>(result), Is.False); // 창 닫힘 → 턴 전환 간격 먼저
+
+        var next = AdvanceTurnGap(session, result);
+        Assert.That(For<TurnBeganMsg>(next, 0).seat, Is.EqualTo(1)); // 코어는 버림 시점에 이미 턴 전진
     }
 
     [Test]
@@ -222,7 +273,9 @@ public class GameSessionTests
 
         var closed = session.HandlePongTimeout(token);
         Assert.That(HasMsg<PongWindowClosedMsg>(closed), Is.True);
-        Assert.That(For<TurnBeganMsg>(closed, 0).seat, Is.EqualTo(1));
+
+        var next = AdvanceTurnGap(session, closed);
+        Assert.That(For<TurnBeganMsg>(next, 0).seat, Is.EqualTo(1));
     }
 
     [Test]
@@ -388,7 +441,9 @@ public class GameSessionTests
 
         Assert.That(For<NaturalPongedMsg>(result, 1).laid, Has.Length.EqualTo(3));
         Assert.That(For<DiscardedMsg>(result, 1).card.number, Is.EqualTo(2));
-        Assert.That(For<TurnBeganMsg>(result, 1).seat, Is.EqualTo(1)); // 다음 턴
+
+        var next = AdvanceTurnGap(session, result);
+        Assert.That(For<TurnBeganMsg>(next, 1).seat, Is.EqualTo(1)); // 다음 턴
     }
 
     [Test]

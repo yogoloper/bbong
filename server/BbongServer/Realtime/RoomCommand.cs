@@ -23,3 +23,6 @@ public sealed record PongTimeoutCmd(int Token) : RoomCommand;
 
 /// <summary>판 종료 후 자동 다음 판. Token으로 stale 방지.</summary>
 public sealed record NextRoundCmd(int Token) : RoomCommand;
+
+/// <summary>버림 → 다음 턴 사이 전환 간격 만료. Token으로 stale 방지.</summary>
+public sealed record TurnGapCmd(int Token) : RoomCommand;

@@ -9,6 +9,7 @@ public static class RoundPhase
     public const string WaitingDiscard = "WaitingDiscard";     // 드로우 후 버림(또는 족보/자연뽕) 대기
     public const string PongWindow = "PongWindow";             // 뽕 선언 창(5초)
     public const string WaitingPongDiscard = "WaitingPongDiscard"; // 뽕 선언자의 추가 버림 대기
+    public const string TurnGap = "TurnGap";                   // 버림 → 다음 턴 사이 아무도 턴이 아닌 간격(연출)
     public const string RoundOver = "RoundOver";
     public const string SetOver = "SetOver";
 }

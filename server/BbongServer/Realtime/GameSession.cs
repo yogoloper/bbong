@@ -40,6 +40,7 @@ public sealed class GameSession
     private List<Card> _pongLaid = new();
 
     private int _roundToken;
+    private int _turnGapToken;
 
     public GameSession(string[] nicknames, Func<IRandom> rngFactory, int setRounds = 5)
     {
@@ -101,6 +102,16 @@ public sealed class GameSession
         if (_phase == RoundPhase.PongWindow && token == _pongToken)
         {
             ClosePongWindow(output);
+        }
+
+        return output;
+    }
+
+    public SessionOutput HandleTurnGap(int token)
+    {
+        var output = new SessionOutput();
+        if (_phase == RoundPhase.TurnGap && token == _turnGapToken)
+        {
             BeginTurn(output);
         }
 
@@ -216,9 +227,8 @@ public sealed class GameSession
         var eligible = Enumerable.Range(0, _playerCount).Where(s => _round.CanPong(s)).ToList();
         if (eligible.Count == 0)
         {
-            _phase = RoundPhase.WaitingDiscard;
+            EnterTurnGap(output);
             EmitEach(output, seat => new DiscardedMsg { seat = discarderSeat, card = CardDto.From(card), view = BuildView(seat) });
-            BeginTurn(output);
             return;
         }
 
@@ -300,7 +310,6 @@ public sealed class GameSession
 
         _pongToken++;
         ClosePongWindow(output);
-        BeginTurn(output);
     }
 
     private void HandlePongDiscard(SessionOutput output, int seat, PongDiscardMsg msg)
@@ -442,8 +451,16 @@ public sealed class GameSession
 
     private void ClosePongWindow(SessionOutput output)
     {
-        _phase = RoundPhase.WaitingDiscard; // 다음 턴 진입 전 임시 — BeginTurn이 확정
+        EnterTurnGap(output);
         EmitEach(output, seat => new PongWindowClosedMsg { view = BuildView(seat) });
+    }
+
+    /// <summary>턴 전환 간격 진입: 잠깐 아무도 턴이 아닌 상태(연습 모드 연출 이식). 만료 시 HandleTurnGap이 턴 진입.</summary>
+    private void EnterTurnGap(SessionOutput output)
+    {
+        _phase = RoundPhase.TurnGap;
+        _turnGapToken++;
+        output.After(new TurnGapCmd(_turnGapToken), RealtimeConfig.TurnGapMs);
     }
 
     // ── 판 종료 ──

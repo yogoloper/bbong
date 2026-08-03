@@ -9,5 +9,8 @@ public static class RealtimeConfig
     /// <summary>판 종료 전광판 후 다음 판 자동 시작까지(ms).</summary>
     public const int NextRoundDelayMs = 8000;
 
+    /// <summary>버림 → 다음 턴 사이 아무도 턴이 아닌 간격(ms). 연습 모드 TurnGapDelay(0.5초)와 동일.</summary>
+    public const int TurnGapMs = 500;
+
     public const int RoomCodeLength = 6;
 }

@@ -118,6 +118,13 @@ public sealed class Room
                 }
 
                 break;
+            case TurnGapCmd gap:
+                if (_session is not null)
+                {
+                    Apply(_session.HandleTurnGap(gap.Token));
+                }
+
+                break;
         }
     }
 

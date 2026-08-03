@@ -5,7 +5,7 @@
 ## 현재 상태 (2026-08-03)
 
 - **Phase 0 규칙** ✅ / **1 코어** ✅ / **2 AI 봇** ✅ / **3 UI/UX** ✅ / **4 메타·수익화(서버)** 🚧 / **5 온라인 멀티 M1(친구방)** ✅ 동작
-- 테스트: 코어 **118개**, 서버 **101개** (NUnit, PG round-trip·WS 통합 포함).
+- 테스트: 코어 **118개**, 서버 **107개** (NUnit, PG round-trip·WS 통합 포함).
 - 클라: 연습(봇전, 무료) + **친구방 온라인 멀티**(초대코드, 2~6인, 서버 권위) 3클라 수동 검증 완료. 메인 로비 + 5개 모드 화면.
 - 서버: ASP.NET Core + EF Core/PostgreSQL + JWT + **WebSocket(/ws) 실시간**. 게스트/소셜 로그인·프로필·지갑·광고보상·매치 에스크로/정산 API.
 - 부하/정합 검증: `tools/BbongLoadSim` — 게스트 20명 동시 × 5게임, 394요청 실패 0, 잔액 정합 불일치 0.
@@ -42,6 +42,24 @@ compose.yaml          dev 인프라 PG(5432)+Redis(6379). 서버 앱은 컨테�
 - 봇 게임만: 빈 GameObject에 `GameTableBootstrap`만 붙이고 Play (서버 불필요)
 - 정식 흐름(로그인~): ① `docker compose up -d` ② `cd server/BbongServer && dotnet run` (포트 5080) ③ Unity에서 AuthBootstrap Play → 게스트 시작
 - 게임 로그: Unity Console `[BBONG]` (화면 로그는 제거됨)
+
+## 세션 (2026-08-03 심야) — 넷 테이블 폴리시 + 모바일 빌드 준비
+
+- **턴 간격(서버)**: `RoundPhase.TurnGap` + `TurnGapCmd` + `RealtimeConfig.TurnGapMs=500` —
+  버림 후 0.5초 무포커스 간격(뽕 없음/전원 패스/뽕창 타임아웃 경로). 서버 테스트 101→**107**.
+- **코어**: `RoundView`에 TurnGap 페이즈 상수 추가, sync-core-dll.sh로 DLL 반영.
+- **클라(NetGameTableBootstrap)**: TurnGap 동안 좌석 포커스 해제(로컬과 동일 연출),
+  판 종료 점수판을 로컬과 같은 표(판별 히스토리+계, 5초 후 페이드)로 교체.
+- **넷 손패 뭉개짐 수정**: 손패 HorizontalLayoutGroup이 `childControl*=false`라
+  CreateCardFace의 `LayoutElement.preferred*`(130x200)가 무시되어 기본 100x100 정사각 +
+  `childForceExpandWidth` 기본 true로 전폭 흩어짐 → 로컬 CreateRow와 동일하게
+  childControl 유지 + `childForceExpand*=false`로 수정. macOS 빌드/에디터 모두 정상 확인.
+- **모바일 준비**: Android 빌드 프로필 추가. NDK 유실 복구 — 6000.4.10f1의
+  `PlaybackEngines/AndroidPlayer/NDK`가 비어 "Android NDK not found" → 6000.0.78f1의 동일
+  버전(r27c, 27.2.12479018) 복사로 해결. 모바일 UI 확인은 Device Simulator(20:9)로 — 기기 불필요.
+- 검증: 새 macOS 빌드 다중 클라(최대 6개) + 서버 107 테스트 통과.
+- 참고: 폰 실기기 테스트 시 `ServerApi.BaseUrl`을 LAN IP로 + Player Settings에서
+  "Allow downloads over HTTP" 허용 필요.
 
 ## 세션 (2026-08-03 후반) — Phase 5 M1: 친구방 온라인 멀티
 
