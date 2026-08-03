@@ -12,5 +12,8 @@ public static class RealtimeConfig
     /// <summary>버림 → 다음 턴 사이 아무도 턴이 아닌 간격(ms). 연습 모드 TurnGapDelay(0.5초)와 동일.</summary>
     public const int TurnGapMs = 500;
 
+    /// <summary>내 행동 대기 제한(초, rules.md §3). 초과 시 자동 진행(드로우 카드 버림/자동 계속).</summary>
+    public const int TurnTimerSeconds = BbongCore.Config.GameConfig.TurnTimerSeconds;
+
     public const int RoomCodeLength = 6;
 }

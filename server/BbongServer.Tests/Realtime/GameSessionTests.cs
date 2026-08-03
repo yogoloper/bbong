@@ -537,4 +537,77 @@ public class GameSessionTests
         Assert.That(started.dealerSeat, Is.EqualTo(1)); // 판 끝낸 사람이 선
         Assert.That(For<DrewCardMsg>(next, 1).seat, Is.EqualTo(1));
     }
+
+    // ── 턴 타이머 (rules.md §3: 5초 미행동 → 자동 진행) ──
+
+    private static int TurnTimerToken(SessionOutput output) =>
+        ((TurnTimeoutCmd)output.Timers.Last(t => t.Command is TurnTimeoutCmd).Command).Token;
+
+    [Test]
+    public void Turn_timeout_auto_discards_drawn_card()
+    {
+        var original = new[] { C(1, CardColor.Red), C(2, CardColor.Red), C(3, CardColor.Blue), C(4, CardColor.Red), C(5, CardColor.Blue) };
+        var (session, output) = Rigged(
+            new[] { P(0, original), P(1, C(11, CardColor.Red), C(12, CardColor.Red)) },
+            drawPile: new[] { C(9, CardColor.Red), C(6, CardColor.Green) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+        var drew = For<DrewCardMsg>(output, 0);
+        var drawn = drew.view.myHand.Select(c => c.ToCard()).Except(original).Single();
+
+        var result = session.HandleTurnTimeout(TurnTimerToken(output));
+
+        var discarded = For<DiscardedMsg>(result, 0);
+        Assert.That(discarded.seat, Is.EqualTo(0));
+        Assert.That(discarded.card.ToCard(), Is.EqualTo(drawn)); // 방금 드로우한 카드 자동 버림
+    }
+
+    [Test]
+    public void Turn_timeout_on_stop_decision_auto_continues()
+    {
+        var (session, output) = StopScenario(stopperSum: 5, rivalSum: 8);
+        Assert.That(For<TurnBeganMsg>(output, 0).view.phase, Is.EqualTo(RoundPhase.WaitingStop));
+
+        var result = session.HandleTurnTimeout(TurnTimerToken(output));
+
+        Assert.That(For<DrewCardMsg>(result, 0).view.phase, Is.EqualTo(RoundPhase.WaitingDiscard)); // 자동 계속
+    }
+
+    [Test]
+    public void Turn_timeout_after_pong_declare_auto_discards()
+    {
+        var (session, _) = Rigged(
+            new[]
+            {
+                P(0, C(9, CardColor.Red), C(1, CardColor.Red), C(2, CardColor.Blue)),
+                P(1, C(9, CardColor.Green), C(9, CardColor.Yellow), C(7, CardColor.Red), C(8, CardColor.Red)),
+                P(2, C(4, CardColor.Red), C(5, CardColor.Red))
+            },
+            drawPile: new[] { C(6, CardColor.Red), C(10, CardColor.Red) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+        session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(9, CardColor.Red)) });
+        var ponged = session.HandleAction(1, new PongDeclareMsg());
+        Assert.That(For<PongedMsg>(ponged, 0).view.phase, Is.EqualTo(RoundPhase.WaitingPongDiscard));
+
+        var result = session.HandleTurnTimeout(TurnTimerToken(ponged));
+
+        var discarded = For<DiscardedMsg>(result, 1);
+        Assert.That(discarded.seat, Is.EqualTo(1)); // 내려놓은 뽕 카드 제외 자동 버림
+        Assert.That(discarded.card.ToCard().Number, Is.Not.EqualTo(9));
+    }
+
+    [Test]
+    public void Stale_turn_timeout_is_ignored()
+    {
+        var (session, output) = Rigged(
+            new[] { P(0, C(1, CardColor.Red), C(2, CardColor.Red)), P(1, C(11, CardColor.Red), C(12, CardColor.Red)) },
+            drawPile: new[] { C(9, CardColor.Red), C(6, CardColor.Green) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+        var staleToken = TurnTimerToken(output);
+        session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(1, CardColor.Red)) }); // 제때 행동
+
+        Assert.That(session.HandleTurnTimeout(staleToken).Messages, Is.Empty);
+    }
 }

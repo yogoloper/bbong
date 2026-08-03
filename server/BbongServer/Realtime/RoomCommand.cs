@@ -26,3 +26,6 @@ public sealed record NextRoundCmd(int Token) : RoomCommand;
 
 /// <summary>버림 → 다음 턴 사이 전환 간격 만료. Token으로 stale 방지.</summary>
 public sealed record TurnGapCmd(int Token) : RoomCommand;
+
+/// <summary>턴 행동 대기 5초 만료(rules.md §3) → 자동 진행. Token으로 stale 방지.</summary>
+public sealed record TurnTimeoutCmd(int Token) : RoomCommand;

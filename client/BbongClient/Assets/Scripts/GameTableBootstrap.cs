@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Ai;
 using BbongCore.Cards;
+using BbongCore.Config;
 using BbongCore.Game;
 using BbongCore.Online;
 using BbongCore.Rules;
@@ -61,6 +62,9 @@ namespace Bbong.Client
         private int _seed = 1;
         private Coroutine _pongTimer;
         private Coroutine _botLoop;
+        private Coroutine _turnTimer; // 내 행동 대기 5초 제한(rules.md §3) — 초과 시 자동 진행
+        private int _turnToken;       // 이전 턴의 타이머가 다음 턴에 오발화하지 않도록 무효화 토큰
+        private Card _drawnCard;      // 시간 초과 시 자동으로 버릴 방금 드로우한 카드
         private MeldResult _pendingMeld; // 족보 선언 대기 중인 족보(MeldDecision)
         private readonly List<int[]> _roundHistory = new(); // 게임 내 판별 점수
         private Button _nextBtn, _lobbyBtn;
@@ -125,6 +129,7 @@ namespace Bbong.Client
 
         private void EndRound(int[] scores, string reason, int enderSeat)
         {
+            CancelTurnTimer();
             _table.SetEndReason(reason); // 버림 더미 아래에 종료 사유 표시
             _table.PlayStopSfx();
             _roundHistory.Add(scores);
@@ -207,6 +212,7 @@ namespace Bbong.Client
                         _state = UiState.StopDecision;
                         SetLog("스톱? 또는 계속");
                         Refresh();
+                        StartTurnTimer();
                     }
                     else
                     {
@@ -406,6 +412,59 @@ namespace Bbong.Client
             }
         }
 
+        // ── 턴 타이머 (rules.md §3: 5초 내 미행동 시 자동 진행) ──
+
+        private void StartTurnTimer()
+        {
+            CancelTurnTimer();
+            _turnTimer = StartCoroutine(TurnTimeout(_turnToken));
+        }
+
+        private void CancelTurnTimer()
+        {
+            _turnToken++;
+            if (_turnTimer != null)
+            {
+                StopCoroutine(_turnTimer);
+                _turnTimer = null;
+            }
+        }
+
+        private IEnumerator TurnTimeout(int token)
+        {
+            yield return new WaitForSeconds(GameConfig.TurnTimerSeconds);
+            if (token != _turnToken)
+            {
+                yield break;
+            }
+
+            switch (_state)
+            {
+                case UiState.StopDecision:
+                    SetLog("턴 시간 초과 → 자동 계속");
+                    OnPass();
+                    break;
+
+                case UiState.NeedDiscard:
+                case UiState.MeldDecision:
+                    if (_round.CurrentSeat == MySeat)
+                    {
+                        SetLog($"턴 시간 초과 → 드로우 카드 자동 버림 {CardLabel(_drawnCard)}");
+                        OnCardClicked(_drawnCard);
+                    }
+
+                    break;
+
+                case UiState.PongDiscardSelect:
+                case UiState.NaturalPongSelect:
+                    // 내려놓은 고정 패를 제외한 첫 카드 자동 버림
+                    var fallback = _round.Players[MySeat].Hand.Cards.First(c => !_pendingLaid.Contains(c));
+                    SetLog($"턴 시간 초과 → 자동 버림 {CardLabel(fallback)}");
+                    OnCardClicked(fallback);
+                    break;
+            }
+        }
+
         private void StopPongTimer()
         {
             if (_pongTimer != null)
@@ -450,6 +509,7 @@ namespace Bbong.Client
 
             DrawCard();
             _table.PlayDrawSfx();
+            _drawnCard = _round.CurrentPlayer.Hand.Cards[^1]; // 시간 초과 시 자동 버림 대상(§3)
             var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
             if (meld.Type != MeldType.None)
             {
@@ -458,12 +518,14 @@ namespace Bbong.Client
                 _state = UiState.MeldDecision;
                 SetLog($"족보 완성 가능 [{MeldName(meld.Type)} {meld.Score}점] — 선언 또는 계속");
                 Refresh();
+                StartTurnTimer();
                 return;
             }
 
             _state = UiState.NeedDiscard;
             SetLog(_round.CanNaturalPong() ? "버릴 카드 클릭 (또는 자연뽕)" : "버릴 카드를 클릭하세요.");
             Refresh();
+            StartTurnTimer();
         }
 
         private string StopReason(int stopSeat) => StopResolver.IsBagaji(_round, stopSeat)
@@ -498,6 +560,7 @@ namespace Bbong.Client
         {
             if (_state == UiState.StopDecision && StopResolver.CanStop(_round, MySeat))
             {
+                CancelTurnTimer();
                 AnnounceStop(MySeat);
                 EndRound(RoundSettlement.SettleByStop(_round, MySeat), StopReason(MySeat), StopEnderSeat(MySeat));
             }
@@ -537,12 +600,14 @@ namespace Bbong.Client
             _state = UiState.PongDiscardSelect;
             SetLog($"뽕! {_pongNumber} 외 버릴 카드 클릭");
             Refresh();
+            StartTurnTimer();
         }
 
         private void OnPass()
         {
             if (_state == UiState.StopDecision)
             {
+                CancelTurnTimer();
                 _state = UiState.Resolving;
                 AutoDrawMe(); // 스톱 안 하고 계속 → 자동 드로우
                 return;
@@ -568,6 +633,7 @@ namespace Bbong.Client
                 return;
             }
 
+            CancelTurnTimer();
             _state = UiState.Resolving;
             _table.ShowMeldSet(_round.Players[MySeat].Hand.Cards); // 족보: 버림 비우고 표시
             _table.PongFx($"{SeatName(MySeat)}\n{MeldName(_pendingMeld.Type)}!");
@@ -581,6 +647,7 @@ namespace Bbong.Client
                 return;
             }
 
+            CancelTurnTimer();
             _naturalPongNumber = TripleNumber(_round.Players[MySeat].Hand);
             var laid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _naturalPongNumber).Take(3).ToList();
             var rest = _round.Players[MySeat].Hand.Cards.Count(c => c.Number != _naturalPongNumber);
@@ -606,6 +673,7 @@ namespace Bbong.Client
             SetLog($"자연뽕! {_naturalPongNumber} 외 버릴 카드 클릭");
             Refresh();
             _table.SetPrompt($"자연뽕! {_naturalPongNumber} 외 버릴 카드 클릭");
+            StartTurnTimer();
         }
 
         private void OnNext()
@@ -650,6 +718,7 @@ namespace Bbong.Client
                         return;
                     }
 
+                    CancelTurnTimer();
                     _state = UiState.Resolving; // 더블클릭 → 두 장 버림 방지
                     _round = _round.Discard(card);
                     SetLog($"내 버림 {CardLabel(card)}");
@@ -666,6 +735,7 @@ namespace Bbong.Client
                         return; // 내려놓은 2장만 금지 — 같은 숫자 3장째는 버릴 수 있음
                     }
 
+                    CancelTurnTimer();
                     _state = UiState.Resolving;
                     _round = _round.Pong(MySeat, card); // 내려놓기는 선언 시 이미 표시됨
                     _pendingLaid.Clear();
@@ -689,6 +759,7 @@ namespace Bbong.Client
                         return; // 내려놓은 3장만 금지 — 같은 숫자 4장째는 버릴 수 있음
                     }
 
+                    CancelTurnTimer();
                     _state = UiState.Resolving;
                     _round = _round.NaturalPong(_naturalPongNumber, card); // 내려놓기는 선언 시 이미 표시됨
                     _pendingLaid.Clear();

@@ -125,6 +125,13 @@ public sealed class Room
                 }
 
                 break;
+            case TurnTimeoutCmd turnTimeout:
+                if (_session is not null)
+                {
+                    Apply(_session.HandleTurnTimeout(turnTimeout.Token));
+                }
+
+                break;
         }
     }
 

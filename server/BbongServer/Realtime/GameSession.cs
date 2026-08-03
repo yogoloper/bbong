@@ -42,6 +42,10 @@ public sealed class GameSession
     private int _roundToken;
     private int _turnGapToken;
 
+    // 턴 행동 대기 타이머(§3). 대기 상태 진입마다 증가 — stale 타임아웃 무시용.
+    private int _turnToken;
+    private Card _drawnCard; // 시간 초과 시 자동으로 버릴 방금 드로우한 카드
+
     public GameSession(string[] nicknames, Func<IRandom> rngFactory, int setRounds = 5)
     {
         _nicknames = nicknames;
@@ -107,6 +111,37 @@ public sealed class GameSession
         return output;
     }
 
+    public SessionOutput HandleTurnTimeout(int token)
+    {
+        var output = new SessionOutput();
+        if (token != _turnToken)
+        {
+            return output;
+        }
+
+        switch (_phase)
+        {
+            case RoundPhase.WaitingStop:
+                AutoDraw(output); // 미응답 → 자동 계속(§3)
+                break;
+
+            case RoundPhase.WaitingDiscard:
+                var current = _round.CurrentSeat;
+                var drawn = _drawnCard;
+                _round = _round.Discard(drawn);
+                AfterDiscard(output, current, drawn); // 방금 드로우한 카드 자동 버림(§3)
+                break;
+
+            case RoundPhase.WaitingPongDiscard:
+                var declarer = _pongDeclarerSeat;
+                var toss = _round.Players[declarer].Hand.Cards.First(c => !_pongLaid.Contains(c));
+                ApplyPongDiscard(output, declarer, toss); // 내려놓은 고정 패 제외 자동 버림
+                break;
+        }
+
+        return output;
+    }
+
     public SessionOutput HandleTurnGap(int token)
     {
         var output = new SessionOutput();
@@ -163,6 +198,7 @@ public sealed class GameSession
         {
             _phase = RoundPhase.WaitingStop;
             EmitEach(output, seat => new TurnBeganMsg { seat = current, view = BuildView(seat) });
+            ArmTurnTimer(output);
             return;
         }
 
@@ -186,12 +222,14 @@ public sealed class GameSession
         var reshuffled = _round.ReshuffleCount > reshufflesBefore;
 
         var hand = _round.CurrentPlayer.Hand;
+        _drawnCard = hand.Cards[^1]; // 시간 초과 시 자동 버림 대상(§3)
         _meld = HandEvaluator.Evaluate(hand);
         _canNaturalPong = _round.CanNaturalPong();
         _naturalPongNumber = _canNaturalPong ? TripleNumber(hand) : 0;
         _phase = RoundPhase.WaitingDiscard;
 
         EmitEach(output, seat => new DrewCardMsg { seat = current, reshuffled = reshuffled, view = BuildView(seat) });
+        ArmTurnTimer(output);
     }
 
     // ── 버림 ──
@@ -224,6 +262,7 @@ public sealed class GameSession
     /// <summary>버림(일반/뽕 추가버림) 공통 후처리: 뽕 창 오픈 또는 다음 턴.</summary>
     private void AfterDiscard(SessionOutput output, int discarderSeat, Card card)
     {
+        _turnToken++; // 대기 상태 이탈 — 진행 중 턴 타이머 무효화
         var eligible = Enumerable.Range(0, _playerCount).Where(s => _round.CanPong(s)).ToList();
         if (eligible.Count == 0)
         {
@@ -293,6 +332,7 @@ public sealed class GameSession
         {
             seat = seat, number = _pongNumber, laid = CardDto.FromAll(laid), view = BuildView(s)
         });
+        ArmTurnTimer(output);
     }
 
     private void HandlePongPass(SessionOutput output, int seat)
@@ -327,6 +367,12 @@ public sealed class GameSession
             return;
         }
 
+        ApplyPongDiscard(output, seat, card);
+    }
+
+    /// <summary>뽕 추가 버림 반영(플레이어 선택/턴 타임아웃 공용).</summary>
+    private void ApplyPongDiscard(SessionOutput output, int seat, Card card)
+    {
         _round = _round.Pong(seat, card);
         _pongDeclarerSeat = -1;
 
@@ -455,6 +501,13 @@ public sealed class GameSession
         EmitEach(output, seat => new PongWindowClosedMsg { view = BuildView(seat) });
     }
 
+    /// <summary>턴 행동 대기 타이머 예약(§3). 이전 타이머는 토큰 증가로 무효화.</summary>
+    private void ArmTurnTimer(SessionOutput output)
+    {
+        _turnToken++;
+        output.After(new TurnTimeoutCmd(_turnToken), RealtimeConfig.TurnTimerSeconds * 1000);
+    }
+
     /// <summary>턴 전환 간격 진입: 잠깐 아무도 턴이 아닌 상태(연습 모드 연출 이식). 만료 시 HandleTurnGap이 턴 진입.</summary>
     private void EnterTurnGap(SessionOutput output)
     {
@@ -467,6 +520,7 @@ public sealed class GameSession
 
     private void EndRound(SessionOutput output, int[] scores, string reason, int enderSeat)
     {
+        _turnToken++; // 진행 중 턴 타이머 무효화
         _game = _game.ApplyRoundScores(scores);
         _roundIndex++;
         _dealerSeat = enderSeat;
