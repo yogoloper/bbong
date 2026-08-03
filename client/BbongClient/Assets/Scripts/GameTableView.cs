@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using BbongCore.Cards;
+using BbongCore.Config;
 using BbongCore.Online;
 using BbongCore.Rules;
 using UnityEngine;
@@ -57,6 +58,9 @@ namespace Bbong.Client
         private CanvasGroup _calloutGroup;
         private Coroutine _calloutFx;
         private Coroutine _pongCountdown;
+        private Text _turnCountdown;
+        private Coroutine _turnCountdownFx;
+        private string _turnCountdownKey; // 같은 대기 상태에서 리렌더돼도 카운트다운이 리셋되지 않게 하는 키
 
         private AudioSource _audio;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop, _sfxShuffle;
@@ -180,6 +184,14 @@ namespace Bbong.Client
             _calloutGroup.alpha = 0f;
             _calloutGroup.blocksRaycasts = false;
 
+            // 내 행동 대기 남은 초(§3 턴 타이머와 동기) — 안내 문구 오른쪽
+            _turnCountdown = UiKit.CreateText(root, "", 56, TextAnchor.MiddleCenter,
+                new Vector2(0.80f, 0.335f), new Vector2(0.88f, 0.41f));
+            _turnCountdown.fontStyle = FontStyle.Bold;
+            _turnCountdown.color = new Color(1f, 0.55f, 0.35f);
+            _turnCountdown.raycastTarget = false;
+            TableArt.AddOutline(_turnCountdown);
+
             // 전체 화면 플래시(연출용, 클릭 막지 않음)
             _flash = UiKit.CreatePanel(root, new Color(1, 1, 1, 0));
             UiKit.Stretch(_flash.rectTransform);
@@ -224,6 +236,50 @@ namespace Bbong.Client
             RenderDiscard();
             RenderPrompt(view, naturalSelecting);
             RenderButtons(view, naturalSelecting);
+            UpdateTurnCountdown(view, naturalSelecting);
+        }
+
+        /// <summary>
+        /// 내 행동 대기 상태면 5초 카운트다운 표시(턴 타이머와 동기). 상태 키가 바뀔 때만 재시작 —
+        /// 로컬/서버 타이머는 각자 돌고, 이 표시는 뷰가 렌더 상태로부터 자체 관리한다.
+        /// </summary>
+        private void UpdateTurnCountdown(RoundView view, bool naturalSelecting)
+        {
+            var actionable =
+                (view.phase == RoundPhase.WaitingStop && view.currentSeat == MySeat)
+                || (view.phase == RoundPhase.WaitingDiscard && view.currentSeat == MySeat)
+                || (view.phase == RoundPhase.WaitingPongDiscard && view.actorSeat == MySeat);
+            var key = actionable ? $"{view.phase}:{view.currentSeat}:{view.actorSeat}:{naturalSelecting}" : null;
+            if (key == _turnCountdownKey)
+            {
+                return;
+            }
+
+            _turnCountdownKey = key;
+            if (_turnCountdownFx != null)
+            {
+                StopCoroutine(_turnCountdownFx);
+                _turnCountdownFx = null;
+            }
+
+            if (key == null)
+            {
+                _turnCountdown.text = "";
+                return;
+            }
+
+            _turnCountdownFx = StartCoroutine(TurnCountdownFx(GameConfig.TurnTimerSeconds));
+        }
+
+        private IEnumerator TurnCountdownFx(int seconds)
+        {
+            for (var t = seconds; t > 0; t--)
+            {
+                _turnCountdown.text = t.ToString();
+                yield return new WaitForSeconds(1f);
+            }
+
+            _turnCountdown.text = "";
         }
 
         public void SetPrompt(string text) => _prompt.text = text;

@@ -111,15 +111,42 @@ public class RoomRegistryTests
     }
 
     [Test]
-    public void Host_leave_closes_room_for_everyone()
+    public void Host_leave_hands_host_to_next_member()
     {
         var (room, _, host) = CreatedRoom();
-        Join(room, "손님", out var guestSink);
+        var guest = Join(room, "손님", out var guestSink);
 
         room.Execute(new LeaveCmd(host.UserId));
 
-        Assert.That(guestSink.Last<RoomClosedMsg>().reason, Is.Not.Empty);
+        var update = guestSink.Last<RoomUpdateMsg>();
+        Assert.That(update.hostUserId, Is.EqualTo(guest.UserId.ToString())); // 방장 위임, 방 유지
+        Assert.That(update.members.Single().nickname, Is.EqualTo("손님"));
         Assert.That(_registry.FindByUser(host.UserId), Is.Null);
+        Assert.That(_registry.FindByUser(guest.UserId), Is.SameAs(room));
+    }
+
+    [Test]
+    public void Last_member_leave_closes_room()
+    {
+        var (room, _, host) = CreatedRoom();
+
+        room.Execute(new LeaveCmd(host.UserId));
+
+        Assert.That(room.Phase, Is.EqualTo(RoomPhase.Closed));
+        Assert.That(_registry.FindByUser(host.UserId), Is.Null);
+    }
+
+    [Test]
+    public void New_host_can_start_after_migration()
+    {
+        var (room, _, host) = CreatedRoom();
+        var guest = Join(room, "손님", out var guestSink);
+        Join(room, "손님2", out _);
+        room.Execute(new LeaveCmd(host.UserId));
+
+        room.Execute(new StartGameCmd(guest.UserId));
+
+        Assert.That(guestSink.Last<GameStartedMsg>().yourSeat, Is.EqualTo(0)); // 새 방장이 시작 가능
     }
 
     [Test]

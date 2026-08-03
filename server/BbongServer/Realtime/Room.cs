@@ -37,7 +37,7 @@ public sealed class Room
 
     public string Code { get; }
 
-    public Guid HostUserId { get; }
+    public Guid HostUserId { get; private set; }
 
     public RoomPhase Phase { get; private set; } = RoomPhase.Waiting;
 
@@ -164,15 +164,27 @@ public sealed class Room
             return;
         }
 
-        if (Phase == RoomPhase.Playing || userId == HostUserId)
+        if (Phase == RoomPhase.Playing)
         {
-            // 게임 중 이탈 또는 호스트 퇴장 → 방 해체
-            CloseRoom(Phase == RoomPhase.Playing ? "참가자 연결이 끊겨 방이 해체되었습니다." : "호스트가 방을 나갔습니다.");
+            // 게임 중 이탈 → 방 해체 (후속: rules.md §9-4 봇 대체로 교체 예정)
+            CloseRoom("참가자 연결이 끊겨 방이 해체되었습니다.");
             return;
         }
 
         _members.Remove(member);
         _registry.Detach(userId);
+
+        if (_members.Count == 0)
+        {
+            CloseRoom("모든 참가자가 나가 방이 닫혔습니다.");
+            return;
+        }
+
+        if (userId == HostUserId)
+        {
+            HostUserId = _members[0].UserId; // 방장 퇴장 → 다음 입장자에게 위임(방 유지)
+        }
+
         BroadcastRoomUpdate();
     }
 
