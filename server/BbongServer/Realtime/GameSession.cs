@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BbongCore.Ai;
 using BbongCore.Cards;
 using BbongCore.Game;
 using BbongCore.Online;
@@ -46,12 +47,22 @@ public sealed class GameSession
     private int _turnToken;
     private Card _drawnCard; // 시간 초과 시 자동으로 버릴 방금 드로우한 카드
 
+    // 이탈/AFK 봇 대체(§9-4): 한 판 내내 직접 입력 없이 턴 타임아웃을 겪은 좌석은 판 종료 시 봇 전환.
+    private readonly bool[] _acted;    // 이 판에 직접 입력했는가
+    private readonly bool[] _timedOut; // 이 판에 턴 타임아웃을 겪었는가(턴이 안 온 좌석 보호)
+    private readonly HashSet<int> _botSeats = new();
+    private readonly Bot?[] _bots;
+    private int _botToken;
+
     public GameSession(string[] nicknames, Func<IRandom> rngFactory, int setRounds = 5)
     {
         _nicknames = nicknames;
         _rngFactory = rngFactory;
         _playerCount = nicknames.Length;
         _game = GameState.Start(_playerCount, setRounds);
+        _acted = new bool[_playerCount];
+        _timedOut = new bool[_playerCount];
+        _bots = new Bot?[_playerCount];
     }
 
     // ── 진입점 ──
@@ -66,6 +77,13 @@ public sealed class GameSession
     public SessionOutput HandleAction(int seat, object message)
     {
         var output = new SessionOutput();
+        if (_botSeats.Contains(seat))
+        {
+            Error(output, seat, "seat_replaced", "이탈로 봇이 대신 플레이 중인 자리입니다.");
+            return output;
+        }
+
+        _acted[seat] = true; // 어떤 입력이든 활동으로 간주(§9-4 AFK 판정)
         switch (message)
         {
             case DiscardMsg discard:
@@ -122,11 +140,13 @@ public sealed class GameSession
         switch (_phase)
         {
             case RoundPhase.WaitingStop:
+                _timedOut[_round.CurrentSeat] = true;
                 AutoDraw(output); // 미응답 → 자동 계속(§3)
                 break;
 
             case RoundPhase.WaitingDiscard:
                 var current = _round.CurrentSeat;
+                _timedOut[current] = true;
                 var drawn = _drawnCard;
                 _round = _round.Discard(drawn);
                 AfterDiscard(output, current, drawn); // 방금 드로우한 카드 자동 버림(§3)
@@ -134,12 +154,126 @@ public sealed class GameSession
 
             case RoundPhase.WaitingPongDiscard:
                 var declarer = _pongDeclarerSeat;
+                _timedOut[declarer] = true;
                 var toss = _round.Players[declarer].Hand.Cards.First(c => !_pongLaid.Contains(c));
                 ApplyPongDiscard(output, declarer, toss); // 내려놓은 고정 패 제외 자동 버림
                 break;
         }
 
         return output;
+    }
+
+    /// <summary>봇 대체 좌석의 행동(§9-4). 상태별로 코어 Bot이 결정한다.</summary>
+    public SessionOutput HandleBotAct(int token)
+    {
+        var output = new SessionOutput();
+        if (token != _botToken)
+        {
+            return output;
+        }
+
+        switch (_phase)
+        {
+            case RoundPhase.WaitingStop when _botSeats.Contains(_round.CurrentSeat):
+            {
+                var seat = _round.CurrentSeat;
+                if (StopResolver.CanStop(_round, seat) && _bots[seat]!.ShouldStop(_round, seat))
+                {
+                    var bagaji = StopResolver.IsBagaji(_round, seat);
+                    output.ToAll(new StopDeclaredMsg { seat = seat, bagaji = bagaji });
+                    var reason = bagaji ? $"{_nicknames[seat]} 바가지 (+30)" : $"{_nicknames[seat]} 스톱";
+                    EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, StopEnderSeat(seat, bagaji));
+                }
+                else
+                {
+                    AutoDraw(output);
+                }
+
+                break;
+            }
+
+            case RoundPhase.WaitingDiscard when _botSeats.Contains(_round.CurrentSeat):
+            {
+                var seat = _round.CurrentSeat;
+                var bot = _bots[seat]!;
+                if (_meld.Type != MeldType.None)
+                {
+                    output.ToAll(new MeldDeclaredMsg { seat = seat, meldType = _meld.Type.ToString(), meldScore = _meld.Score });
+                    EndRound(output, RoundSettlement.SettleByMeld(_round, seat, _meld),
+                        $"{_nicknames[seat]} 족보 완성 [{MeldNames.Korean(_meld.Type)} {_meld.Score}점]", seat);
+                    break;
+                }
+
+                if (_canNaturalPong)
+                {
+                    BotNaturalPong(output, seat, bot);
+                    break;
+                }
+
+                var card = bot.ChooseDiscard(_round.CurrentPlayer.Hand);
+                _round = _round.Discard(card);
+                AfterDiscard(output, seat, card);
+                break;
+            }
+
+            case RoundPhase.WaitingPongDiscard when _botSeats.Contains(_pongDeclarerSeat):
+            {
+                var seat = _pongDeclarerSeat;
+                var toss = _bots[seat]!.ChoosePongDiscard(new Hand(_round.Players[seat].Hand.Cards.Except(_pongLaid)));
+                ApplyPongDiscard(output, seat, toss);
+                break;
+            }
+
+            case RoundPhase.PongWindow:
+            {
+                foreach (var seat in _pongEligible.Where(s => _botSeats.Contains(s) && !_pongPassed.Contains(s)).ToList())
+                {
+                    if (_phase != RoundPhase.PongWindow)
+                    {
+                        break; // 선행 봇의 뽕/마지막 패스로 창이 닫힘
+                    }
+
+                    if (_bots[seat]!.ShouldPong())
+                    {
+                        DeclarePong(output, seat);
+                        break;
+                    }
+
+                    HandlePongPass(output, seat);
+                }
+
+                break;
+            }
+        }
+
+        return output;
+    }
+
+    private void BotNaturalPong(SessionOutput output, int seat, Bot bot)
+    {
+        var number = _naturalPongNumber;
+        var hand = _round.Players[seat].Hand;
+        var laid = hand.Cards.Where(c => c.Number == number).Take(3).ToList();
+        var rest = hand.Cards.Except(laid).ToList();
+
+        if (rest.Count == 0)
+        {
+            _round = _round.NaturalPong(number, null);
+            EmitEach(output, s => new NaturalPongedMsg
+            {
+                seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
+            });
+            EndRound(output, RoundSettlement.SettleByHandClear(_round, seat), $"{_nicknames[seat]} 자연뽕 손 털기", seat);
+            return;
+        }
+
+        var toss = bot.ChoosePongDiscard(new Hand(rest));
+        _round = _round.NaturalPong(number, toss);
+        EmitEach(output, s => new NaturalPongedMsg
+        {
+            seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
+        });
+        AfterDiscard(output, seat, toss);
     }
 
     public SessionOutput HandleTurnGap(int token)
@@ -177,6 +311,8 @@ public sealed class GameSession
 
     private void StartRound(SessionOutput output)
     {
+        Array.Fill(_acted, false);
+        Array.Fill(_timedOut, false);
         _round = RoundState.Deal(Deck.CreateStandard(), _playerCount, _rngFactory(), _dealerSeat);
         _phase = RoundPhase.WaitingDiscard;
         EmitEach(output, seat => new RoundStartedMsg
@@ -198,7 +334,7 @@ public sealed class GameSession
         {
             _phase = RoundPhase.WaitingStop;
             EmitEach(output, seat => new TurnBeganMsg { seat = current, view = BuildView(seat) });
-            ArmTurnTimer(output);
+            ArmActorTimer(output);
             return;
         }
 
@@ -229,7 +365,7 @@ public sealed class GameSession
         _phase = RoundPhase.WaitingDiscard;
 
         EmitEach(output, seat => new DrewCardMsg { seat = current, reshuffled = reshuffled, view = BuildView(seat) });
-        ArmTurnTimer(output);
+        ArmActorTimer(output);
     }
 
     // ── 버림 ──
@@ -288,6 +424,11 @@ public sealed class GameSession
             view = BuildView(seat)
         });
         output.After(new PongTimeoutCmd(_pongToken), RealtimeConfig.PongWindowSeconds * 1000);
+
+        if (eligible.Any(s => _botSeats.Contains(s)))
+        {
+            ArmBotAct(output); // 봇 좌석의 뽕 결정
+        }
     }
 
     // ── 뽕 ──
@@ -306,6 +447,12 @@ public sealed class GameSession
             return;
         }
 
+        DeclarePong(output, seat);
+    }
+
+    /// <summary>뽕 선언 반영(플레이어/봇 공용). 검증은 호출부 책임.</summary>
+    private void DeclarePong(SessionOutput output, int seat)
+    {
         _pongToken++; // 진행 중 타이머 무효화
 
         var hand = _round.Players[seat].Hand;
@@ -332,7 +479,7 @@ public sealed class GameSession
         {
             seat = seat, number = _pongNumber, laid = CardDto.FromAll(laid), view = BuildView(s)
         });
-        ArmTurnTimer(output);
+        ArmActorTimer(output);
     }
 
     private void HandlePongPass(SessionOutput output, int seat)
@@ -508,6 +655,26 @@ public sealed class GameSession
         output.After(new TurnTimeoutCmd(_turnToken), RealtimeConfig.TurnTimerSeconds * 1000);
     }
 
+    /// <summary>행동 주체가 봇이면 봇 행동 예약, 사람이면 5초 턴 타이머 예약.</summary>
+    private void ArmActorTimer(SessionOutput output)
+    {
+        var actor = _phase == RoundPhase.WaitingPongDiscard ? _pongDeclarerSeat : _round.CurrentSeat;
+        if (_botSeats.Contains(actor))
+        {
+            ArmBotAct(output);
+        }
+        else
+        {
+            ArmTurnTimer(output);
+        }
+    }
+
+    private void ArmBotAct(SessionOutput output)
+    {
+        _botToken++;
+        output.After(new BotActCmd(_botToken), RealtimeConfig.BotActDelayMs);
+    }
+
     /// <summary>턴 전환 간격 진입: 잠깐 아무도 턴이 아닌 상태(연습 모드 연출 이식). 만료 시 HandleTurnGap이 턴 진입.</summary>
     private void EnterTurnGap(SessionOutput output)
     {
@@ -521,6 +688,7 @@ public sealed class GameSession
     private void EndRound(SessionOutput output, int[] scores, string reason, int enderSeat)
     {
         _turnToken++; // 진행 중 턴 타이머 무효화
+        ReplaceLeaversWithBots(output);
         _game = _game.ApplyRoundScores(scores);
         _roundIndex++;
         _dealerSeat = enderSeat;
@@ -534,7 +702,7 @@ public sealed class GameSession
                 enderSeat = enderSeat,
                 scores = scores,
                 cumulativeDebts = _game.CumulativeDebts.ToArray(),
-                winnerSeats = _game.WinnerSeats().ToArray()
+                winnerSeats = WinnerSeatsExcludingBots()
             });
             return;
         }
@@ -552,6 +720,46 @@ public sealed class GameSession
             view = BuildView(seat)
         });
         output.After(new NextRoundCmd(_roundToken), RealtimeConfig.NextRoundDelayMs);
+    }
+
+    /// <summary>
+    /// §9-4: 이 판에 직접 입력 없이 턴 타임아웃만 겪은 좌석(이탈/AFK)을 봇으로 전환.
+    /// 턴이 오지 않아 입력 기회가 없던 좌석은 타임아웃 기록이 없어 보호된다.
+    /// </summary>
+    private void ReplaceLeaversWithBots(SessionOutput output)
+    {
+        for (var seat = 0; seat < _playerCount; seat++)
+        {
+            if (_botSeats.Contains(seat) || _acted[seat] || !_timedOut[seat])
+            {
+                continue;
+            }
+
+            _botSeats.Add(seat);
+            _bots[seat] = new Bot(BotDifficulty.Normal);
+            _nicknames[seat] += " (봇)";
+            output.ToAll(new BotTookOverMsg { seat = seat, nickname = _nicknames[seat] });
+        }
+    }
+
+    /// <summary>§9-4: 이탈(봇 대체) 좌석은 우승 후보 제외 — 남은 사람 중 최저 빚이 우승.</summary>
+    private int[] WinnerSeatsExcludingBots()
+    {
+        var humans = Enumerable.Range(0, _playerCount).Where(s => !_botSeats.Contains(s)).ToList();
+        if (humans.Count == 0)
+        {
+            return _game.WinnerSeats().ToArray();
+        }
+
+        var minDebt = humans.Min(s => _game.CumulativeDebts[s]);
+        return humans.Where(s => _game.CumulativeDebts[s] == minDebt).ToArray();
+    }
+
+    /// <summary>테스트 전용: 좌석을 즉시 봇으로 전환.</summary>
+    internal void BotifyForTest(int seat)
+    {
+        _botSeats.Add(seat);
+        _bots[seat] = new Bot(BotDifficulty.Normal);
     }
 
     // ── 뷰/헬퍼 ──

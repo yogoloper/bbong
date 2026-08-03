@@ -61,11 +61,11 @@ public class WsEndpointTests
         await socket.SendAsync(Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text, true, CancellationToken.None);
     }
 
-    /// <summary>지정 type 메시지가 올 때까지 수신(그 외는 스킵). 5초 타임아웃.</summary>
-    private static async Task<JsonElement> ReceiveUntilAsync(WebSocket socket, string type)
+    /// <summary>지정 type 메시지가 올 때까지 수신(그 외는 스킵). 기본 5초 타임아웃.</summary>
+    private static async Task<JsonElement> ReceiveUntilAsync(WebSocket socket, string type, int timeoutSeconds = 5)
     {
         var buffer = new byte[64 * 1024];
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
         while (true)
         {
             var result = await socket.ReceiveAsync(buffer, cts.Token);
@@ -186,14 +186,15 @@ public class WsEndpointTests
     }
 
     [Test]
-    public async Task Abrupt_close_during_game_closes_room_for_others()
+    public async Task Abrupt_close_during_game_keeps_game_running_for_others()
     {
         var (host, guest) = await StartedGameAsync();
         await ReceiveUntilAsync(guest, "gameStarted");
 
         host.Abort(); // 강제 종료(게임 중 끊김)
 
-        var closed = await ReceiveUntilAsync(guest, "roomClosed");
-        Assert.That(closed.GetProperty("reason").GetString(), Is.Not.Empty);
+        // 방은 유지되고, 끊긴 선(seat0)의 턴은 5초 룰이 자동 버림으로 진행시킨다(§9-4)
+        var discarded = await ReceiveUntilAsync(guest, "discarded", timeoutSeconds: 8);
+        Assert.That(discarded.GetProperty("seat").GetInt32(), Is.EqualTo(0));
     }
 }

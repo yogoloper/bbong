@@ -29,3 +29,6 @@ public sealed record TurnGapCmd(int Token) : RoomCommand;
 
 /// <summary>턴 행동 대기 5초 만료(rules.md §3) → 자동 진행. Token으로 stale 방지.</summary>
 public sealed record TurnTimeoutCmd(int Token) : RoomCommand;
+
+/// <summary>봇 대체 좌석의 행동 차례(rules.md §9-4). 짧은 지연 후 봇이 결정. Token으로 stale 방지.</summary>
+public sealed record BotActCmd(int Token) : RoomCommand;

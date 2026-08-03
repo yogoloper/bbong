@@ -597,6 +597,98 @@ public class GameSessionTests
         Assert.That(discarded.card.ToCard().Number, Is.Not.EqualTo(9));
     }
 
+    // ── 이탈/AFK 봇 대체 (rules.md §9-4) ──
+
+    private static int BotActToken(SessionOutput output) =>
+        ((BotActCmd)output.Timers.Last(t => t.Command is BotActCmd).Command).Token;
+
+    [Test]
+    public void Silent_seat_with_timeout_becomes_bot_at_round_end()
+    {
+        var (session, output) = Rigged(
+            new[]
+            {
+                P(0, C(1, CardColor.Red), C(2, CardColor.Red), C(3, CardColor.Red)),
+                new Player(1, new Hand(new[] { C(9, CardColor.Green), C(9, CardColor.Yellow) }), PongCount: 1)
+            },
+            drawPile: new[] { C(9, CardColor.Red), C(9, CardColor.Blue) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+        // seat0 무입력 5초 → 드로우한 9 자동 버림(타임아웃 기록)
+        var afterTimeout = session.HandleTurnTimeout(TurnTimerToken(output));
+        Assert.That(For<DiscardedMsg>(afterTimeout, 0).card.ToCard().Number, Is.EqualTo(9));
+
+        // seat1 뽕 손 털기로 판 종료 → 무입력+타임아웃 좌석 0 봇 전환
+        var ended = session.HandleAction(1, new PongDeclareMsg());
+
+        Assert.That(HasMsg<RoundEndedMsg>(ended), Is.True);
+        var bot = For<BotTookOverMsg>(ended, 0);
+        Assert.That(bot.seat, Is.EqualTo(0));
+        Assert.That(bot.nickname, Does.Contain("봇"));
+    }
+
+    [Test]
+    public void Acting_seat_is_not_replaced_by_bot()
+    {
+        var (session, _) = Rigged(
+            new[]
+            {
+                P(0, C(1, CardColor.Red), C(2, CardColor.Red), C(3, CardColor.Red)),
+                new Player(1, new Hand(new[] { C(9, CardColor.Green), C(9, CardColor.Yellow) }), PongCount: 1)
+            },
+            drawPile: new[] { C(9, CardColor.Red), C(9, CardColor.Blue) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+        // seat0이 직접 버림(입력 있음) → 판이 끝나도 봇 전환 없음
+        session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(9, CardColor.Red)) });
+
+        var ended = session.HandleAction(1, new PongDeclareMsg());
+
+        Assert.That(HasMsg<RoundEndedMsg>(ended), Is.True);
+        Assert.That(HasMsg<BotTookOverMsg>(ended), Is.False);
+    }
+
+    [Test]
+    public void Bot_seat_auto_discards_on_its_turn()
+    {
+        var session = NewSession(2);
+        session.BotifyForTest(0);
+        var round = new RoundState(
+            new[] { P(0, C(1, CardColor.Red), C(2, CardColor.Red), C(3, CardColor.Blue)), P(1, C(11, CardColor.Red), C(12, CardColor.Red)) },
+            new[] { C(5, CardColor.Green), C(6, CardColor.Red) },
+            Array.Empty<Card>(), currentSeat: 0, new SeededRandom(1), 0);
+
+        var output = session.RigRoundForTest(round);
+
+        Assert.That(output.Timers.Any(t => t.Command is TurnTimeoutCmd), Is.False); // 봇에겐 5초 타이머 없음
+        var result = session.HandleBotAct(BotActToken(output));
+        Assert.That(For<DiscardedMsg>(result, 1).seat, Is.EqualTo(0)); // 봇이 알아서 버림
+    }
+
+    [Test]
+    public void Set_winners_exclude_bot_seats()
+    {
+        var session = NewSession(2, setRounds: 1);
+        session.BotifyForTest(0);
+        var round = new RoundState(
+            new[]
+            {
+                new Player(0, new Hand(new[] { C(9, CardColor.Red), C(9, CardColor.Green) }), PongCount: 1),
+                P(1, C(9, CardColor.Yellow), C(1, CardColor.Red), C(2, CardColor.Red))
+            },
+            new[] { C(6, CardColor.Red), C(10, CardColor.Red) },
+            Array.Empty<Card>(), currentSeat: 1, new SeededRandom(1), 0);
+        session.RigRoundForTest(round);
+
+        // seat1이 9 버림 → 봇(0)이 뽕 손 털기로 최저 빚이 되어도 우승 후보 제외
+        var discarded = session.HandleAction(1, new DiscardMsg { card = CardDto.From(C(9, CardColor.Yellow)) });
+        var set = session.HandleBotAct(BotActToken(discarded));
+
+        var endMsg = For<SetEndedMsg>(set, 1);
+        Assert.That(endMsg.winnerSeats, Does.Not.Contain(0));
+        Assert.That(endMsg.winnerSeats, Does.Contain(1));
+    }
+
     [Test]
     public void Stale_turn_timeout_is_ignored()
     {

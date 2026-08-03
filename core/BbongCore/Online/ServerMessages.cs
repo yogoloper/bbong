@@ -20,6 +20,7 @@ public static class ServerMessageType
     public const string NaturalPonged = "naturalPonged";
     public const string StopDeclared = "stopDeclared";
     public const string MeldDeclared = "meldDeclared";
+    public const string BotTookOver = "botTookOver";
     public const string RoundEnded = "roundEnded";
     public const string SetEnded = "setEnded";
     public const string RoomClosed = "roomClosed";
@@ -153,6 +154,15 @@ public sealed class MeldDeclaredMsg
     public int seat;
     public string meldType = "";
     public int meldScore;
+}
+
+/// <summary>이탈/무응답(rules.md §9-4) 좌석을 봇이 이어받음. 닉네임은 "(봇)" 표기로 갱신.</summary>
+[Serializable]
+public sealed class BotTookOverMsg
+{
+    public string type = ServerMessageType.BotTookOver;
+    public int seat;
+    public string nickname = "";
 }
 
 [Serializable]

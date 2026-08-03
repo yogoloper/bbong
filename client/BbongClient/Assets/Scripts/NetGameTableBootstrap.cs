@@ -150,6 +150,13 @@ namespace Bbong.Client
                     _table.ShowCallout($"{Nicknames[stop.seat]}\n{(stop.bagaji ? "바가지!" : "스톱!")}");
                     break;
 
+                case ServerMessageType.BotTookOver:
+                    // 이탈/무응답 좌석을 봇이 이어받음(§9-4). 닉네임 "(봇)" 갱신 — 점수판/콜아웃에 반영.
+                    var bot = JsonUtility.FromJson<BotTookOverMsg>(json);
+                    Nicknames[bot.seat] = bot.nickname;
+                    _table.ShowCallout($"{bot.nickname}\n자리 교대");
+                    break;
+
                 case ServerMessageType.MeldDeclared:
                     var meld = JsonUtility.FromJson<MeldDeclaredMsg>(json);
                     _table.PongFx($"{Nicknames[meld.seat]}\n{GameTableView.MeldKorean(meld.meldType)}!");

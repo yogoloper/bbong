@@ -24,6 +24,7 @@ public sealed class Room
 {
     private readonly Channel<RoomCommand> _channel = Channel.CreateUnbounded<RoomCommand>();
     private readonly List<RoomMember> _members = new();
+    private readonly HashSet<Guid> _absent = new(); // 게임 중 이탈(끊김/종료) — 좌석 유지, 판 종료 시 봇 대체(§9-4)
     private readonly RoomRegistry _registry;
     private bool _loopRunning;
     private GameSession? _session;
@@ -132,6 +133,13 @@ public sealed class Room
                 }
 
                 break;
+            case BotActCmd botAct:
+                if (_session is not null)
+                {
+                    Apply(_session.HandleBotAct(botAct.Token));
+                }
+
+                break;
         }
     }
 
@@ -166,8 +174,14 @@ public sealed class Room
 
         if (Phase == RoomPhase.Playing)
         {
-            // 게임 중 이탈 → 방 해체 (후속: rules.md §9-4 봇 대체로 교체 예정)
-            CloseRoom("참가자 연결이 끊겨 방이 해체되었습니다.");
+            // 게임 중 이탈 → 방 유지. 좌석은 5초 룰로 진행되다 판 종료 시 봇 대체(§9-4).
+            _absent.Add(userId);
+            _registry.Detach(userId);
+            if (_members.All(m => _absent.Contains(m.UserId)))
+            {
+                CloseRoom("모든 참가자가 나가 방이 해체되었습니다.");
+            }
+
             return;
         }
 
@@ -248,7 +262,7 @@ public sealed class Room
         {
             if (outbound.Seat is { } seat)
             {
-                if (seat < _members.Count)
+                if (seat < _members.Count && !_absent.Contains(_members[seat].UserId))
                 {
                     Send(_members[seat].Sink, outbound.Message);
                 }
@@ -274,6 +288,21 @@ public sealed class Room
     {
         _session = null;
         Phase = RoomPhase.Waiting;
+
+        // 게임 중 이탈자(봇 대체됐던 좌석)는 대기실 복귀 시 정리
+        _members.RemoveAll(m => _absent.Contains(m.UserId));
+        _absent.Clear();
+        if (_members.Count == 0)
+        {
+            CloseRoom("모든 참가자가 나가 방이 닫혔습니다.");
+            return;
+        }
+
+        if (_members.All(m => m.UserId != HostUserId))
+        {
+            HostUserId = _members[0].UserId; // 방장이 이탈했으면 위임
+        }
+
         BroadcastRoomUpdate();
     }
 
@@ -314,7 +343,10 @@ public sealed class Room
     {
         foreach (var member in _members)
         {
-            Send(member.Sink, message);
+            if (!_absent.Contains(member.UserId))
+            {
+                Send(member.Sink, message);
+            }
         }
     }
 

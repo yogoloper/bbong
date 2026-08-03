@@ -161,7 +161,7 @@ public class RoomRegistryTests
     }
 
     [Test]
-    public void Disconnect_while_playing_closes_room()
+    public void Disconnect_while_playing_keeps_room_alive()
     {
         var (room, hostSink, host) = CreatedRoom();
         var guest = Join(room, "손님", out _);
@@ -169,7 +169,23 @@ public class RoomRegistryTests
 
         room.Execute(new DisconnectCmd(guest.UserId));
 
-        Assert.That(hostSink.Last<RoomClosedMsg>().reason, Is.Not.Empty);
+        // 방 유지 — 이탈 좌석은 5초 룰로 진행되다 판 종료 시 봇 대체(rules.md §9-4)
+        Assert.That(room.Phase, Is.EqualTo(RoomPhase.Playing));
+        Assert.That(hostSink.SentOf<RoomClosedMsg>(), Is.Empty);
+        Assert.That(_registry.FindByUser(guest.UserId), Is.Null);
+    }
+
+    [Test]
+    public void Room_closes_when_every_player_disconnects_mid_game()
+    {
+        var (room, _, host) = CreatedRoom();
+        var guest = Join(room, "손님", out _);
+        room.Execute(new StartGameCmd(host.UserId));
+
+        room.Execute(new DisconnectCmd(guest.UserId));
+        room.Execute(new DisconnectCmd(host.UserId));
+
+        Assert.That(room.Phase, Is.EqualTo(RoomPhase.Closed));
     }
 
     // ── 게임 시작 ──
