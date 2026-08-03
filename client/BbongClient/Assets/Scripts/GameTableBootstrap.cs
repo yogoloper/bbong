@@ -33,19 +33,7 @@ namespace Bbong.Client
 
         public BotDifficulty Difficulty { get; set; } = BotDifficulty.Normal;
 
-        // 색약 안전 팔레트(Okabe-Ito 기반). 색은 보조, 도형이 주 구분 수단.
-        private static readonly Color[] Palette =
-        {
-            new Color(0.835f, 0.369f, 0.000f), // Red  → 주황빨강(vermillion)
-            new Color(0.000f, 0.447f, 0.698f), // Blue → 진파랑
-            new Color(0.000f, 0.620f, 0.451f), // Green→ 청록
-            new Color(0.902f, 0.624f, 0.000f)  // Yellow→ 호박색(amber)
-        };
-
-        private static readonly string[] ColorLetter = { "R", "B", "G", "Y" };
-
-        // 정렬 색 순위: 빨(0)·파(1)·노(2)·초(3). enum 순서(Red0,Blue1,Green2,Yellow3) → 순위.
-        private static readonly int[] ColorRank = { 0, 1, 3, 2 };
+        // 카드 아트/정렬/효과음은 TableArt(온라인 테이블과 공용)로 추출됨.
 
         // 닉네임 = "형용사 명사" 조합(띄어쓰기 포함 최대 9자, GameConfig.MaxNicknameLength=12 이내).
         // 나 포함 전원 게임마다 중복 없이 무작위 배정.
@@ -108,8 +96,6 @@ namespace Bbong.Client
         // 그 사이 손패 표시에서 숨겨 "선언 → 즉시 내려놓기 → 버림" 흐름을 만든다.
         private readonly List<Card> _pendingLaid = new();
 
-        private readonly Sprite[] _cardBg = new Sprite[4];  // 색별 둥근 그라데이션 카드 배경
-        private Sprite _haloSprite;                          // 마지막 버림 강조용 흰 둥근 스프라이트
 
         private void Start()
         {
@@ -988,8 +974,6 @@ namespace Bbong.Client
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand; // 화면비 달라도 글씨/카드 비대 방지
             var root = canvasGo.transform;
 
-            GenerateArt();
-
             var felt = CreatePanel(root, Color.white);
             felt.sprite = UiArt.Backdrop; // 메뉴 화면과 톤 통일(네이비). 카드/더미는 그 위에.
             Stretch(felt.rectTransform);
@@ -1096,11 +1080,11 @@ namespace Bbong.Client
             // 오디오 + 절차적 효과음
             _audio = canvasGo.AddComponent<AudioSource>();
             _audio.playOnAwake = false;
-            _sfxDraw = Tone("draw", 880f, 0.06f, 24f);
-            _sfxDiscard = Tone("discard", 300f, 0.12f, 16f);
-            _sfxPong = Noise("pong", 0.16f, 42f);   // "찰싹" 노이즈 버스트
-            _sfxStop = Tone("stop", 520f, 0.28f, 7f);
-            _sfxShuffle = Noise("shuffle", 0.35f, 10f); // "쏴아" 카드 섞는 소리
+            _sfxDraw = TableArt.Tone("draw", 880f, 0.06f, 24f);
+            _sfxDiscard = TableArt.Tone("discard", 300f, 0.12f, 16f);
+            _sfxPong = TableArt.Noise("pong", 0.16f, 42f);   // "찰싹" 노이즈 버스트
+            _sfxStop = TableArt.Tone("stop", 520f, 0.28f, 7f);
+            _sfxShuffle = TableArt.Noise("shuffle", 0.35f, 10f); // "쏴아" 카드 섞는 소리
         }
 
         // ── 연출/사운드 ──
@@ -1149,12 +1133,9 @@ namespace Bbong.Client
             _calloutGroup.alpha = 0f;
         }
 
-        /// <summary>숫자 오름차순 → 같은 숫자는 빨·파·노·초 순으로 정렬.</summary>
-        private static List<Card> Sorted(IEnumerable<Card> cards) =>
-            cards.OrderBy(c => c.Number).ThenBy(c => ColorRank[(int)c.Color]).ToList();
+        private static List<Card> Sorted(IEnumerable<Card> cards) => TableArt.Sorted(cards);
 
-        /// <summary>중앙 밀집 무작위(삼각분포). 균등분포보다 자연스러운 무더기를 만듭니다.</summary>
-        private static float Tri(float range) => (Random.Range(-range, range) + Random.Range(-range, range)) / 2f;
+        private static float Tri(float range) => TableArt.Tri(range);
 
         /// <summary>단일 버림: 중앙 더미에 무작위 위치·기울기로 던져 놓기(실제 카드판 느낌).</summary>
         private void AddDiscard(Card card) => _timeline.Add((new List<Card> { card }, false,
@@ -1201,114 +1182,10 @@ namespace Bbong.Client
             }
         }
 
-        private AudioClip Tone(string name, float freq, float duration, float decay)
-        {
-            var rate = 44100;
-            var count = Mathf.RoundToInt(rate * duration);
-            var data = new float[count];
-            for (var i = 0; i < count; i++)
-            {
-                var t = i / (float)rate;
-                data[i] = Mathf.Sin(2f * Mathf.PI * freq * t) * Mathf.Exp(-decay * t);
-            }
+        private GameObject CreateCardFace(Transform parent, Card card, float width, float height) =>
+            TableArt.CreateCardFace(parent, card, width, height, _font);
 
-            var clip = AudioClip.Create(name, count, 1, rate, false);
-            clip.SetData(data, 0);
-            return clip;
-        }
-
-        private AudioClip Noise(string name, float duration, float decay)
-        {
-            var rate = 44100;
-            var count = Mathf.RoundToInt(rate * duration);
-            var data = new float[count];
-            for (var i = 0; i < count; i++)
-            {
-                var t = i / (float)rate;
-                data[i] = (Random.value * 2f - 1f) * Mathf.Exp(-decay * t);
-            }
-
-            var clip = AudioClip.Create(name, count, 1, rate, false);
-            clip.SetData(data, 0);
-            return clip;
-        }
-
-        /// <summary>
-        /// 카드 한 장(색 배경 그라데이션 + 흰 테두리 + 흰 숫자(외곽선) + 양 모서리 흰 도형).
-        /// 색약 대응: 도형이 주 구분 수단, 색은 보조. 손패·버림 공용.
-        /// </summary>
-        private GameObject CreateCardFace(Transform parent, Card card, float width, float height)
-        {
-            var colorIndex = (int)card.Color;
-
-            var go = new GameObject($"Card_{card.Number}{ColorLetter[colorIndex]}",
-                typeof(RectTransform), typeof(Image), typeof(LayoutElement));
-            go.transform.SetParent(parent, false);
-
-            var bg = go.GetComponent<Image>();
-            bg.sprite = _cardBg[colorIndex];
-            bg.type = Image.Type.Sliced;
-            bg.color = Color.white;
-
-            // 카드가 테이블에 떠 있는 느낌의 부드러운 그림자
-            var shadow = go.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0f, 0f, 0f, 0.35f);
-            shadow.effectDistance = new Vector2(5f, -5f);
-
-            var le = go.GetComponent<LayoutElement>();
-            le.preferredWidth = width;
-            le.preferredHeight = height;
-
-            var num = card.Number.ToString();
-            var letter = ColorLetter[colorIndex];
-            var pip = Mathf.RoundToInt(height * 0.15f);
-
-            // 중앙 큰 숫자(흰색 + 검은 외곽선)
-            var center = CreateText(go.transform, num, Mathf.RoundToInt(height * 0.5f), TextAnchor.MiddleCenter);
-            center.color = Color.white;
-            center.fontStyle = FontStyle.Bold;
-            Stretch(center.rectTransform);
-            AddOutline(center);
-
-            // 네 모서리: 숫자/이니셜 (대각 대칭)
-            Pip(go.transform, num, pip, TextAnchor.UpperLeft, new Vector2(0.10f, 0.78f), new Vector2(0.5f, 0.97f));
-            Pip(go.transform, letter, pip, TextAnchor.UpperRight, new Vector2(0.5f, 0.78f), new Vector2(0.90f, 0.97f));
-            Pip(go.transform, letter, pip, TextAnchor.LowerLeft, new Vector2(0.10f, 0.03f), new Vector2(0.5f, 0.22f));
-            Pip(go.transform, num, pip, TextAnchor.LowerRight, new Vector2(0.5f, 0.03f), new Vector2(0.90f, 0.22f));
-
-            return go;
-        }
-
-        private void Pip(Transform parent, string content, int size, TextAnchor anchor, Vector2 min, Vector2 max)
-        {
-            var t = CreateText(parent, content, size, anchor);
-            t.color = Color.white;
-            t.fontStyle = FontStyle.Bold;
-            Anchor(t.rectTransform, min, max);
-            AddOutline(t);
-        }
-
-        private static void AddOutline(Text text)
-        {
-            var outline = text.gameObject.AddComponent<Outline>();
-            outline.effectColor = new Color(0, 0, 0, 0.65f);
-            outline.effectDistance = new Vector2(2, -2);
-        }
-
-        // ── 절차적 카드 아트 ──
-
-        private void GenerateArt()
-        {
-            for (var i = 0; i < 4; i++)
-            {
-                var c = Palette[i];
-                var top = Color.Lerp(c, Color.white, 0.22f);     // 위쪽 밝게
-                var bottom = Color.Lerp(c, Color.black, 0.20f);  // 아래쪽 어둡게
-                _cardBg[i] = UiArt.RoundedGradient(120, 168, 22, top, bottom);
-            }
-
-            _haloSprite = UiArt.RoundedGradient(120, 168, 22, Color.white, Color.white);
-        }
+        private static void AddOutline(Text text) => TableArt.AddOutline(text);
 
         private void RenderDiscard()
         {
@@ -1372,7 +1249,7 @@ namespace Bbong.Client
             halo.transform.SetParent(_discardRow, false);
 
             var img = halo.GetComponent<Image>();
-            img.sprite = _haloSprite;
+            img.sprite = TableArt.Halo;
             img.type = Image.Type.Sliced;
             img.color = new Color(1f, 0.92f, 0.3f, 0.95f);
             img.raycastTarget = false;
@@ -1470,7 +1347,7 @@ namespace Bbong.Client
 
         private int TopDiscardNumber() => _round.DiscardPile[_round.DiscardPile.Count - 1].Number;
 
-        private string CardLabel(Card c) => $"{c.Number}{ColorLetter[(int)c.Color]}";
+        private string CardLabel(Card c) => TableArt.CardLabel(c);
 
         private string SeatName(int seat) => seat == MySeat ? $"{_names[seat]}(나)" : _names[seat];
 
