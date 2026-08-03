@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using BbongCore.Cards;
 using BbongCore.Online;
+using BbongCore.Rules;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -58,7 +59,9 @@ namespace Bbong.Client
         private Coroutine _pongCountdown;
 
         private AudioSource _audio;
-        private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop;
+        private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop, _sfxShuffle;
+        private Image _flash;
+        private List<Card> _meldSet; // 족보 완성 시 6장(버림 비우고 표시)
 
         // ── UI 생성 ──
 
@@ -177,12 +180,19 @@ namespace Bbong.Client
             _calloutGroup.alpha = 0f;
             _calloutGroup.blocksRaycasts = false;
 
+            // 전체 화면 플래시(연출용, 클릭 막지 않음)
+            _flash = UiKit.CreatePanel(root, new Color(1, 1, 1, 0));
+            UiKit.Stretch(_flash.rectTransform);
+            _flash.raycastTarget = false;
+            _flash.transform.SetAsLastSibling();
+
             _audio = canvasGo.AddComponent<AudioSource>();
             _audio.playOnAwake = false;
             _sfxDraw = TableArt.Tone("draw", 880f, 0.06f, 24f);
             _sfxDiscard = TableArt.Tone("discard", 300f, 0.12f, 16f);
             _sfxPong = TableArt.Noise("pong", 0.16f, 42f);
             _sfxStop = TableArt.Tone("stop", 520f, 0.28f, 7f);
+            _sfxShuffle = TableArt.Noise("shuffle", 0.35f, 10f);
         }
 
         /// <summary>버튼 바에 모드 전용 버튼 추가(대기실로/다음 판/로비로 등). 생성 직후 숨김.</summary>
@@ -230,9 +240,10 @@ namespace Bbong.Client
             var center = new Vector2(0.50f, 0.58f);
             var radius = new Vector2(0.40f, 0.30f);
 
-            // 뽕 창/턴 전환 간격 동안은 아무도 포커싱하지 않음
-            var focusSeat = view.phase == RoundPhase.PongWindow || view.phase == RoundPhase.TurnGap
-                ? -1 : view.currentSeat;
+            // 뽕 창/턴 전환 간격 동안은 아무도 포커싱하지 않음. 뽕 추가 버림은 선언자를 포커싱.
+            var focusSeat = view.phase == RoundPhase.PongWindow || view.phase == RoundPhase.TurnGap ? -1
+                : view.phase == RoundPhase.WaitingPongDiscard ? view.actorSeat
+                : view.currentSeat;
 
             foreach (var seatView in view.seats)
             {
@@ -309,6 +320,18 @@ namespace Bbong.Client
                 Destroy(child.gameObject);
             }
 
+            // 족보 완성: 버림 타임라인 대신 족보 6장만 영역 정중앙에 펼쳐 표시
+            if (_meldSet != null)
+            {
+                for (var i = 0; i < _meldSet.Count; i++)
+                {
+                    var offset = (i - (_meldSet.Count - 1) / 2f) * 136f;
+                    PlaceCard(_meldSet[i], 128, 192, new Vector2(0.5f, 0.5f), new Vector2(offset, 0f), 0f);
+                }
+
+                return;
+            }
+
             const float w = 120f, h = 180f;
             var heapAnchor = new Vector2(0.5f, 0.45f);
             GameObject last = null;
@@ -328,13 +351,44 @@ namespace Bbong.Client
                 }
             }
 
-            if (last != null && _timeline.Count > _timelineShown)
+            if (last != null)
             {
-                StartCoroutine(ScalePop(last.transform));
+                HighlightTop(last);
+
+                if (_timeline.Count > _timelineShown)
+                {
+                    StartCoroutine(ScalePop(last.transform));
+                }
             }
 
             _timelineShown = _timeline.Count;
         }
+
+        /// <summary>맨 위(마지막 버림) 카드 강조: 카드 바로 아래에 노란 헤일로를 깔아 테두리처럼 보이게.</summary>
+        private void HighlightTop(GameObject top)
+        {
+            var topRt = (RectTransform)top.transform;
+            var halo = new GameObject("TopHalo", typeof(RectTransform), typeof(Image));
+            halo.transform.SetParent(_discardRow, false);
+
+            var img = halo.GetComponent<Image>();
+            img.sprite = TableArt.Halo;
+            img.type = Image.Type.Sliced;
+            img.color = new Color(1f, 0.92f, 0.3f, 0.95f);
+            img.raycastTarget = false;
+
+            var rt = (RectTransform)halo.transform;
+            rt.anchorMin = rt.anchorMax = topRt.anchorMin;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = topRt.sizeDelta + new Vector2(14f, 14f);
+            rt.anchoredPosition = topRt.anchoredPosition;
+            rt.localRotation = topRt.localRotation;
+
+            halo.transform.SetSiblingIndex(top.transform.GetSiblingIndex()); // 카드 바로 아래로
+        }
+
+        /// <summary>족보 완성 6장 표시(다음 판 시작 ClearTimeline까지 유지).</summary>
+        public void ShowMeldSet(IEnumerable<Card> cards) => _meldSet = TableArt.Sorted(cards);
 
         private GameObject PlaceCard(Card card, float w, float h, Vector2 anchor, Vector2 offset, float rot)
         {
@@ -358,12 +412,20 @@ namespace Bbong.Client
             _prompt.text = view.phase switch
             {
                 RoundPhase.WaitingStop when view.currentSeat == MySeat => "스톱? 또는 계속",
+                RoundPhase.WaitingDiscard when view.currentSeat == MySeat && view.canMeld =>
+                    $"족보 완성! [{MeldKorean(view.meldType)} {view.meldScore}점] — 선언 또는 버리고 계속",
+                RoundPhase.WaitingDiscard when view.currentSeat == MySeat && view.canNaturalPong =>
+                    "버릴 카드를 클릭하세요 (또는 자연뽕)",
                 RoundPhase.WaitingDiscard when view.currentSeat == MySeat => "버릴 카드를 클릭하세요.",
                 RoundPhase.WaitingPongDiscard when view.actorSeat == MySeat => $"뽕! {view.pongNumber} 외 버릴 카드 클릭",
                 RoundPhase.PongWindow when view.canPong => $"{view.pongNumber} 뽕 기회!",
                 _ => ""
             };
         }
+
+        /// <summary>DTO/뷰의 enum 문자열 → 한글 족보명(코어 MeldNames 단일 출처).</summary>
+        public static string MeldKorean(string meldType) =>
+            Enum.TryParse<MeldType>(meldType, out var type) ? MeldNames.Korean(type) : meldType;
 
         private void RenderButtons(RoundView view, bool naturalSelecting)
         {
@@ -431,9 +493,10 @@ namespace Bbong.Client
         {
             _timeline.Clear();
             _timelineShown = 0;
+            _meldSet = null;
         }
 
-        // ── 효과음 ──
+        // ── 효과음/연출 ──
 
         public void PlayDrawSfx() => _audio.PlayOneShot(_sfxDraw, 0.5f);
 
@@ -442,6 +505,40 @@ namespace Bbong.Client
         public void PlayPongSfx() => _audio.PlayOneShot(_sfxPong, 0.8f);
 
         public void PlayStopSfx() => _audio.PlayOneShot(_sfxStop, 0.6f);
+
+        /// <summary>뽕/자연뽕/족보 공통 연출: 효과음 + 화면 플래시 + 콜아웃.</summary>
+        public void PongFx(string callout)
+        {
+            PlayPongSfx();
+            Flash(new Color(1f, 0.95f, 0.4f, 0.5f));
+            ShowCallout(callout);
+        }
+
+        /// <summary>재셔플 연출: 콜아웃 + 플래시 + 셔플 효과음.</summary>
+        public void ShuffleFx()
+        {
+            ShowCallout("더미 셔플!");
+            Flash(new Color(1f, 1f, 1f, 0.3f));
+            _audio.PlayOneShot(_sfxShuffle, 0.7f);
+        }
+
+        public void Flash(Color color)
+        {
+            _flash.color = color;
+            StartCoroutine(FadeFlash());
+        }
+
+        private IEnumerator FadeFlash()
+        {
+            var start = _flash.color;
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.25f)
+            {
+                _flash.color = new Color(start.r, start.g, start.b, Mathf.Lerp(start.a, 0f, t));
+                yield return null;
+            }
+
+            _flash.color = new Color(start.r, start.g, start.b, 0f);
+        }
 
         // ── 콜아웃/점수판 ──
 
@@ -456,8 +553,9 @@ namespace Bbong.Client
             _calloutFx = StartCoroutine(CalloutFx());
         }
 
-        /// <summary>중앙 점수표: 헤더 + 판별 점수 행 + 합계 행. fadeOut이면 잠시 후 사라짐.</summary>
-        public void ShowScorePopup(string title, int[] debts, IReadOnlyList<int[]> roundHistory, bool fadeOut)
+        /// <summary>중앙 점수표: 헤더 + 판별 점수 행 + 합계 행. fadeOut이면 잠시 후 사라지고 onFadedOut 호출.</summary>
+        public void ShowScorePopup(string title, IReadOnlyList<int> debts, IReadOnlyList<int[]> roundHistory, bool fadeOut,
+            Action onFadedOut = null)
         {
             _scoreTitle.text = title;
 
@@ -505,7 +603,7 @@ namespace Bbong.Client
 
             if (fadeOut)
             {
-                _scoreFade = StartCoroutine(FadeScorePopup());
+                _scoreFade = StartCoroutine(FadeScorePopup(onFadedOut));
             }
         }
 
@@ -544,7 +642,7 @@ namespace Bbong.Client
             t.resizeTextMaxSize = max;
         }
 
-        private IEnumerator FadeScorePopup()
+        private IEnumerator FadeScorePopup(Action onFadedOut)
         {
             yield return new WaitForSeconds(5f); // 충분히 보이도록(다음 판 시작 전)
             for (var t = 0f; t < 1f; t += Time.deltaTime / 1.2f)
@@ -554,6 +652,7 @@ namespace Bbong.Client
             }
 
             _scorePopup.SetActive(false);
+            onFadedOut?.Invoke();
         }
 
         private IEnumerator CalloutFx()

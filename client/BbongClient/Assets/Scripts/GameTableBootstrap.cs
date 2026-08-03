@@ -3,20 +3,19 @@ using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Ai;
 using BbongCore.Cards;
-using BbongCore.Config;
 using BbongCore.Game;
+using BbongCore.Online;
 using BbongCore.Rules;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace Bbong.Client
 {
     /// <summary>
-    /// 코드 생성 카드 테이블 + 게임 흐름(Phase 3). 2~6인(사람 P0 + 봇).
-    /// 드로우/버림 · 뽕/자연뽕 · 스톱 · 게임(5판) 점수/판돈. 봇 턴은 코루틴으로 천천히 진행.
-    /// 인원·판돈은 로비(LobbyBootstrap)에서 Start 전에 설정. 단독 사용 시 기본 4인·판돈 1000.
+    /// 연습(봇전) 게임 테이블 드라이버. 2~6인(사람 P0 + 봇), 서버 불필요.
+    /// 렌더/연출은 공용 GameTableView가 담당 — 여기는 코어 게임 루프(봇 코루틴 포함)를 돌리며
+    /// 상태를 RoundView로 합성해 뷰에 공급하고, 뷰 입력 이벤트를 코어 액션으로 바꾼다.
+    /// 인원·난이도는 로비(LobbyBootstrap)에서 Start 전에 설정.
     /// </summary>
     public sealed class GameTableBootstrap : MonoBehaviour
     {
@@ -30,10 +29,7 @@ namespace Bbong.Client
 
         public int PlayerCount { get; set; } = 4;
 
-
         public BotDifficulty Difficulty { get; set; } = BotDifficulty.Normal;
-
-        // 카드 아트/정렬/효과음은 TableArt(온라인 테이블과 공용)로 추출됨.
 
         // 닉네임 = "형용사 명사" 조합(띄어쓰기 포함 최대 9자, GameConfig.MaxNicknameLength=12 이내).
         // 나 포함 전원 게임마다 중복 없이 무작위 배정.
@@ -52,6 +48,7 @@ namespace Bbong.Client
         private string[] _names;
         private Bot[] _bots;
 
+        private GameTableView _table;
         private GameState _game;
         private RoundState _round;
         private int _roundIndex;
@@ -64,44 +61,16 @@ namespace Bbong.Client
         private int _seed = 1;
         private Coroutine _pongTimer;
         private Coroutine _botLoop;
-
-        private Font _font;
-        private GameObject _canvasGo;
-        private Transform _seatsArea;        // 좌석 패널(타원 배치) 컨테이너
-        private Transform _discardRow;
-        private Transform _handRow;
-        private Text _prompt;                // 내 차례 안내 문구(손패 위)
-        private Text _endReason;             // 판 종료 사유(버림 더미 아래)
-        private GameObject _scorePopup;      // 판 종료 중앙 전광판(표)
-        private Text _scoreTitle;
-        private Transform _scoreGrid;        // 표 셀 컨테이너(GridLayout)
-        private CanvasGroup _scorePopupGroup;
-        private Coroutine _scoreFade;
-        private readonly List<int[]> _roundHistory = new(); // 게임 내 판별 점수
-        private Button _stopBtn, _pongBtn, _passBtn, _naturalBtn, _meldBtn, _nextBtn, _lobbyBtn;
         private MeldResult _pendingMeld; // 족보 선언 대기 중인 족보(MeldDecision)
-
-        private AudioSource _audio;
-        private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop, _sfxShuffle;
-        private Image _flash;
-        private Text _callout;               // 뽕/자연뽕 콜아웃("8뽕!")
-        private CanvasGroup _calloutGroup;
-        private Coroutine _calloutFx;
-        // 버림 타임라인: 발생 순서대로. group=true면 뽕/자연뽕 고정 패(위쪽 정렬), false면 단일 버림(중앙 더미).
-        // pos/rot은 버릴 때 1회 추첨(매 Refresh마다 더미가 들썩이지 않도록 고정).
-        private readonly List<(List<Card> cards, bool group, Vector2 pos, float rot)> _timeline = new();
-        private int _timelineShown;
-        private List<Card> _meldSet; // 족보 완성 시 6장(버림 비우고 표시)
+        private readonly List<int[]> _roundHistory = new(); // 게임 내 판별 점수
+        private Button _nextBtn, _lobbyBtn;
         // 뽕/자연뽕 선언 직후 내려놓은 카드(시각 전용). 코어는 버림 선택 후 한 번에 반영되므로
         // 그 사이 손패 표시에서 숨겨 "선언 → 즉시 내려놓기 → 버림" 흐름을 만든다.
         private readonly List<Card> _pendingLaid = new();
 
-
         private void Start()
         {
             _seed = Random.Range(1, 1_000_000); // Play마다 다른 패(고정 시드 버그 수정)
-            _font = Resources.Load<Font>("Fonts/Pretendard-SemiBold")
-                    ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             _bots = Enumerable.Range(0, PlayerCount).Select(_ => new Bot(Difficulty)).ToArray();
 
             _names = new string[PlayerCount];
@@ -117,8 +86,22 @@ namespace Bbong.Client
 
                 _names[s] = name;
             }
-            EnsureEventSystem();
-            BuildUi();
+
+            _table = gameObject.AddComponent<GameTableView>();
+            _table.MySeat = MySeat;
+            _table.PlayerCount = PlayerCount;
+            _table.Nicknames = _names;
+            _table.Build();
+            _nextBtn = _table.AddBarButton("다음 판", OnNext);
+            _lobbyBtn = _table.AddBarButton("로비로", OnLobby);
+
+            _table.CardClicked += OnCardClicked;
+            _table.StopClicked += OnStop;
+            _table.MeldClicked += OnMeldDeclare;
+            _table.NaturalPongClicked += OnNaturalPong;
+            _table.PongClicked += OnPong;
+            _table.PassClicked += OnPass;
+
             _game = GameState.Start(PlayerCount);
             StartRound();
         }
@@ -131,15 +114,10 @@ namespace Bbong.Client
                 dealerSeat: _dealerSeat);
             _state = UiState.NeedDiscard;
             _turnGap = false;
-            _timeline.Clear();
-            _timelineShown = 0;
-            _meldSet = null;
+            _table.ClearTimeline();
             _pendingLaid.Clear();
-            _endReason.text = "";
-            if (_scorePopup != null)
-            {
-                _scorePopup.SetActive(false);
-            }
+            _table.SetEndReason("");
+            _table.HideScorePopup();
 
             SetLog($"{_roundIndex + 1}판 시작.");
             RunBots();
@@ -147,8 +125,8 @@ namespace Bbong.Client
 
         private void EndRound(int[] scores, string reason, int enderSeat)
         {
-            _endReason.text = reason; // 버림 더미 아래에 종료 사유 표시
-            PlayStop();
+            _table.SetEndReason(reason); // 버림 더미 아래에 종료 사유 표시
+            _table.PlayStopSfx();
             _roundHistory.Add(scores);
             _game = _game.ApplyRoundScores(scores);
             _roundIndex++;
@@ -173,106 +151,16 @@ namespace Bbong.Client
                 _state = UiState.RoundOver;
             }
 
-            ShowScorePopup(title);
-            Refresh();
-        }
-
-        /// <summary>중앙 점수표: 헤더 + 판별 점수 행 + 합계 행. 내용 크기에 맞춰 정중앙 배치, 잠시 후 페이드아웃.</summary>
-        private void ShowScorePopup(string title)
-        {
-            _scoreTitle.text = title;
-
-            var cols = PlayerCount + 1;
-            var rows = _roundHistory.Count + 2; // 헤더 + 판별 + 합계
-            ((RectTransform)_scorePopup.transform).sizeDelta = new Vector2(
-                cols * 180f + (cols - 1) * 6f + 40f,
-                rows * 48f + (rows - 1) * 6f + 80f + 32f);
-
-            foreach (Transform child in _scoreGrid)
-            {
-                Destroy(child.gameObject);
-            }
-
-            // 헤더(닉네임은 셀에 맞게 작은 글씨)
-            AddCell("판수", true);
-            for (var s = 0; s < PlayerCount; s++)
-            {
-                AddCell($"{_names[s]}{(s == MySeat ? "*" : "")}", true, 22, fit: true);
-            }
-
-            // 판별 점수
-            for (var r = 0; r < _roundHistory.Count; r++)
-            {
-                AddCell($"{r + 1}", true);
-                for (var s = 0; s < PlayerCount; s++)
-                {
-                    AddCell($"{_roundHistory[r][s]}", false);
-                }
-            }
-
-            // 합계
-            AddCell("계", true);
-            for (var s = 0; s < PlayerCount; s++)
-            {
-                AddCell($"{_game.CumulativeDebts[s]}", true);
-            }
-
-            _scorePopup.SetActive(true);
-            _scorePopupGroup.alpha = 1f;
-
-            if (_scoreFade != null)
-            {
-                StopCoroutine(_scoreFade);
-                _scoreFade = null;
-            }
-
             // 판 종료만 페이드+자동 진행. 게임 종료(SetOver)는 '새 게임' 전까지 계속 표시.
-            if (_state == UiState.RoundOver)
-            {
-                _scoreFade = StartCoroutine(FadeScorePopup());
-            }
-        }
-
-        private void AddCell(string text, bool emphasize, int size = 30, bool fit = false)
-        {
-            var t = CreateText(_scoreGrid, text, size, TextAnchor.MiddleCenter); // 셀 중앙 정렬(박스와 표 정렬 일치)
-            t.color = emphasize ? new Color(1f, 0.9f, 0.4f) : Color.white;
-            if (emphasize)
-            {
-                t.fontStyle = FontStyle.Bold;
-            }
-
-            if (fit)
-            {
-                FitText(t, 12, size);
-            }
-        }
-
-        /// <summary>긴 닉네임 대응: 영역에 맞게 글씨 자동 축소.</summary>
-        private static void FitText(Text t, int min, int max)
-        {
-            t.horizontalOverflow = HorizontalWrapMode.Wrap;
-            t.resizeTextForBestFit = true;
-            t.resizeTextMinSize = min;
-            t.resizeTextMaxSize = max;
-        }
-
-        private IEnumerator FadeScorePopup()
-        {
-            yield return new WaitForSeconds(5f); // 충분히 보이도록
-            for (var t = 0f; t < 1f; t += Time.deltaTime / 1.2f)
-            {
-                _scorePopupGroup.alpha = 1f - t;
-                yield return null;
-            }
-
-            _scorePopup.SetActive(false);
-
-            // 전광판이 닫히면 다음 판 자동 시작(게임 종료 시엔 '새 게임' 버튼 유지)
-            if (_state == UiState.RoundOver)
-            {
-                OnNext();
-            }
+            _table.ShowScorePopup(title, _game.CumulativeDebts, _roundHistory, fadeOut: _state == UiState.RoundOver,
+                onFadedOut: () =>
+                {
+                    if (_state == UiState.RoundOver)
+                    {
+                        OnNext();
+                    }
+                });
+            Refresh();
         }
 
         // ── 봇 자동 진행 (코루틴, 천천히) ──
@@ -348,8 +236,8 @@ namespace Bbong.Client
                 var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
                 if (meld.Type != MeldType.None)
                 {
-                    _meldSet = Sorted(_round.CurrentPlayer.Hand.Cards); // 족보: 버림 비우고 표시
-                    ShowCallout($"{SeatName(seat)}\n{MeldName(meld.Type)}!");
+                    _table.ShowMeldSet(_round.CurrentPlayer.Hand.Cards); // 족보: 버림 비우고 표시
+                    _table.PongFx($"{SeatName(seat)}\n{MeldName(meld.Type)}!");
                     EndRound(RoundSettlement.SettleByMeld(_round, seat, meld), $"{SeatName(seat)} 족보 완성 [{MeldName(meld.Type)} {meld.Score}점]", seat);
                     yield break;
                 }
@@ -364,8 +252,8 @@ namespace Bbong.Client
                     {
                         // 3장 전부 같은 숫자 → 손 소진 자연뽕 종료
                         _round = _round.NaturalPong(number, null);
-                        AddGroup(laid);
-                        PlayPong($"{SeatName(seat)}\n{number}자연뽕!");
+                        _table.AddGroup(laid);
+                        _table.PongFx($"{SeatName(seat)}\n{number}자연뽕!");
                         EndRound(RoundSettlement.SettleByHandClear(_round, seat), $"{SeatName(seat)} 자연뽕 손 털기", seat);
                         yield break;
                     }
@@ -373,13 +261,13 @@ namespace Bbong.Client
                     var toss = _bots[seat].ChoosePongDiscard(rest);
                     _round = _round.NaturalPong(number, toss);
                     SetLog($"P{seat} 자연뽕! {number} 3장 고정");
-                    PlayPong($"{SeatName(seat)}\n{number}자연뽕!");
-                    AddGroup(laid);
+                    _table.PongFx($"{SeatName(seat)}\n{number}자연뽕!");
+                    _table.AddGroup(laid);
                     Refresh();
                     yield return new WaitForSeconds(TossDelay); // 내려놓기 먼저, 버림은 한 박자 뒤
 
-                    PlayDiscard();
-                    AddDiscard(toss);
+                    _table.PlayDiscardSfx();
+                    _table.AddDiscard(toss);
                     _turnGap = true;
                     Refresh();
                     yield return new WaitForSeconds(TurnGapDelay);
@@ -397,8 +285,8 @@ namespace Bbong.Client
                 var discard = _bots[seat].ChooseDiscard(_round.CurrentPlayer.Hand);
                 _round = _round.Discard(discard);
                 SetLog($"P{seat} 버림 {CardLabel(discard)}");
-                PlayDiscard();
-                AddDiscard(discard);
+                _table.PlayDiscardSfx();
+                _table.AddDiscard(discard);
                 _turnGap = true;
                 Refresh();
                 yield return new WaitForSeconds(TurnGapDelay);
@@ -451,8 +339,8 @@ namespace Bbong.Client
             if (rest.Count == 0)
             {
                 _round = _round.Pong(seat, null);
-                PlayPong($"{SeatName(seat)}\n{number}뽕!");
-                AddGroup(laid);
+                _table.PongFx($"{SeatName(seat)}\n{number}뽕!");
+                _table.AddGroup(laid);
                 EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} 손 털기 · {SeatName(discarderSeat)} 박 +20", seat);
                 return;
             }
@@ -460,8 +348,8 @@ namespace Bbong.Client
             var toss = _bots[seat].ChoosePongDiscard(rest);
             _round = _round.Pong(seat, toss); // 코어는 즉시 반영, 버림 표시만 지연
             SetLog($"P{seat} 뽕! {number} 3장 고정");
-            PlayPong($"{SeatName(seat)}\n{number}뽕!");
-            AddGroup(laid);
+            _table.PongFx($"{SeatName(seat)}\n{number}뽕!");
+            _table.AddGroup(laid);
             Refresh();
             if (_round.Players[seat].Hand.Count == 0)
             {
@@ -477,8 +365,8 @@ namespace Bbong.Client
         private IEnumerator EndAfterToss(Card toss, int seat, int discarderSeat)
         {
             yield return new WaitForSeconds(TossDelay);
-            PlayDiscard();
-            AddDiscard(toss);
+            _table.PlayDiscardSfx();
+            _table.AddDiscard(toss);
             EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} 손 털기 · {SeatName(discarderSeat)} 박 +20", seat);
         }
 
@@ -491,8 +379,8 @@ namespace Bbong.Client
                 yield break; // 그 사이 판이 끝났으면 다음 판에서 더미가 리셋됨
             }
 
-            PlayDiscard();
-            AddDiscard(toss);
+            _table.PlayDiscardSfx();
+            _table.AddDiscard(toss);
             Refresh();
         }
 
@@ -505,17 +393,13 @@ namespace Bbong.Client
             _state = UiState.PongWindow;
             SetLog($"P{discarderSeat}가 {_pongNumber} 버림 — 뽕?");
             Refresh();
-            _pongTimer = StartCoroutine(PongCountdown());
+            _table.StartPongCountdown(PongWindowSeconds);
+            _pongTimer = StartCoroutine(PongAutoPass());
         }
 
-        private IEnumerator PongCountdown()
+        private IEnumerator PongAutoPass()
         {
-            for (var t = PongWindowSeconds; t > 0; t--)
-            {
-                SetButtonLabel(_pongBtn, $"뽕! ({t})");
-                yield return new WaitForSeconds(1f);
-            }
-
+            yield return new WaitForSeconds(PongWindowSeconds);
             if (_state == UiState.PongWindow)
             {
                 OnPass();
@@ -530,7 +414,7 @@ namespace Bbong.Client
                 _pongTimer = null;
             }
 
-            SetButtonLabel(_pongBtn, "뽕!");
+            _table.StopPongCountdown();
         }
 
         // ── 사람 액션 ──
@@ -548,38 +432,14 @@ namespace Bbong.Client
             if (discardBefore > 1 && _round.DiscardPile.Count < discardBefore)
             {
                 // 고정 패(뽕/자연뽕)는 테이블에 남고, 단일 버림은 맨 위 1장만 유지
-                var kept = new List<(List<Card> cards, bool group, Vector2 pos, float rot)>();
-                (List<Card> cards, bool group, Vector2 pos, float rot)? lastSingle = null;
-                foreach (var entry in _timeline)
-                {
-                    if (entry.group)
-                    {
-                        kept.Add(entry);
-                    }
-                    else
-                    {
-                        lastSingle = entry;
-                    }
-                }
-
-                if (lastSingle != null)
-                {
-                    kept.Add(lastSingle.Value);
-                }
-
-                _timeline.Clear();
-                _timeline.AddRange(kept);
-                _timelineShown = _timeline.Count;
-
+                _table.KeepGroupsAndTopDiscard();
                 SetLog("바닥 더미 소진 → 버림 더미 재셔플(맨 위 1장 유지)");
-                ShowCallout("더미 셔플!");
-                Flash(new Color(1f, 1f, 1f, 0.3f));
-                _audio.PlayOneShot(_sfxShuffle, 0.7f);
+                _table.ShuffleFx();
                 Refresh();
             }
         }
 
-        /// <summary>내 턴 자동 드로우 → 족보면 종료, 아니면 버림 대기(NeedDiscard).</summary>
+        /// <summary>내 턴 자동 드로우 → 족보면 선언 대기, 아니면 버림 대기(NeedDiscard).</summary>
         private void AutoDrawMe()
         {
             if (!_round.CanDraw)
@@ -589,7 +449,7 @@ namespace Bbong.Client
             }
 
             DrawCard();
-            PlayDraw();
+            _table.PlayDrawSfx();
             var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
             if (meld.Type != MeldType.None)
             {
@@ -645,7 +505,7 @@ namespace Bbong.Client
 
         /// <summary>스톱 선언 콜아웃: 성공=스톱, 실패=바가지.</summary>
         private void AnnounceStop(int stopSeat) =>
-            ShowCallout(StopResolver.IsBagaji(_round, stopSeat)
+            _table.ShowCallout(StopResolver.IsBagaji(_round, stopSeat)
                 ? $"{SeatName(stopSeat)}\n바가지!"
                 : $"{SeatName(stopSeat)}\n스톱!");
 
@@ -660,10 +520,10 @@ namespace Bbong.Client
             var pongLaid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _pongNumber).Take(2).ToList();
             if (_round.Players[MySeat].Hand.Count == 2)
             {
-                // 손 전체가 뽕 2장 → 추가 버림 없이 손 소진(같은 숫자 3장째가 있으면 선택 화면으로)
+                // 손 전체가 뽕 2장 → 추가 버림 없이 손 소진
                 _round = _round.Pong(MySeat, null);
-                PlayPong($"{SeatName(MySeat)}\n{_pongNumber}뽕!");
-                AddGroup(pongLaid);
+                _table.PongFx($"{SeatName(MySeat)}\n{_pongNumber}뽕!");
+                _table.AddGroup(pongLaid);
                 EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(MySeat)} 손 털기 · {SeatName(_pongDiscarderSeat)} 박 +20", MySeat);
                 return;
             }
@@ -671,8 +531,8 @@ namespace Bbong.Client
             // 실제 판처럼 "뽕!" 외치는 순간 3장 고정분을 즉시 내려놓고, 버림은 그다음 동작
             _pendingLaid.Clear();
             _pendingLaid.AddRange(pongLaid);
-            AddGroup(pongLaid);
-            PlayPong($"{SeatName(MySeat)}\n{_pongNumber}뽕!");
+            _table.AddGroup(pongLaid);
+            _table.PongFx($"{SeatName(MySeat)}\n{_pongNumber}뽕!");
 
             _state = UiState.PongDiscardSelect;
             SetLog($"뽕! {_pongNumber} 외 버릴 카드 클릭");
@@ -709,8 +569,8 @@ namespace Bbong.Client
             }
 
             _state = UiState.Resolving;
-            _meldSet = Sorted(_round.Players[MySeat].Hand.Cards); // 족보: 버림 비우고 표시
-            ShowCallout($"{SeatName(MySeat)}\n{MeldName(_pendingMeld.Type)}!");
+            _table.ShowMeldSet(_round.Players[MySeat].Hand.Cards); // 족보: 버림 비우고 표시
+            _table.PongFx($"{SeatName(MySeat)}\n{MeldName(_pendingMeld.Type)}!");
             EndRound(RoundSettlement.SettleByMeld(_round, MySeat, _pendingMeld), $"{SeatName(MySeat)} 족보 완성 [{MeldName(_pendingMeld.Type)} {_pendingMeld.Score}점]", MySeat);
         }
 
@@ -730,22 +590,22 @@ namespace Bbong.Client
                 // 3장 전부 같은 숫자 → 손 소진 자연뽕 종료
                 _state = UiState.Resolving;
                 _round = _round.NaturalPong(_naturalPongNumber, null);
-                AddGroup(laid);
-                PlayPong($"{SeatName(MySeat)}\n{_naturalPongNumber}자연뽕!");
+                _table.AddGroup(laid);
+                _table.PongFx($"{SeatName(MySeat)}\n{_naturalPongNumber}자연뽕!");
                 EndRound(RoundSettlement.SettleByHandClear(_round, MySeat), $"{SeatName(MySeat)} 자연뽕 손 털기", MySeat);
                 return;
             }
 
             // 선언 즉시 3장 내려놓기(뽕과 동일한 흐름)
-            var naturalLaid = _round.Players[MySeat].Hand.Cards.Where(c => c.Number == _naturalPongNumber).Take(3).ToList();
             _pendingLaid.Clear();
-            _pendingLaid.AddRange(naturalLaid);
-            AddGroup(naturalLaid);
-            PlayPong($"{SeatName(MySeat)}\n{_naturalPongNumber}자연뽕!");
+            _pendingLaid.AddRange(laid);
+            _table.AddGroup(laid);
+            _table.PongFx($"{SeatName(MySeat)}\n{_naturalPongNumber}자연뽕!");
 
             _state = UiState.NaturalPongSelect;
             SetLog($"자연뽕! {_naturalPongNumber} 외 버릴 카드 클릭");
             Refresh();
+            _table.SetPrompt($"자연뽕! {_naturalPongNumber} 외 버릴 카드 클릭");
         }
 
         private void OnNext()
@@ -775,7 +635,7 @@ namespace Bbong.Client
             }
 
             new GameObject("Lobby", typeof(LobbyBootstrap));
-            Destroy(_canvasGo);
+            Destroy(_table.CanvasGo);
             Destroy(gameObject);
         }
 
@@ -785,11 +645,16 @@ namespace Bbong.Client
             {
                 case UiState.NeedDiscard:
                 case UiState.MeldDecision: // 족보 선언 대신 버리고 계속
+                    if (_round.CurrentSeat != MySeat)
+                    {
+                        return;
+                    }
+
                     _state = UiState.Resolving; // 더블클릭 → 두 장 버림 방지
                     _round = _round.Discard(card);
                     SetLog($"내 버림 {CardLabel(card)}");
-                    PlayDiscard();
-                    AddDiscard(card);
+                    _table.PlayDiscardSfx();
+                    _table.AddDiscard(card);
                     _turnGap = true; // BotLoop 진입 시 간격 소화
                     TryBotPong(MySeat);
                     RunBots();
@@ -805,8 +670,8 @@ namespace Bbong.Client
                     _round = _round.Pong(MySeat, card); // 내려놓기는 선언 시 이미 표시됨
                     _pendingLaid.Clear();
                     SetLog($"뽕 완료. {_pongNumber} 3장 고정");
-                    PlayDiscard();
-                    AddDiscard(card);
+                    _table.PlayDiscardSfx();
+                    _table.AddDiscard(card);
                     if (_round.Players[MySeat].Hand.Count == 0)
                     {
                         // 추가 버림까지 내고 손이 비면 손 털기 종료
@@ -828,512 +693,70 @@ namespace Bbong.Client
                     _round = _round.NaturalPong(_naturalPongNumber, card); // 내려놓기는 선언 시 이미 표시됨
                     _pendingLaid.Clear();
                     SetLog($"자연뽕 완료. {_naturalPongNumber} 3장 고정");
-                    PlayDiscard();
-                    AddDiscard(card);
+                    _table.PlayDiscardSfx();
+                    _table.AddDiscard(card);
                     _turnGap = true;
                     RunBots();
                     break;
             }
         }
 
-        // ── 렌더링 ──
+        // ── 뷰 공급 ──
 
         private void Refresh()
         {
-            RenderSeats();
-            RenderDiscard();
-            RenderHand(_round.Players[MySeat].Hand);
-
-            _prompt.text = _state switch
-            {
-                // 내 차례(드로우 완료)일 때만. 봇 턴 중 stale NeedDiscard 방지.
-                UiState.NeedDiscard when _round.CurrentSeat == MySeat =>
-                    _round.CanNaturalPong() ? "버릴 카드를 선택하세요 (또는 자연뽕)" : "버릴 카드를 선택하세요",
-                UiState.MeldDecision => $"족보 완성! [{MeldName(_pendingMeld.Type)}] 선언하거나 버리고 계속하세요",
-                UiState.PongDiscardSelect => "뽕! 버릴 카드를 선택하세요",
-                UiState.NaturalPongSelect => "자연뽕! 버릴 카드를 선택하세요",
-                UiState.StopDecision => "스톱 또는 계속을 선택하세요",
-                UiState.PongWindow => "뽕 하시겠습니까?",
-                _ => ""
-            };
-
-            _stopBtn.gameObject.SetActive(_state == UiState.StopDecision);
-            _meldBtn.gameObject.SetActive(_state == UiState.MeldDecision);
-            _naturalBtn.gameObject.SetActive((_state == UiState.NeedDiscard || _state == UiState.MeldDecision)
-                && _round.CurrentSeat == MySeat && _round.CanNaturalPong());
-            _pongBtn.gameObject.SetActive(_state == UiState.PongWindow);
-            _passBtn.gameObject.SetActive(_state == UiState.PongWindow || _state == UiState.StopDecision);
-            SetButtonLabel(_passBtn, _state == UiState.StopDecision ? "계속" : "패스");
+            _table.Render(BuildRoundView(), _pendingLaid, _state == UiState.NaturalPongSelect);
             _nextBtn.gameObject.SetActive(_state == UiState.RoundOver || _state == UiState.SetOver);
-            SetButtonLabel(_nextBtn, _state == UiState.SetOver ? "새 게임" : "다음 판");
+            GameTableView.SetButtonLabel(_nextBtn, _state == UiState.SetOver ? "새 게임" : "다음 판");
             _lobbyBtn.gameObject.SetActive(_state == UiState.SetOver);
         }
 
-        /// <summary>
-        /// 좌석 패널: 테이블 중심 타원 위에 360°/인원수 간격으로 배치.
-        /// 나(P0)=아래, 좌석 순서대로 반시계 방향(2인: P1 위 / 4인: P1 오른쪽·P2 위·P3 왼쪽).
-        /// 이름 옆 누적 점수, 현재 턴은 노란 배경.
-        /// </summary>
-        private void RenderSeats()
+        /// <summary>로컬 코어 상태 → 공용 뷰 입력(RoundView) 합성. 서버 GameSession.ToView와 같은 의미.</summary>
+        private RoundView BuildRoundView()
         {
-            foreach (Transform child in _seatsArea)
+            var myTurn = _round.CurrentSeat == MySeat;
+            var phase = _turnGap ? RoundPhase.TurnGap : _state switch
             {
-                Destroy(child.gameObject);
-            }
+                UiState.StopDecision => RoundPhase.WaitingStop,
+                UiState.PongWindow => RoundPhase.PongWindow,
+                UiState.PongDiscardSelect => RoundPhase.WaitingPongDiscard,
+                UiState.RoundOver => RoundPhase.RoundOver,
+                UiState.SetOver => RoundPhase.SetOver,
+                _ => RoundPhase.WaitingDiscard // NeedDiscard/MeldDecision/NaturalPongSelect/Resolving
+            };
 
-            var center = new Vector2(0.50f, 0.58f);
-            var radius = new Vector2(0.40f, 0.30f);
-
-            // 뽕 대기 중엔 아무도 포커싱하지 않고, 뽕을 실제 선언했을 때만 선언자를 포커싱.
-            // 창이 시간 초과로 닫히면 상태가 바뀌면서 원래 턴 대상자에게 포커스가 넘어간다.
-            var focusSeat = _turnGap || _state == UiState.PongWindow ? -1
-                : _state == UiState.PongDiscardSelect ? MySeat
-                : _round.CurrentSeat;
-
-            for (var seat = 0; seat < PlayerCount; seat++)
+            var canNatural = (_state == UiState.NeedDiscard || _state == UiState.MeldDecision)
+                && myTurn && _round.CanNaturalPong();
+            return new RoundView
             {
-                var angle = (-90f + seat * 360f / PlayerCount) * Mathf.Deg2Rad;
-                var anchor = center + new Vector2(Mathf.Cos(angle) * radius.x, Mathf.Sin(angle) * radius.y);
-
-                var mine = seat == MySeat;
-                var highlight = focusSeat == seat;
-                var panel = CreatePanel(_seatsArea, highlight ? new Color(0.9f, 0.8f, 0.2f, 0.55f) : new Color(0, 0, 0, 0.35f));
-                var rt = panel.rectTransform;
-                rt.anchorMin = rt.anchorMax = anchor;
-                rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.sizeDelta = new Vector2(250f, mine ? 80f : 150f); // 내 손패는 아래에 보이므로 이름표만
-
-                // 닉네임 1줄 + 빚 1줄(긴 닉네임의 어색한 개행 방지)
-                var t = CreateText(panel.transform, $"{SeatName(seat)}\n빚: {_game.CumulativeDebts[seat]}", 24, TextAnchor.MiddleCenter);
-                FitText(t, 16, 24);
-                if (mine)
+                mySeat = MySeat,
+                currentSeat = _round.CurrentSeat,
+                phase = phase,
+                actorSeat = _state == UiState.PongDiscardSelect ? MySeat : _round.CurrentSeat,
+                drawPileCount = _round.DrawPile.Count,
+                reshuffleCount = _round.ReshuffleCount,
+                pongNumber = _pongNumber,
+                canStop = _state == UiState.StopDecision,
+                canMeld = _state == UiState.MeldDecision,
+                meldType = _state == UiState.MeldDecision ? _pendingMeld.Type.ToString() : "",
+                meldScore = _state == UiState.MeldDecision ? _pendingMeld.Score : 0,
+                canNaturalPong = canNatural,
+                naturalPongNumber = canNatural ? TripleNumber(_round.Players[MySeat].Hand) : 0,
+                canPong = _state == UiState.PongWindow,
+                myHand = CardDto.FromAll(_round.Players[MySeat].Hand.Cards),
+                seats = Enumerable.Range(0, PlayerCount).Select(s => new SeatView
                 {
-                    Stretch(t.rectTransform);
-                    continue;
-                }
-
-                Anchor(t.rectTransform, new Vector2(0f, 0.55f), new Vector2(1f, 1f));
-
-                // 닉네임 아래 뒤집힌 카드로 손패 수 표현(겹침 없이 나란히, 6장까지 수용)
-                var count = _round.Players[seat].Hand.Count;
-                const float bw = 36f, bh = 50f, step = bw + 3f;
-                var total = (count - 1) * step + bw;
-                for (var j = 0; j < count; j++)
-                {
-                    var back = CreatePanel(panel.transform, Color.white);
-                    back.sprite = UiArt.CardBack;
-                    back.type = Image.Type.Simple; // 격자 패턴 왜곡 없이 통째로 축소
-                    var brt = back.rectTransform;
-                    brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.31f);
-                    brt.pivot = new Vector2(0.5f, 0.5f);
-                    brt.sizeDelta = new Vector2(bw, bh);
-                    brt.anchoredPosition = new Vector2(-total / 2f + bw / 2f + j * step, 0f);
-                }
-            }
+                    seat = s,
+                    nickname = _names[s],
+                    handCount = _round.Players[s].Hand.Count,
+                    pongCount = _round.Players[s].PongCount,
+                    hasPonged = _round.Players[s].HasPonged,
+                    cumulativeDebt = _game.CumulativeDebts[s]
+                }).ToArray()
+            };
         }
 
-        private void RenderHand(Hand hand)
-        {
-            foreach (Transform child in _handRow)
-            {
-                Destroy(child.gameObject);
-            }
-
-            foreach (var card in Sorted(hand.Cards))
-            {
-                if (_pendingLaid.Contains(card))
-                {
-                    continue; // 뽕/자연뽕 선언으로 이미 내려놓은 카드(코어 반영 전)
-                }
-
-                var go = CreateCardFace(_handRow, card, 130, 200);
-                var captured = card;
-                go.AddComponent<Button>().onClick.AddListener(() => OnCardClicked(captured));
-            }
-        }
-
-        // ── UI 생성 ──
-
-        private void BuildUi()
-        {
-            var canvasGo = new GameObject("Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            _canvasGo = canvasGo;
-            var canvas = canvasGo.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            var scaler = canvasGo.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080); // 폰 가로(16:9 기준, 넓은 화면은 여유 확장)
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand; // 화면비 달라도 글씨/카드 비대 방지
-            var root = canvasGo.transform;
-
-            var felt = CreatePanel(root, Color.white);
-            felt.sprite = UiArt.Backdrop; // 메뉴 화면과 톤 통일(네이비). 카드/더미는 그 위에.
-            Stretch(felt.rectTransform);
-
-            // 좌석 패널: 테이블 중심 기준 타원 배치(나=아래, 반시계 방향)
-            var seatsGo = new GameObject("SeatsArea", typeof(RectTransform));
-            seatsGo.transform.SetParent(root, false);
-            _seatsArea = seatsGo.transform;
-            Stretch((RectTransform)_seatsArea);
-
-            // 버림 더미/내려놓은 패 영역(수동 배치 — 겹침/펼침 제어). 테이블 중앙.
-            var discardGo = new GameObject("DiscardArea", typeof(RectTransform));
-            discardGo.transform.SetParent(root, false);
-            _discardRow = discardGo.transform;
-            Anchor((RectTransform)_discardRow, new Vector2(0.20f, 0.42f), new Vector2(0.80f, 0.72f));
-
-            // 판 종료 사유(내 좌석 패널 바로 위, 다음 판 시작 시 비움)
-            _endReason = CreateText(root, "", 32, TextAnchor.MiddleCenter);
-            _endReason.fontStyle = FontStyle.Bold;
-            _endReason.color = new Color(1f, 1f, 1f, 0.9f);
-            FitText(_endReason, 20, 32);
-            Anchor(_endReason.rectTransform, new Vector2(0.25f, 0.325f), new Vector2(0.75f, 0.39f));
-
-            // 내 차례 안내 문구(버튼 위)
-            _prompt = CreateText(root, "", 44, TextAnchor.MiddleCenter);
-            _prompt.fontStyle = FontStyle.Bold;
-            _prompt.color = new Color(1f, 0.92f, 0.4f);
-            Anchor(_prompt.rectTransform, new Vector2(0.20f, 0.335f), new Vector2(0.80f, 0.41f));
-
-            // 액션 버튼: 손패 우측(시기에 따라 표시, 동시 노출 최대 2개)
-            var bar = CreateRow(root, new Vector2(0.80f, 0.04f), new Vector2(0.995f, 0.21f), 14).transform;
-            _stopBtn = CreateButton(bar, "스톱", OnStop);
-            _meldBtn = CreateButton(bar, "족보 선언!", OnMeldDeclare);
-            _naturalBtn = CreateButton(bar, "자연뽕", OnNaturalPong);
-            _pongBtn = CreateButton(bar, "뽕!", OnPong);
-            _passBtn = CreateButton(bar, "패스", OnPass);
-            _nextBtn = CreateButton(bar, "다음 판", OnNext);
-            _lobbyBtn = CreateButton(bar, "로비로", OnLobby);
-
-            // 내 손패: 화면 가로 정중앙 기준 가운데 정렬(카드 수에 따라 유동).
-            // 전폭 컨테이너라 배경·클릭 차단은 제거(우측 버튼 영역과 겹치므로).
-            var handPanel = CreateRow(root, new Vector2(0f, 0.02f), new Vector2(1f, 0.225f), 12);
-            handPanel.color = new Color(0, 0, 0, 0);
-            handPanel.raycastTarget = false;
-            _handRow = handPanel.transform;
-
-            // 판 종료 점수표(이름+점수 한 그룹). 화면 정중앙, 크기는 내용에 맞춰 ShowScorePopup에서 설정.
-            var popupBg = CreatePanel(root, new Color(0.05f, 0.05f, 0.08f, 0.97f)); // 뒤 카드가 비치지 않게 거의 불투명
-            _scorePopup = popupBg.gameObject;
-            var popupRt = popupBg.rectTransform;
-            popupRt.anchorMin = popupRt.anchorMax = new Vector2(0.5f, 0.60f); // 살짝 위 — 아래 종료 사유와 분리
-            popupRt.pivot = new Vector2(0.5f, 0.5f);
-            popupBg.raycastTarget = false;
-            _scorePopupGroup = _scorePopup.AddComponent<CanvasGroup>();
-            _scorePopupGroup.blocksRaycasts = false;
-            _scorePopupGroup.interactable = false;
-
-            _scoreTitle = CreateText(popupBg.transform, "", 36, TextAnchor.MiddleCenter);
-            _scoreTitle.fontStyle = FontStyle.Bold;
-            FitText(_scoreTitle, 20, 36);
-            var titleRt = _scoreTitle.rectTransform;
-            titleRt.anchorMin = new Vector2(0f, 1f);
-            titleRt.anchorMax = new Vector2(1f, 1f);
-            titleRt.pivot = new Vector2(0.5f, 1f);
-            titleRt.offsetMin = new Vector2(0f, -80f);
-            titleRt.offsetMax = Vector2.zero;
-
-            var gridGo = new GameObject("ScoreGrid", typeof(RectTransform));
-            gridGo.transform.SetParent(popupBg.transform, false);
-            _scoreGrid = gridGo.transform;
-            var gridRt = (RectTransform)_scoreGrid;
-            gridRt.anchorMin = Vector2.zero;
-            gridRt.anchorMax = Vector2.one;
-            gridRt.offsetMin = new Vector2(20f, 16f);
-            gridRt.offsetMax = new Vector2(-20f, -80f);
-            var grid = gridGo.AddComponent<GridLayoutGroup>();
-            grid.spacing = new Vector2(6, 6);
-            grid.cellSize = new Vector2(180, 48); // 닉네임(최대 8자) 수용 폭
-            grid.childAlignment = TextAnchor.MiddleCenter;
-            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            grid.constraintCount = PlayerCount + 1; // 라벨 칸 + 플레이어
-
-            _scorePopup.SetActive(false);
-
-            // 뽕/자연뽕/족보 콜아웃("P1 8뽕!") — 더미 위 중앙에 크게 떴다 사라짐
-            _callout = CreateText(root, "", 100, TextAnchor.MiddleCenter);
-            _callout.fontStyle = FontStyle.Bold;
-            _callout.color = new Color(1f, 0.92f, 0.35f);
-            _callout.raycastTarget = false;
-            FitText(_callout, 40, 100); // 긴 닉네임도 한 화면에
-            AddOutline(_callout);
-            Anchor(_callout.rectTransform, new Vector2(0.25f, 0.43f), new Vector2(0.75f, 0.62f));
-            _calloutGroup = _callout.gameObject.AddComponent<CanvasGroup>();
-            _calloutGroup.alpha = 0f;
-            _calloutGroup.blocksRaycasts = false;
-            _calloutGroup.interactable = false;
-
-            // 전체 화면 플래시(연출용, 클릭 막지 않음)
-            _flash = CreatePanel(root, new Color(1, 1, 1, 0));
-            Stretch(_flash.rectTransform);
-            _flash.raycastTarget = false;
-            _flash.transform.SetAsLastSibling();
-
-            // 오디오 + 절차적 효과음
-            _audio = canvasGo.AddComponent<AudioSource>();
-            _audio.playOnAwake = false;
-            _sfxDraw = TableArt.Tone("draw", 880f, 0.06f, 24f);
-            _sfxDiscard = TableArt.Tone("discard", 300f, 0.12f, 16f);
-            _sfxPong = TableArt.Noise("pong", 0.16f, 42f);   // "찰싹" 노이즈 버스트
-            _sfxStop = TableArt.Tone("stop", 520f, 0.28f, 7f);
-            _sfxShuffle = TableArt.Noise("shuffle", 0.35f, 10f); // "쏴아" 카드 섞는 소리
-        }
-
-        // ── 연출/사운드 ──
-
-        private void PlayDraw() => _audio.PlayOneShot(_sfxDraw, 0.5f);
-        private void PlayDiscard() => _audio.PlayOneShot(_sfxDiscard, 0.5f);
-        private void PlayStop() => _audio.PlayOneShot(_sfxStop, 0.6f);
-
-        private void PlayPong(string callout)
-        {
-            _audio.PlayOneShot(_sfxPong, 0.8f);
-            Flash(new Color(1f, 0.95f, 0.4f, 0.5f));
-            ShowCallout(callout);
-        }
-
-        private void ShowCallout(string message)
-        {
-            _callout.text = message;
-            if (_calloutFx != null)
-            {
-                StopCoroutine(_calloutFx);
-            }
-
-            _calloutFx = StartCoroutine(CalloutFx());
-        }
-
-        /// <summary>콜아웃 연출: 크게 등장 → 잠시 유지 → 페이드아웃.</summary>
-        private IEnumerator CalloutFx()
-        {
-            _calloutGroup.alpha = 1f;
-            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.15f)
-            {
-                _callout.transform.localScale = Vector3.one * Mathf.Lerp(1.6f, 1f, t);
-                yield return null;
-            }
-
-            _callout.transform.localScale = Vector3.one;
-            yield return new WaitForSeconds(0.7f);
-
-            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.35f)
-            {
-                _calloutGroup.alpha = 1f - t;
-                yield return null;
-            }
-
-            _calloutGroup.alpha = 0f;
-        }
-
-        private static List<Card> Sorted(IEnumerable<Card> cards) => TableArt.Sorted(cards);
-
-        private static float Tri(float range) => TableArt.Tri(range);
-
-        /// <summary>단일 버림: 중앙 더미에 무작위 위치·기울기로 던져 놓기(실제 카드판 느낌).</summary>
-        private void AddDiscard(Card card) => _timeline.Add((new List<Card> { card }, false,
-            new Vector2(Tri(150f), Tri(50f)), Tri(28f)));
-
-        /// <summary>뽕/자연뽕 고정 패: 더미 위로 같이 던짐(한 지점에 살짝 펼쳐서).</summary>
-        private void AddGroup(IEnumerable<Card> cards) => _timeline.Add((Sorted(cards), true,
-            new Vector2(Tri(120f), Tri(45f)), Tri(16f)));
-
-        private void Flash(Color color)
-        {
-            _flash.color = color;
-            StartCoroutine(FadeFlash());
-        }
-
-        private IEnumerator FadeFlash()
-        {
-            var start = _flash.color;
-            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.25f)
-            {
-                _flash.color = new Color(start.r, start.g, start.b, Mathf.Lerp(start.a, 0f, t));
-                yield return null;
-            }
-
-            _flash.color = new Color(start.r, start.g, start.b, 0f);
-        }
-
-        private IEnumerator ScalePop(Transform target)
-        {
-            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.15f)
-            {
-                var s = Mathf.Lerp(1.4f, 1f, t);
-                if (target != null)
-                {
-                    target.localScale = new Vector3(s, s, 1f);
-                }
-
-                yield return null;
-            }
-
-            if (target != null)
-            {
-                target.localScale = Vector3.one;
-            }
-        }
-
-        private GameObject CreateCardFace(Transform parent, Card card, float width, float height) =>
-            TableArt.CreateCardFace(parent, card, width, height, _font);
-
-        private static void AddOutline(Text text) => TableArt.AddOutline(text);
-
-        private void RenderDiscard()
-        {
-            foreach (Transform child in _discardRow)
-            {
-                Destroy(child.gameObject);
-            }
-
-            // 족보 완성: 버림 타임라인 비우고 족보 6장만 영역 정중앙에 펼쳐 표시
-            if (_meldSet != null)
-            {
-                for (var i = 0; i < _meldSet.Count; i++)
-                {
-                    var offset = (i - (_meldSet.Count - 1) / 2f) * 136f;
-                    PlaceCard(_meldSet[i], 128, 192, new Vector2(0.5f, 0.5f), new Vector2(offset, 0f), 0f);
-                }
-
-                return;
-            }
-
-            // 전부 중앙 무작위 더미: 발생 순서대로 쌓아 마지막 던진 카드가 맨 위.
-            // 뽕/자연뽕 3장도 같은 지점에 살짝 펼쳐 던짐(j별 고정 오프셋 → Refresh마다 동일).
-            const float w = 120f, h = 180f;
-            var heapAnchor = new Vector2(0.5f, 0.45f);
-            GameObject last = null;
-            foreach (var (cards, group, pos, rot) in _timeline)
-            {
-                if (group)
-                {
-                    for (var j = 0; j < cards.Count; j++)
-                    {
-                        var fan = j - (cards.Count - 1) / 2f;
-                        last = PlaceCard(cards[j], w, h, heapAnchor,
-                            pos + new Vector2(fan * 38f, j * 3f), rot + fan * 9f);
-                    }
-                }
-                else
-                {
-                    last = PlaceCard(cards[0], w, h, heapAnchor, pos, rot);
-                }
-            }
-
-            if (last != null)
-            {
-                HighlightTop(last);
-
-                if (_timeline.Count > _timelineShown)
-                {
-                    StartCoroutine(ScalePop(last.transform));
-                }
-            }
-
-            _timelineShown = _timeline.Count;
-        }
-
-        /// <summary>맨 위(마지막 버림) 카드 강조: 카드 바로 아래에 노란 헤일로를 깔아 테두리처럼 보이게.</summary>
-        private void HighlightTop(GameObject top)
-        {
-            var topRt = (RectTransform)top.transform;
-            var halo = new GameObject("TopHalo", typeof(RectTransform), typeof(Image));
-            halo.transform.SetParent(_discardRow, false);
-
-            var img = halo.GetComponent<Image>();
-            img.sprite = TableArt.Halo;
-            img.type = Image.Type.Sliced;
-            img.color = new Color(1f, 0.92f, 0.3f, 0.95f);
-            img.raycastTarget = false;
-
-            var rt = (RectTransform)halo.transform;
-            rt.anchorMin = rt.anchorMax = topRt.anchorMin;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = topRt.sizeDelta + new Vector2(14f, 14f);
-            rt.anchoredPosition = topRt.anchoredPosition;
-            rt.localRotation = topRt.localRotation;
-
-            halo.transform.SetSiblingIndex(top.transform.GetSiblingIndex()); // 카드 바로 아래로
-        }
-
-        /// <summary>버림 영역에 카드 1장 배치. anchorRel=영역 내 기준점(0~1), pos=기준점에서의 오프셋(px).</summary>
-        private GameObject PlaceCard(Card card, float w, float h, Vector2 anchorRel, Vector2 pos, float rot)
-        {
-            var face = CreateCardFace(_discardRow, card, w, h);
-            var rt = face.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = anchorRel;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(w, h);
-            rt.anchoredPosition = pos;
-            rt.localRotation = Quaternion.Euler(0, 0, rot);
-            return face;
-        }
-
-        // ── UI 헬퍼 ──
-
-        private void EnsureEventSystem()
-        {
-            if (EventSystem.current == null)
-            {
-                new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
-            }
-        }
-
-        private Image CreateRow(Transform parent, Vector2 min, Vector2 max, float spacing)
-        {
-            var panel = CreatePanel(parent, new Color(0, 0, 0, 0.12f));
-            Anchor(panel.rectTransform, min, max);
-            var layout = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
-            layout.spacing = spacing;
-            layout.childAlignment = TextAnchor.MiddleCenter;
-            layout.childForceExpandWidth = false;
-            layout.childForceExpandHeight = false;
-            layout.padding = new RectOffset(14, 14, 10, 10);
-            return panel;
-        }
-
-        private static Image CreatePanel(Transform parent, Color color)
-        {
-            var go = new GameObject("Panel", typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(parent, false);
-            go.GetComponent<Image>().color = color;
-            return go.GetComponent<Image>();
-        }
-
-        private Text CreateText(Transform parent, string content, int size, TextAnchor anchor)
-        {
-            var go = new GameObject("Text", typeof(RectTransform), typeof(Text));
-            go.transform.SetParent(parent, false);
-            var text = go.GetComponent<Text>();
-            text.font = _font;
-            text.text = content;
-            text.fontSize = size;
-            text.alignment = anchor;
-            text.color = Color.white;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            return text;
-        }
-
-        private Button CreateButton(Transform parent, string label, UnityEngine.Events.UnityAction onClick)
-        {
-            var go = new GameObject("Button", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
-            go.transform.SetParent(parent, false);
-            var img = go.GetComponent<Image>();
-            img.sprite = UiArt.Button;
-            img.type = Image.Type.Sliced;
-            img.color = new Color(0.95f, 0.95f, 0.95f);
-            var le = go.GetComponent<LayoutElement>();
-            le.preferredWidth = 160;
-            le.preferredHeight = 90;
-            var text = CreateText(go.transform, label, 34, TextAnchor.MiddleCenter);
-            text.color = Color.black;
-            Stretch(text.rectTransform);
-            go.GetComponent<Button>().onClick.AddListener(onClick);
-            return go.GetComponent<Button>();
-        }
-
-        private void SetButtonLabel(Button button, string label) => button.GetComponentInChildren<Text>().text = label;
+        // ── 헬퍼 ──
 
         private int TripleNumber(Hand hand) => hand.Cards.GroupBy(c => c.Number).First(g => g.Count() >= 3).Key;
 
@@ -1344,15 +767,5 @@ namespace Bbong.Client
         private string SeatName(int seat) => seat == MySeat ? $"{_names[seat]}(나)" : _names[seat];
 
         private void SetLog(string message) => Debug.Log($"[BBONG {Time.time:F2}] {message.Replace("\n", " | ")}"); // 콘솔 전용, 타이밍 튜닝용 경과초 포함
-
-        private static void Stretch(RectTransform rt) => Anchor(rt, Vector2.zero, Vector2.one);
-
-        private static void Anchor(RectTransform rt, Vector2 min, Vector2 max)
-        {
-            rt.anchorMin = min;
-            rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-        }
     }
 }

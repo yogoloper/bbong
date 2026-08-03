@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Cards;
 using BbongCore.Online;
-using BbongCore.Rules;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -86,7 +85,7 @@ namespace Bbong.Client
                     if (drew.reshuffled)
                     {
                         _table.KeepGroupsAndTopDiscard();
-                        _table.ShowCallout("더미 셔플!");
+                        _table.ShuffleFx();
                     }
 
                     _table.PlayDrawSfx();
@@ -153,8 +152,7 @@ namespace Bbong.Client
 
                 case ServerMessageType.MeldDeclared:
                     var meld = JsonUtility.FromJson<MeldDeclaredMsg>(json);
-                    _table.PlayPongSfx();
-                    _table.ShowCallout($"{Nicknames[meld.seat]}\n{MeldDisplay(meld.meldType)}!");
+                    _table.PongFx($"{Nicknames[meld.seat]}\n{GameTableView.MeldKorean(meld.meldType)}!");
                     break;
 
                 case ServerMessageType.RoundEnded:
@@ -223,10 +221,6 @@ namespace Bbong.Client
             _roomBtn.gameObject.SetActive(_pendingRoom != null);
         }
 
-        /// <summary>DTO의 enum 문자열 → 한글 족보명(코어 MeldNames 단일 출처).</summary>
-        private static string MeldDisplay(string meldType) =>
-            System.Enum.TryParse<MeldType>(meldType, out var type) ? MeldNames.Korean(type) : meldType;
-
         private void OnLaid(int seat, int number, CardDto[] laid, string suffix)
         {
             var cards = laid.Select(c => c.ToCard()).ToList();
@@ -237,8 +231,7 @@ namespace Bbong.Client
                 _pendingLaid.AddRange(cards);
             }
 
-            _table.PlayPongSfx();
-            _table.ShowCallout($"{Nicknames[seat]}\n{number}{suffix}");
+            _table.PongFx($"{Nicknames[seat]}\n{number}{suffix}");
         }
 
         private void LeaveToLobby(string reason)
@@ -293,8 +286,7 @@ namespace Bbong.Client
             _pendingLaid.AddRange(laid);
             _table.AddGroup(laid);
             _naturalLaidLocally = true;
-            _table.PlayPongSfx();
-            _table.ShowCallout($"{Nicknames[MySeat]}\n{number}자연뽕!");
+            _table.PongFx($"{Nicknames[MySeat]}\n{number}자연뽕!");
 
             _naturalSelecting = true;
             Render();
