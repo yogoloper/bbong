@@ -610,15 +610,7 @@ namespace Bbong.Client
             ? $"{SeatName(stopSeat)} 바가지 (+30)"
             : $"{SeatName(stopSeat)} 스톱";
 
-        private static string MeldName(MeldType type) => type switch
-        {
-            MeldType.Ttoittoi => "또이또이",
-            MeldType.Straight => "스트레이트",
-            MeldType.TenOrUnder => "10이하",
-            MeldType.SixtySixOrOver => "66이상",
-            MeldType.Chongtong => "총통",
-            _ => type.ToString()
-        };
+        private static string MeldName(MeldType type) => MeldNames.Korean(type); // 단일 출처: 코어 MeldNames
 
         /// <summary>스톱 종료 시 다음 판 선: 바가지면 이긴 자(최저 손합 뽕한 게이머), 아니면 스톱 선언자.</summary>
         private int StopEnderSeat(int stopSeat)

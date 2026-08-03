@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Cards;
 using BbongCore.Online;
+using BbongCore.Rules;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -26,6 +27,7 @@ namespace Bbong.Client
         private int _timelineShown;
         private readonly List<Card> _pendingLaid = new(); // 내 뽕/자연뽕 내려놓기(서버 반영 전 손패 숨김)
         private bool _naturalSelecting;                    // 자연뽕 추가 버림 선택 중
+        private bool _naturalLaidLocally;                  // 자연뽕 선언 즉시 내려놓기 연출(서버 확정 전)
         private RoomUpdateMsg _pendingRoom;                // 세트 종료 후 대기실 복귀 대기
 
         private Font _font;
@@ -82,6 +84,7 @@ namespace Bbong.Client
                     _timelineShown = 0;
                     _pendingLaid.Clear();
                     _naturalSelecting = false;
+                    _naturalLaidLocally = false;
                     _endReason.text = "";
                     HideScorePopup();
                     ApplyView(round.view);
@@ -135,7 +138,21 @@ namespace Bbong.Client
 
                 case ServerMessageType.NaturalPonged:
                     var natural = JsonUtility.FromJson<NaturalPongedMsg>(json);
-                    OnLaid(natural.seat, natural.number, natural.laid, "자연뽕!");
+                    if (natural.seat == MySeat && _naturalLaidLocally)
+                    {
+                        // 선언 순간 이미 내려놓기 연출을 했으므로 서버 확정 구성으로 치환만(콜아웃/효과음 중복 방지)
+                        _naturalLaidLocally = false;
+                        _timeline.RemoveAt(_timeline.Count - 1);
+                        AddGroup(natural.laid.Select(c => c.ToCard()));
+                        _timelineShown = _timeline.Count;
+                        _pendingLaid.Clear();
+                        _pendingLaid.AddRange(natural.laid.Select(c => c.ToCard()));
+                    }
+                    else
+                    {
+                        OnLaid(natural.seat, natural.number, natural.laid, "자연뽕!");
+                    }
+
                     ApplyView(natural.view);
                     break;
 
@@ -148,7 +165,7 @@ namespace Bbong.Client
                 case ServerMessageType.MeldDeclared:
                     var meld = JsonUtility.FromJson<MeldDeclaredMsg>(json);
                     _audio.PlayOneShot(_sfxPong, 0.8f);
-                    ShowCallout($"{Nicknames[meld.seat]}\n족보 {meld.meldType}!");
+                    ShowCallout($"{Nicknames[meld.seat]}\n{MeldDisplay(meld.meldType)}!"); // 로컬과 동일 문구
                     break;
 
                 case ServerMessageType.RoundEnded:
@@ -188,6 +205,17 @@ namespace Bbong.Client
 
                 case ServerMessageType.Error:
                     var error = JsonUtility.FromJson<ErrorMsg>(json);
+                    if (_naturalLaidLocally)
+                    {
+                        // 자연뽕이 서버에서 거부됨 — 낙관적으로 내려놓은 3장 원복
+                        _naturalLaidLocally = false;
+                        _naturalSelecting = false;
+                        _timeline.RemoveAt(_timeline.Count - 1);
+                        _timelineShown = Mathf.Min(_timelineShown, _timeline.Count);
+                        _pendingLaid.Clear();
+                        Render();
+                    }
+
                     _prompt.text = error.message;
                     break;
             }
@@ -200,6 +228,10 @@ namespace Bbong.Client
             _view = view;
             Render();
         }
+
+        /// <summary>DTO의 enum 문자열 → 한글 족보명(코어 MeldNames 단일 출처).</summary>
+        private static string MeldDisplay(string meldType) =>
+            System.Enum.TryParse<MeldType>(meldType, out var type) ? MeldNames.Korean(type) : meldType;
 
         private void OnLaid(int seat, int number, CardDto[] laid, string suffix)
         {
@@ -276,8 +308,18 @@ namespace Bbong.Client
                 return;
             }
 
+            // 선언 즉시 3장 내려놓기(로컬·일반 뽕과 동일한 흐름) — 서버 확정 전 낙관적 연출
+            var laid = _view.myHand.Select(c => c.ToCard()).Where(c => c.Number == number).Take(3).ToList();
+            _pendingLaid.Clear();
+            _pendingLaid.AddRange(laid);
+            AddGroup(laid);
+            _naturalLaidLocally = true;
+            _audio.PlayOneShot(_sfxPong, 0.8f);
+            ShowCallout($"{Nicknames[MySeat]}\n{number}자연뽕!");
+
             _naturalSelecting = true;
             _prompt.text = $"자연뽕! {number} 외 버릴 카드 클릭";
+            Render();
         }
 
         // ── 렌더 ──

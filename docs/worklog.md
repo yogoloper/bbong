@@ -5,7 +5,7 @@
 ## 현재 상태 (2026-08-03)
 
 - **Phase 0 규칙** ✅ / **1 코어** ✅ / **2 AI 봇** ✅ / **3 UI/UX** ✅ / **4 메타·수익화(서버)** 🚧 / **5 온라인 멀티 M1(친구방)** ✅ 동작
-- 테스트: 코어 **118개**, 서버 **107개** (NUnit, PG round-trip·WS 통합 포함).
+- 테스트: 코어 **124개**, 서버 **107개** (NUnit, PG round-trip·WS 통합 포함).
 - 클라: 연습(봇전, 무료) + **친구방 온라인 멀티**(초대코드, 2~6인, 서버 권위) 3클라 수동 검증 완료. 메인 로비 + 5개 모드 화면.
 - 서버: ASP.NET Core + EF Core/PostgreSQL + JWT + **WebSocket(/ws) 실시간**. 게스트/소셜 로그인·프로필·지갑·광고보상·매치 에스크로/정산 API.
 - 부하/정합 검증: `tools/BbongLoadSim` — 게스트 20명 동시 × 5게임, 394요청 실패 0, 잔액 정합 불일치 0.
@@ -57,6 +57,12 @@ compose.yaml          dev 인프라 PG(5432)+Redis(6379). 서버 앱은 컨테�
 - **모바일 준비**: Android 빌드 프로필 추가. NDK 유실 복구 — 6000.4.10f1의
   `PlaybackEngines/AndroidPlayer/NDK`가 비어 "Android NDK not found" → 6000.0.78f1의 동일
   버전(r27c, 27.2.12479018) 복사로 해결. 모바일 UI 확인은 Device Simulator(20:9)로 — 기기 불필요.
+- **자연뽕 즉시 내려놓기(넷)**: 로컬은 선언 즉시 3장 내려놓는데 넷은 서버 확정까지 6장 유지 →
+  선언 순간 낙관적으로 내려놓고(_naturalLaidLocally), 서버 확정 시 콜아웃/효과음 없이 치환,
+  Error 시 원복. 일반 뽕과 동일한 흐름.
+- **족보 표시명 단일 출처**: 코어 `Rules/MeldNames.Korean()` 신규(TDD, 코어 118→**124**) —
+  로컬 중복 매핑 삭제, 서버 판 종료 사유 `[Straight]`→`[스트레이트]`, 넷 콜아웃도 로컬과 동일
+  형식("닉\n스트레이트!"). DTO는 enum 문자열 유지(언어 중립), 표시 시점에만 변환.
 - 검증: 새 macOS 빌드 다중 클라(최대 6개) + 서버 107 테스트 통과.
 - 참고: 폰 실기기 테스트 시 `ServerApi.BaseUrl`을 LAN IP로 + Player Settings에서
   "Allow downloads over HTTP" 허용 필요.

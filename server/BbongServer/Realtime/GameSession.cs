@@ -378,7 +378,7 @@ public sealed class GameSession
 
         output.ToAll(new MeldDeclaredMsg { seat = seat, meldType = _meld.Type.ToString(), meldScore = _meld.Score });
         EndRound(output, RoundSettlement.SettleByMeld(_round, seat, _meld),
-            $"{_nicknames[seat]} 족보 완성 [{_meld.Type} {_meld.Score}점]", seat);
+            $"{_nicknames[seat]} 족보 완성 [{MeldNames.Korean(_meld.Type)} {_meld.Score}점]", seat);
     }
 
     private void HandleNaturalPong(SessionOutput output, int seat, NaturalPongMsg msg)
