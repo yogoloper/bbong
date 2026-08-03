@@ -4,10 +4,10 @@
 
 ## 현재 상태 (2026-08-03)
 
-- **Phase 0 규칙** ✅ / **1 코어** ✅ / **2 AI 봇** ✅ / **3 UI/UX** ✅ / **4 메타·수익화(서버)** 🚧 진행 중
-- 테스트: 코어 **116개**, 서버 **62개** (NUnit, PG round-trip 포함).
-- 클라: 4인(사람+봇3) 한 게임(5판) 처음~끝 동작. 메인 로비 + 5개 모드 화면. **연습(봇전)은 무료 — 로컬 지갑(PlayerWallet) 삭제**.
-- 서버: ASP.NET Core + EF Core/PostgreSQL + JWT. 게스트/소셜 로그인·프로필·지갑·광고보상 + **매치 에스크로/정산 API**. docker compose로 PG/Redis 기동.
+- **Phase 0 규칙** ✅ / **1 코어** ✅ / **2 AI 봇** ✅ / **3 UI/UX** ✅ / **4 메타·수익화(서버)** 🚧 / **5 온라인 멀티 M1(친구방)** ✅ 동작
+- 테스트: 코어 **118개**, 서버 **101개** (NUnit, PG round-trip·WS 통합 포함).
+- 클라: 연습(봇전, 무료) + **친구방 온라인 멀티**(초대코드, 2~6인, 서버 권위) 3클라 수동 검증 완료. 메인 로비 + 5개 모드 화면.
+- 서버: ASP.NET Core + EF Core/PostgreSQL + JWT + **WebSocket(/ws) 실시간**. 게스트/소셜 로그인·프로필·지갑·광고보상·매치 에스크로/정산 API.
 - 부하/정합 검증: `tools/BbongLoadSim` — 게스트 20명 동시 × 5게임, 394요청 실패 0, 잔액 정합 불일치 0.
 
 ## 구조
@@ -42,6 +42,19 @@ compose.yaml          dev 인프라 PG(5432)+Redis(6379). 서버 앱은 컨테�
 - 봇 게임만: 빈 GameObject에 `GameTableBootstrap`만 붙이고 Play (서버 불필요)
 - 정식 흐름(로그인~): ① `docker compose up -d` ② `cd server/BbongServer && dotnet run` (포트 5080) ③ Unity에서 AuthBootstrap Play → 게스트 시작
 - 게임 로그: Unity Console `[BBONG]` (화면 로그는 제거됨)
+
+## 세션 (2026-08-03 후반) — Phase 5 M1: 친구방 온라인 멀티
+
+- **프로토콜**: 순수 WebSocket + JSON(신규 의존성 0). 공유 DTO는 `core/BbongCore/Online/`
+  (JsonUtility 호환 public 필드). 좌석별 개인화 스냅샷(RoundView — 타인 손패는 장수만) + 연출 이벤트.
+- **서버** `server/BbongServer/Realtime/`: RoomRegistry(6자리 초대코드) → Room(Channel 단일 소비 루프 —
+  레이스 차단, 선착 뽕) → GameSession(서버 권위, 전송 무지·SessionOutput 반환 → WS 없이 단위테스트).
+  뽕 창 5초 타이머, 판 사이 8초 자동, 종료 5종 전부, 세트 후 대기실 복귀. /ws는 기존 JWT 재사용.
+- **클라**: WsClient(BCL ClientWebSocket, 수신 큐→Update 펌프, runInBackground), FriendRoomBootstrap
+  실구현(만들기/코드 입장/대기실), NetGameTableBootstrap(RoundView 렌더+의도 전송, 좌석 회전 배치),
+  TableArt 추출(카드 아트/정렬/효과음 — 로컬·넷 공용).
+- 검증: 서버 101 테스트 + 3클라(호스트+2) 수동 — 방 생성/입장/시작/플레이 동작 확인.
+- 끊김 = 방 해체(MVP). 알려진 것: macOS 창 임의 비율로 UI 어긋남(모바일 타깃은 정상).
 
 ## 세션 (2026-08-03) — 매치 API + 동시접속 검증
 
@@ -85,10 +98,12 @@ UI: 코드생성 카드아트(색배경+모서리핍, 색약 안전 팔레트), 
 
 ## 미해결 / 다음 후보
 
-- **Phase 5 온라인 멀티**: 대기실/방찾기/게임서버(Realtime). 맞춤게임에서 매치 API 소비 시작점.
-- **R7 지갑 동시성**: advisory lock/SERIALIZABLE — 멀티 전 필수(considerations.md).
+- **Phase 5 M2 — 맞춤게임(판돈 멀티)**: 방찾기/빠른매칭 + 판돈 에스크로/정산을 멀티에 연결.
+  선행: **R7 지갑 동시성 락**(advisory lock/SERIALIZABLE, considerations.md).
+- **멀티 후속**: 재접속(현재 끊김=방 해체), 턴 타이머(5초 자동버림), 넷 테이블 전광판 표(현재 텍스트),
+  로컬/넷 상태 렌더 중복 정리, WebGL 불가(WS Authorization 헤더) 시 티켓 방식.
 - **미정산 매치 타임아웃 정리 잡** (후속)
-- **실제 아트 에셋**(카드는 여전히 절차생성)
+- **실제 아트 에셋**(카드는 여전히 절차생성) / macOS 테스트 창 비율 대응(모바일 타깃은 무관)
 - 봇 스톱 성향 과함(시뮬상 78% 스톱 종료) — 다양성 튜닝 여지
 
 ## 컴플라이언스 핵심 (잊지 말 것)
