@@ -77,10 +77,22 @@ namespace Bbong.Client
             _seed = Random.Range(1, 1_000_000); // Play마다 다른 패(고정 시드 버그 수정)
             _bots = Enumerable.Range(0, PlayerCount).Select(_ => new Bot(Difficulty)).ToArray();
 
+            // 내 좌석 = 계정 닉네임(로그인 전 단독 실행 시에만 랜덤), 봇 = "형용사 명사" 무작위 배정
             _names = new string[PlayerCount];
             var used = new HashSet<string>();
+            if (!string.IsNullOrEmpty(Session.Nickname))
+            {
+                _names[MySeat] = Session.Nickname;
+                used.Add(Session.Nickname);
+            }
+
             for (var s = 0; s < PlayerCount; s++)
             {
+                if (_names[s] != null)
+                {
+                    continue;
+                }
+
                 string name;
                 do
                 {
