@@ -847,7 +847,7 @@ namespace Bbong.Client
 
         private string CardLabel(Card c) => TableArt.CardLabel(c);
 
-        private string SeatName(int seat) => seat == MySeat ? $"{_names[seat]}(나)" : _names[seat];
+        private string SeatName(int seat) => _names[seat]; // 내 좌석은 항상 아래 중앙 — "(나)" 표기 불필요
 
         private void SetLog(string message) => Debug.Log($"[BBONG {Time.time:F2}] {message.Replace("\n", " | ")}"); // 콘솔 전용, 타이밍 튜닝용 경과초 포함
     }

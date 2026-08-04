@@ -58,9 +58,10 @@ namespace Bbong.Client
         private CanvasGroup _calloutGroup;
         private Coroutine _calloutFx;
         private Coroutine _pongCountdown;
-        private Text _turnCountdown;
         private Coroutine _turnCountdownFx;
         private string _turnCountdownKey; // 같은 대기 상태에서 리렌더돼도 카운트다운이 리셋되지 않게 하는 키
+        private string _promptBase = "";  // 카운트다운 접미사 "(N)" 를 제외한 안내 문구 원문
+        private int _countdownRemaining;  // 0 = 카운트다운 미표시
 
         private AudioSource _audio;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop, _sfxShuffle;
@@ -184,14 +185,6 @@ namespace Bbong.Client
             _calloutGroup.alpha = 0f;
             _calloutGroup.blocksRaycasts = false;
 
-            // 내 행동 대기 남은 초(§3 턴 타이머와 동기) — 안내 문구 오른쪽
-            _turnCountdown = UiKit.CreateText(root, "", 56, TextAnchor.MiddleCenter,
-                new Vector2(0.80f, 0.335f), new Vector2(0.88f, 0.41f));
-            _turnCountdown.fontStyle = FontStyle.Bold;
-            _turnCountdown.color = new Color(1f, 0.55f, 0.35f);
-            _turnCountdown.raycastTarget = false;
-            TableArt.AddOutline(_turnCountdown);
-
             // 전체 화면 플래시(연출용, 클릭 막지 않음)
             _flash = UiKit.CreatePanel(root, new Color(1, 1, 1, 0));
             UiKit.Stretch(_flash.rectTransform);
@@ -264,7 +257,8 @@ namespace Bbong.Client
 
             if (key == null)
             {
-                _turnCountdown.text = "";
+                _countdownRemaining = 0;
+                ApplyPrompt();
                 return;
             }
 
@@ -275,14 +269,26 @@ namespace Bbong.Client
         {
             for (var t = seconds; t > 0; t--)
             {
-                _turnCountdown.text = t.ToString();
+                _countdownRemaining = t;
+                ApplyPrompt(); // 안내 문구 뒤에 "(N)" — 예: 버릴 카드를 클릭하세요. (5)
                 yield return new WaitForSeconds(1f);
             }
 
-            _turnCountdown.text = "";
+            _countdownRemaining = 0;
+            ApplyPrompt();
         }
 
-        public void SetPrompt(string text) => _prompt.text = text;
+        /// <summary>안내 문구 설정. 턴 카운트다운 중이면 "(남은 초)"가 뒤에 붙는다.</summary>
+        public void SetPrompt(string text)
+        {
+            _promptBase = text;
+            ApplyPrompt();
+        }
+
+        private void ApplyPrompt() =>
+            _prompt.text = _countdownRemaining > 0 && _promptBase.Length > 0
+                ? $"{_promptBase} ({_countdownRemaining})"
+                : _promptBase;
 
         public void SetEndReason(string text) => _endReason.text = text;
 
@@ -316,8 +322,7 @@ namespace Bbong.Client
                 rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.sizeDelta = new Vector2(250f, mine ? 80f : 150f);
 
-                var name = mine ? $"{seatView.nickname} (나)" : seatView.nickname;
-                var label = UiKit.CreateText(panel.transform, $"{name}\n빚: {seatView.cumulativeDebt}", 24,
+                var label = UiKit.CreateText(panel.transform, $"{seatView.nickname}\n빚: {seatView.cumulativeDebt}", 24,
                     TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
                 FitText(label, 16, 24);
                 if (mine)
@@ -465,7 +470,7 @@ namespace Bbong.Client
                 return; // 자연뽕 안내(SetPrompt) 유지
             }
 
-            _prompt.text = view.phase switch
+            SetPrompt(view.phase switch
             {
                 RoundPhase.WaitingStop when view.currentSeat == MySeat => "스톱? 또는 계속",
                 RoundPhase.WaitingDiscard when view.currentSeat == MySeat && view.canMeld =>
@@ -476,7 +481,7 @@ namespace Bbong.Client
                 RoundPhase.WaitingPongDiscard when view.actorSeat == MySeat => $"뽕! {view.pongNumber} 외 버릴 카드 클릭",
                 RoundPhase.PongWindow when view.canPong => $"{view.pongNumber} 뽕 기회!",
                 _ => ""
-            };
+            });
         }
 
         /// <summary>DTO/뷰의 enum 문자열 → 한글 족보명(코어 MeldNames 단일 출처).</summary>
