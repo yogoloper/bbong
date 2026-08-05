@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using BbongCore.Cards;
 using BbongCore.Config;
 using BbongCore.Online;
@@ -50,6 +51,7 @@ namespace Bbong.Client
         private Text _endReason;
         private GameObject _scorePopup;
         private Text _scoreTitle;
+        private Text _scoreSubtitle; // 판 종료 사유(타이틀 아래)
         private Transform _scoreGrid;
         private CanvasGroup _scorePopupGroup;
         private Coroutine _scoreFade;
@@ -66,6 +68,9 @@ namespace Bbong.Client
         private AudioSource _audio;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop, _sfxShuffle;
         private Image _flash;
+        private RectTransform _shakeRoot;
+        private Coroutine _shakeFx;
+        private Transform _leaderboardRows; // 좌상단 상시 누적 리더보드
         private List<Card> _meldSet; // 족보 완성 시 6장(버림 비우고 표시)
 
         // ── UI 생성 ──
@@ -82,10 +87,16 @@ namespace Bbong.Client
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
-            var root = canvasGo.transform;
+
+            // 전체 UI를 담는 셰이크 루트 — 뽕/셔플 연출 때 화면 전체를 흔든다
+            var shakeGo = new GameObject("ShakeRoot", typeof(RectTransform));
+            shakeGo.transform.SetParent(canvasGo.transform, false);
+            _shakeRoot = (RectTransform)shakeGo.transform;
+            UiKit.Stretch(_shakeRoot);
+            var root = shakeGo.transform;
 
             var felt = UiKit.CreatePanel(root, Color.white);
-            felt.sprite = UiArt.Backdrop;
+            felt.sprite = UiArt.Backdrop; // 로비와 동일한 네이비 배경(전 화면 톤 통일)
             UiKit.Stretch(felt.rectTransform);
 
             var seatsGo = new GameObject("SeatsArea", typeof(RectTransform));
@@ -98,14 +109,41 @@ namespace Bbong.Client
             _discardRow = discardGo.transform;
             UiKit.Anchor((RectTransform)_discardRow, new Vector2(0.20f, 0.42f), new Vector2(0.80f, 0.72f));
 
+            // 좌상단 상시 리더보드(누적 빚 순위) — 어떤 인원수에서도 좌석 타원과 안 겹치는 코너
+            var lbPanel = UiKit.CreatePanel(root, new Color(0f, 0f, 0f, 0.38f));
+            if (UiArt.Panel9 != null)
+            {
+                lbPanel.sprite = UiArt.Panel9;
+                lbPanel.type = Image.Type.Sliced;
+                lbPanel.color = new Color(0.10f, 0.13f, 0.22f, 0.85f);
+            }
+
+            lbPanel.raycastTarget = false;
+            var lbRt = lbPanel.rectTransform;
+            lbRt.anchorMin = lbRt.anchorMax = new Vector2(0f, 1f); // 좌상단 고정
+            lbRt.pivot = new Vector2(0f, 1f);
+            lbRt.anchoredPosition = new Vector2(10f, -10f);
+            lbRt.sizeDelta = new Vector2(345f, 0f); // 높이는 인원수에 맞춰 자동(아래 여백 없음)
+            var lbLayout = lbPanel.gameObject.AddComponent<VerticalLayoutGroup>();
+            lbLayout.padding = new RectOffset(12, 12, 8, 8);
+            lbLayout.spacing = 3;
+            lbLayout.childControlWidth = true;
+            lbLayout.childControlHeight = true;
+            lbLayout.childForceExpandHeight = false;
+            lbPanel.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            _leaderboardRows = lbPanel.transform;
+
             _endReason = UiKit.CreateText(root, "", 32, TextAnchor.MiddleCenter,
                 new Vector2(0.25f, 0.325f), new Vector2(0.75f, 0.39f));
             _endReason.fontStyle = FontStyle.Bold;
+            _endReason.color = new Color(1f, 0.96f, 0.88f);
+            TableArt.AddOutline(_endReason);
 
             _prompt = UiKit.CreateText(root, "", 44, TextAnchor.MiddleCenter,
                 new Vector2(0.20f, 0.335f), new Vector2(0.80f, 0.41f));
             _prompt.fontStyle = FontStyle.Bold;
-            _prompt.color = new Color(1f, 0.92f, 0.4f);
+            _prompt.color = new Color(0.98f, 0.94f, 0.80f); // 웜화이트 — 다크 밴드 위 눈 편한 대비
+            TableArt.AddOutline(_prompt);
 
             // 액션 버튼(손패 우측) — 공통 5개. 모드 전용 버튼은 AddBarButton으로 추가.
             var barGo = new GameObject("Buttons", typeof(RectTransform));
@@ -118,11 +156,13 @@ namespace Bbong.Client
             layout.childForceExpandHeight = true;
             _buttonBar = barGo.transform;
 
-            _stopBtn = AddBarButton("스톱", () => StopClicked?.Invoke());
-            _meldBtn = AddBarButton("족보 선언!", () => MeldClicked?.Invoke());
-            _naturalBtn = AddBarButton("자연뽕", () => NaturalPongClicked?.Invoke());
-            _pongBtn = AddBarButton("뽕!", () => PongClicked?.Invoke());
-            _passBtn = AddBarButton("패스", () => PassClicked?.Invoke());
+            // 선언 액션(뽕/자연뽕/족보)은 같은 레드오렌지 — 시그니처 색으로 통일
+            var declareColor = new Color(0.95f, 0.45f, 0.15f);
+            _stopBtn = AddBarButton("스톱", () => StopClicked?.Invoke(), new Color(0.90f, 0.30f, 0.25f));
+            _meldBtn = AddBarButton("족보", () => MeldClicked?.Invoke(), declareColor);
+            _naturalBtn = AddBarButton("자연뽕", () => NaturalPongClicked?.Invoke(), declareColor);
+            _pongBtn = AddBarButton("뽕", () => PongClicked?.Invoke(), declareColor);
+            _passBtn = AddBarButton("패스", () => PassClicked?.Invoke(), new Color(0.36f, 0.46f, 0.66f));
 
             // 내 손패
             var handGo = new GameObject("HandRow", typeof(RectTransform));
@@ -137,25 +177,51 @@ namespace Bbong.Client
             _handRow = handGo.transform;
 
             // 판 종료 점수표(헤더+판별+합계 표). 정중앙, 크기는 ShowScorePopup에서 설정.
-            var popupBg = UiKit.CreatePanel(root, new Color(0.05f, 0.05f, 0.08f, 0.97f));
+            // 발라트로풍: 진한 패널 + 골드 타이틀 밴드 + 줄무늬 행 + 점수 색 구분(빨강=빚 증가, 하늘=감소).
+            var popupBg = UiKit.CreatePanel(root, new Color(0.07f, 0.09f, 0.16f, 0.80f));
+            if (UiArt.Panel9 != null)
+            {
+                popupBg.sprite = UiArt.Panel9;
+                popupBg.type = Image.Type.Sliced;
+                popupBg.color = new Color(0.13f, 0.16f, 0.26f, 0.82f); // 반투명 — 뒤 족보 카드/테이블이 비치게
+            }
+
             _scorePopup = popupBg.gameObject;
             var popupRt = popupBg.rectTransform;
             popupRt.anchorMin = popupRt.anchorMax = new Vector2(0.5f, 0.60f);
             popupRt.pivot = new Vector2(0.5f, 0.5f);
             popupBg.raycastTarget = false;
+            var popupShadow = _scorePopup.AddComponent<Shadow>();
+            popupShadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
+            popupShadow.effectDistance = new Vector2(10f, -10f);
             _scorePopupGroup = _scorePopup.AddComponent<CanvasGroup>();
             _scorePopupGroup.blocksRaycasts = false;
             _scorePopupGroup.interactable = false;
 
-            _scoreTitle = UiKit.CreateText(popupBg.transform, "", 36, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            // 골드 타이틀(패널 상단) — 단순 텍스트 + 아웃라인
+            _scoreTitle = UiKit.CreateText(popupBg.transform, "", 40, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
             _scoreTitle.fontStyle = FontStyle.Bold;
-            FitText(_scoreTitle, 20, 36);
+            _scoreTitle.color = GoldText;
+            TableArt.AddOutline(_scoreTitle);
+            FitText(_scoreTitle, 24, 40);
             var titleRt = _scoreTitle.rectTransform;
             titleRt.anchorMin = new Vector2(0f, 1f);
             titleRt.anchorMax = new Vector2(1f, 1f);
             titleRt.pivot = new Vector2(0.5f, 1f);
-            titleRt.offsetMin = new Vector2(0f, -80f);
-            titleRt.offsetMax = Vector2.zero;
+            titleRt.offsetMin = new Vector2(0f, -70f);
+            titleRt.offsetMax = new Vector2(0f, -8f);
+
+            // 종료 사유(타이틀 아래) — "누구누구 스톱" 등
+            _scoreSubtitle = UiKit.CreateText(popupBg.transform, "", 26, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            _scoreSubtitle.color = new Color(0.92f, 0.90f, 0.84f);
+            TableArt.AddOutline(_scoreSubtitle);
+            FitText(_scoreSubtitle, 16, 26);
+            var subtitleRt = _scoreSubtitle.rectTransform;
+            subtitleRt.anchorMin = new Vector2(0f, 1f);
+            subtitleRt.anchorMax = new Vector2(1f, 1f);
+            subtitleRt.pivot = new Vector2(0.5f, 1f);
+            subtitleRt.offsetMin = new Vector2(0f, -108f);
+            subtitleRt.offsetMax = new Vector2(0f, -72f);
 
             var gridGo = new GameObject("ScoreGrid", typeof(RectTransform));
             gridGo.transform.SetParent(popupBg.transform, false);
@@ -163,11 +229,11 @@ namespace Bbong.Client
             var gridRt = (RectTransform)_scoreGrid;
             gridRt.anchorMin = Vector2.zero;
             gridRt.anchorMax = Vector2.one;
-            gridRt.offsetMin = new Vector2(20f, 16f);
-            gridRt.offsetMax = new Vector2(-20f, -80f);
+            gridRt.offsetMin = new Vector2(20f, 18f);
+            gridRt.offsetMax = new Vector2(-20f, -116f);
             var grid = gridGo.AddComponent<GridLayoutGroup>();
-            grid.spacing = new Vector2(6, 6);
-            grid.cellSize = new Vector2(180, 48);
+            grid.spacing = new Vector2(4, 4);
+            grid.cellSize = new Vector2(210, 58);
             grid.childAlignment = TextAnchor.MiddleCenter;
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             grid.constraintCount = PlayerCount + 1;
@@ -178,12 +244,18 @@ namespace Bbong.Client
             _callout = UiKit.CreateText(root, "", 100, TextAnchor.MiddleCenter,
                 new Vector2(0.25f, 0.43f), new Vector2(0.75f, 0.62f));
             _callout.fontStyle = FontStyle.Bold;
-            _callout.color = new Color(1f, 0.92f, 0.35f);
+            _callout.color = UiKit.Accent;
             _callout.raycastTarget = false;
             TableArt.AddOutline(_callout);
             _calloutGroup = _callout.gameObject.AddComponent<CanvasGroup>();
             _calloutGroup.alpha = 0f;
             _calloutGroup.blocksRaycasts = false;
+
+            // 비네트 — 가장자리를 은은히 어둡게(테이블 집중감)
+            var vignette = UiKit.CreatePanel(root, Color.white);
+            vignette.sprite = UiArt.Vignette;
+            vignette.raycastTarget = false;
+            UiKit.Stretch(vignette.rectTransform);
 
             // 전체 화면 플래시(연출용, 클릭 막지 않음)
             _flash = UiKit.CreatePanel(root, new Color(1, 1, 1, 0));
@@ -200,10 +272,19 @@ namespace Bbong.Client
             _sfxShuffle = TableArt.Noise("shuffle", 0.35f, 10f);
         }
 
-        /// <summary>버튼 바에 모드 전용 버튼 추가(대기실로/다음 판/로비로 등). 생성 직후 숨김.</summary>
-        public Button AddBarButton(string label, UnityEngine.Events.UnityAction onClick)
+        /// <summary>버튼 바에 버튼 추가 — 컬러 버튼(흰 글씨+아웃라인+그림자). tint 미지정 시 블루그레이(이동/진행 계열).</summary>
+        public Button AddBarButton(string label, UnityEngine.Events.UnityAction onClick, Color? tint = null)
         {
             var btn = UiKit.CreateButton(_buttonBar, label, Vector2.zero, Vector2.one, onClick, 36);
+            var buttonShadow = btn.gameObject.AddComponent<Shadow>();
+            buttonShadow.effectColor = new Color(0f, 0f, 0f, 0.45f);
+            buttonShadow.effectDistance = new Vector2(4f, -4f);
+            btn.GetComponent<Image>().color = tint ?? new Color(0.36f, 0.46f, 0.66f);
+            var text = btn.GetComponentInChildren<Text>();
+            text.color = Color.white;
+            text.fontStyle = FontStyle.Bold;
+            TableArt.AddOutline(text);
+
             btn.gameObject.SetActive(false);
             return btn;
         }
@@ -229,7 +310,43 @@ namespace Bbong.Client
             RenderDiscard();
             RenderPrompt(view, naturalSelecting);
             RenderButtons(view, naturalSelecting);
+            RenderLeaderboard(view);
             UpdateTurnCountdown(view, naturalSelecting);
+        }
+
+        /// <summary>좌상단 상시 리더보드: 누적 빚 오름차순(공동 등수), 1위 골드·내 줄 ★.</summary>
+        private void RenderLeaderboard(RoundView view)
+        {
+            foreach (Transform child in _leaderboardRows)
+            {
+                Destroy(child.gameObject);
+            }
+
+            var rank = 0;
+            var seen = 0;
+            var prevDebt = int.MinValue;
+            foreach (var seat in view.seats.OrderBy(s => s.cumulativeDebt))
+            {
+                seen++;
+                if (seat.cumulativeDebt != prevDebt)
+                {
+                    rank = seen;
+                    prevDebt = seat.cumulativeDebt;
+                }
+
+                var mine = seat.seat == MySeat;
+                var row = UiKit.CreateText(_leaderboardRows,
+                    $"{rank}위 {seat.nickname}  {seat.cumulativeDebt}",
+                    26, TextAnchor.MiddleLeft, Vector2.zero, Vector2.one);
+                row.color = mine ? MineText : new Color(0.80f, 0.82f, 0.87f);
+                if (mine)
+                {
+                    row.fontStyle = FontStyle.Bold;
+                }
+
+                TableArt.AddOutline(row);
+                FitText(row, 16, 26);
+            }
         }
 
         /// <summary>
@@ -371,6 +488,7 @@ namespace Bbong.Client
                 var go = TableArt.CreateCardFace(_handRow, card, 130, 200, _font);
                 var captured = card;
                 go.AddComponent<Button>().onClick.AddListener(() => CardClicked?.Invoke(captured));
+                go.AddComponent<CardMotion>(); // 둥실거림 + 호버 확대
             }
         }
 
@@ -497,6 +615,10 @@ namespace Bbong.Client
             SetButtonLabel(_passBtn, view.phase == RoundPhase.WaitingStop ? "계속" : "패스");
             _pongBtn.gameObject.SetActive(view.phase == RoundPhase.PongWindow && view.canPong);
             _meldBtn.gameObject.SetActive(view.canMeld);
+            if (view.canMeld)
+            {
+                SetButtonLabel(_meldBtn, MeldKorean(view.meldType)); // 예: "또이또이"
+            }
             _naturalBtn.gameObject.SetActive(view.canNaturalPong && !naturalSelecting);
         }
 
@@ -567,20 +689,47 @@ namespace Bbong.Client
 
         public void PlayStopSfx() => _audio.PlayOneShot(_sfxStop, 0.6f);
 
-        /// <summary>뽕/자연뽕/족보 공통 연출: 효과음 + 화면 플래시 + 콜아웃.</summary>
+        /// <summary>뽕/자연뽕/족보 공통 연출: 효과음 + 화면 플래시 + 콜아웃 + 셰이크.</summary>
         public void PongFx(string callout)
         {
             PlayPongSfx();
             Flash(new Color(1f, 0.95f, 0.4f, 0.5f));
             ShowCallout(callout);
+            Shake(12f, 0.28f);
         }
 
-        /// <summary>재셔플 연출: 콜아웃 + 플래시 + 셔플 효과음.</summary>
+        /// <summary>재셔플 연출: 콜아웃 + 플래시 + 셔플 효과음 + 약한 셰이크.</summary>
         public void ShuffleFx()
         {
-            ShowCallout("더미 셔플!");
+            ShowCallout("더미 셔플!", new Color(0.75f, 0.9f, 1f));
             Flash(new Color(1f, 1f, 1f, 0.3f));
             _audio.PlayOneShot(_sfxShuffle, 0.7f);
+            Shake(7f, 0.22f);
+        }
+
+        /// <summary>화면 전체 흔들림(감쇠). 뽕/족보 같은 임팩트 순간용.</summary>
+        public void Shake(float amplitude, float duration)
+        {
+            if (_shakeFx != null)
+            {
+                StopCoroutine(_shakeFx);
+            }
+
+            _shakeFx = StartCoroutine(ShakeFx(amplitude, duration));
+        }
+
+        private IEnumerator ShakeFx(float amplitude, float duration)
+        {
+            for (var t = 0f; t < 1f; t += Time.deltaTime / duration)
+            {
+                var damp = (1f - t) * amplitude;
+                _shakeRoot.anchoredPosition = new Vector2(
+                    (Mathf.PerlinNoise(Time.time * 30f, 0.5f) - 0.5f) * 2f * damp,
+                    (Mathf.PerlinNoise(0.5f, Time.time * 30f) - 0.5f) * 2f * damp);
+                yield return null;
+            }
+
+            _shakeRoot.anchoredPosition = Vector2.zero;
         }
 
         public void Flash(Color color)
@@ -603,9 +752,11 @@ namespace Bbong.Client
 
         // ── 콜아웃/점수판 ──
 
-        public void ShowCallout(string message)
+        /// <summary>중앙 콜아웃. color 미지정 시 골드 — 이벤트 성격별 색(스톱=하늘, 바가지=빨강 등) 지정 가능.</summary>
+        public void ShowCallout(string message, Color? color = null)
         {
             _callout.text = message;
+            _callout.color = color ?? UiKit.Accent;
             if (_calloutFx != null)
             {
                 StopCoroutine(_calloutFx);
@@ -614,47 +765,80 @@ namespace Bbong.Client
             _calloutFx = StartCoroutine(CalloutFx());
         }
 
-        /// <summary>중앙 점수표: 헤더 + 판별 점수 행 + 합계 행. fadeOut이면 잠시 후 사라지고 onFadedOut 호출.</summary>
+        private static readonly Color GoldText = UiKit.Accent; // 소프트 골드 — 전 화면 공용 색과 단일 출처
+        private static readonly Color MineText = new(0.55f, 0.88f, 1f);   // 내 닉네임 표시(★ 대신 색으로 구분)
+
+        /// <summary>판별 점수 색: 빚 증가(+)=빨강(나쁨), 감소(-)=하늘(좋음), 0=회색.</summary>
+        private static Color ScoreColor(int value) => value > 0 ? new Color(1f, 0.5f, 0.45f)
+            : value < 0 ? new Color(0.5f, 0.8f, 1f)
+            : new Color(0.72f, 0.72f, 0.78f);
+
+        /// <summary>중앙 점수표: 등수 헤더 + 판별 점수 행(줄무늬) + 합계 행. fadeOut이면 잠시 후 사라지고 onFadedOut 호출.</summary>
         public void ShowScorePopup(string title, IReadOnlyList<int> debts, IReadOnlyList<int[]> roundHistory, bool fadeOut,
             Action onFadedOut = null)
         {
             _scoreTitle.text = title;
+            _scoreSubtitle.text = _endReason.text; // 종료 사유를 점수판 안에도 표시
 
             var cols = PlayerCount + 1;
-            var rows = roundHistory.Count + 2; // 헤더 + 판별 + 합계
+            var rows = roundHistory.Count + 3; // 등수 + 닉네임 + 판별 + 합계
             ((RectTransform)_scorePopup.transform).sizeDelta = new Vector2(
-                cols * 180f + (cols - 1) * 6f + 40f,
-                rows * 48f + (rows - 1) * 6f + 80f + 32f);
+                cols * 210f + (cols - 1) * 4f + 40f,
+                rows * 58f + (rows - 1) * 4f + 116f + 34f);
 
             foreach (Transform child in _scoreGrid)
             {
                 Destroy(child.gameObject);
             }
 
-            AddCell("판수", true);
+            // 현재 등수: 누적 빚이 낮을수록 상위(동점은 공동 등수)
+            var ranks = new int[PlayerCount];
             for (var s = 0; s < PlayerCount; s++)
             {
-                AddCell($"{Nicknames[s]}{(s == MySeat ? "*" : "")}", true, 22, fit: true);
+                ranks[s] = 1;
+                for (var o = 0; o < PlayerCount; o++)
+                {
+                    if (debts[o] < debts[s])
+                    {
+                        ranks[s]++;
+                    }
+                }
+            }
+
+            // 등수 행(닉네임 위 별도 셀)
+            AddCell("", Color.white, bold: false);
+            for (var s = 0; s < PlayerCount; s++)
+            {
+                AddCell($"{ranks[s]}위", new Color(0.75f, 0.77f, 0.83f), bold: true, size: 30);
+            }
+
+            // 닉네임 행 — 내 닉네임은 하늘색으로만 구분
+            AddCell("판", GoldText, bold: true, size: 30);
+            for (var s = 0; s < PlayerCount; s++)
+            {
+                AddCell(Nicknames[s], s == MySeat ? MineText : new Color(0.96f, 0.94f, 0.86f), bold: true, size: 26, fit: true);
             }
 
             for (var r = 0; r < roundHistory.Count; r++)
             {
-                AddCell($"{r + 1}", true);
+                AddCell($"{r + 1}", new Color(0.75f, 0.77f, 0.83f), bold: true, size: 30);
                 for (var s = 0; s < PlayerCount; s++)
                 {
-                    AddCell($"{roundHistory[r][s]}", false);
+                    var value = roundHistory[r][s];
+                    AddCell(value.ToString("+0;-0;0"), ScoreColor(value), bold: false);
                 }
             }
 
-            AddCell("계", true);
+            AddCell("계", GoldText, bold: true);
             for (var s = 0; s < PlayerCount; s++)
             {
-                AddCell($"{debts[s]}", true);
+                AddCell($"{debts[s]}", Color.white, bold: true);
             }
 
             _scorePopup.SetActive(true);
             _scorePopup.transform.SetAsLastSibling();
             _scorePopupGroup.alpha = 1f;
+            _endReason.gameObject.SetActive(false); // 사유는 팝업 안에 표시 — 뒤에 비치는 중복 텍스트 숨김
 
             if (_scoreFade != null)
             {
@@ -677,20 +861,23 @@ namespace Bbong.Client
             }
 
             _scorePopup.SetActive(false);
+            _endReason.gameObject.SetActive(true);
         }
 
-        private void AddCell(string text, bool emphasize, int size = 30, bool fit = false)
+        /// <summary>점수표 셀: 아웃라인 텍스트(배경 없음 — 색·크기로만 구분해 가독성 유지).</summary>
+        private void AddCell(string text, Color color, bool bold, int size = 36, bool fit = false)
         {
             var t = UiKit.CreateText(_scoreGrid, text, size, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
-            t.color = emphasize ? new Color(1f, 0.9f, 0.4f) : Color.white;
-            if (emphasize)
+            t.color = color;
+            if (bold)
             {
                 t.fontStyle = FontStyle.Bold;
             }
 
+            TableArt.AddOutline(t);
             if (fit)
             {
-                FitText(t, 12, size);
+                FitText(t, 15, size);
             }
         }
 
@@ -713,6 +900,7 @@ namespace Bbong.Client
             }
 
             _scorePopup.SetActive(false);
+            _endReason.gameObject.SetActive(true); // 팝업이 사라지면 테이블 위 사유 다시 표시
             onFadedOut?.Invoke();
         }
 
@@ -769,7 +957,7 @@ namespace Bbong.Client
             {
                 StopCoroutine(_pongCountdown);
                 _pongCountdown = null;
-                SetButtonLabel(_pongBtn, "뽕!");
+                SetButtonLabel(_pongBtn, "뽕");
             }
         }
 
@@ -777,7 +965,7 @@ namespace Bbong.Client
         {
             for (var t = seconds; t > 0; t--)
             {
-                SetButtonLabel(_pongBtn, $"뽕! ({t})");
+                SetButtonLabel(_pongBtn, $"뽕 ({t})");
                 yield return new WaitForSeconds(1f);
             }
         }

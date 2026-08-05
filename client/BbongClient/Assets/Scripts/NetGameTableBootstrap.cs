@@ -147,7 +147,8 @@ namespace Bbong.Client
                 case ServerMessageType.StopDeclared:
                     var stop = JsonUtility.FromJson<StopDeclaredMsg>(json);
                     _table.PlayStopSfx();
-                    _table.ShowCallout($"{Nicknames[stop.seat]}\n{(stop.bagaji ? "바가지!" : "스톱!")}");
+                    _table.ShowCallout($"{Nicknames[stop.seat]}\n{(stop.bagaji ? "바가지!" : "스톱!")}",
+                        stop.bagaji ? new Color(1f, 0.4f, 0.35f) : new Color(0.55f, 0.85f, 1f));
                     break;
 
                 case ServerMessageType.BotTookOver:

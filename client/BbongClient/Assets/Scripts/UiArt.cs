@@ -15,6 +15,7 @@ namespace Bbong.Client
         private static Sprite _pill;
         private static Sprite _panel9;
         private static Sprite _coin;
+        private static Sprite _vignette;
         private static bool _coinLoaded;
 
         /// <summary>테이블 펠트 배경: 중앙이 밝은 방사형 그라데이션 + 미세 그레인.</summary>
@@ -29,6 +30,10 @@ namespace Bbong.Client
 
         /// <summary>메뉴 화면 배경: 진한 네이비 세로 그라데이션 + 별 점.</summary>
         public static Sprite Backdrop => _backdrop ??= CreateBackdrop(512);
+
+        /// <summary>화면 가장자리를 은은히 어둡게 하는 비네트 오버레이(중앙 투명 → 모서리 반투명 검정).</summary>
+        public static Sprite Vignette => _vignette ??= CreateVignette(256);
+
 
         /// <summary>CTA(주요 액션) 버튼: Kenney UI(CC0) 갈색/골드 9-slice. 없으면 초록 절차 폴백.</summary>
         public static Sprite GreenButton => _greenButton ??= LoadSliced("UI/btn_brown", 12)
@@ -147,6 +152,28 @@ namespace Bbong.Client
             tex.Apply();
             var border = new Vector4(radius, radius, radius, radius);
             return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
+        }
+
+        private static Sprite CreateVignette(int size)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color[size * size];
+            var half = (size - 1) / 2f;
+            for (var y = 0; y < size; y++)
+            {
+                for (var x = 0; x < size; x++)
+                {
+                    var dx = (x - half) / half;
+                    var dy = (y - half) / half;
+                    var d = Mathf.Sqrt(dx * dx + dy * dy); // 0=중앙, ~1.41=모서리
+                    var t = Mathf.Clamp01(Mathf.InverseLerp(0.75f, 1.35f, d));
+                    pixels[y * size + x] = new Color(0f, 0f, 0f, t * t * 0.45f);
+                }
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
         }
 
         private static Sprite CreateBackdrop(int size)

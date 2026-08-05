@@ -9,7 +9,7 @@ namespace Bbong.Client
     /// <summary>맞춤게임 설정(인원·입장료, 선택 강조). 매칭/게임서버는 Phase 5 — 흐름 placeholder.</summary>
     public sealed class MatchSetupBootstrap : MonoBehaviour
     {
-        private static readonly Color Selected = new(1f, 0.85f, 0.3f);
+        private static readonly Color Selected = UiKit.Accent;
         private static readonly Color Unselected = new(0.95f, 0.95f, 0.95f);
 
         private GameObject _canvas;

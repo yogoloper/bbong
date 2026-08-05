@@ -15,7 +15,7 @@ namespace Bbong.Client
     /// </summary>
     public sealed class LobbyBootstrap : MonoBehaviour
     {
-        private static readonly Color SelectedColor = new(1f, 0.85f, 0.3f);
+        private static readonly Color SelectedColor = UiKit.Accent;
         private static readonly Color UnselectedColor = new(0.95f, 0.95f, 0.95f);
 
         // 봇 난이도 표시명(쉬움/보통/어려움)
@@ -104,7 +104,7 @@ namespace Bbong.Client
             }
 
             _summary = CreateText(root, "", 36, TextAnchor.MiddleCenter);
-            _summary.color = new Color(1f, 0.92f, 0.4f);
+            _summary.color = UiKit.Accent;
             Anchor(_summary.rectTransform, new Vector2(0.05f, 0.165f), new Vector2(0.95f, 0.23f));
 
             _startBtn = UiKit.PrimaryCta(root, "게임 시작", OnStartGame);

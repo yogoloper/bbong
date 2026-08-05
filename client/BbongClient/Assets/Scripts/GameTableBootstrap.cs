@@ -578,11 +578,13 @@ namespace Bbong.Client
             }
         }
 
-        /// <summary>스톱 선언 콜아웃: 성공=스톱, 실패=바가지.</summary>
-        private void AnnounceStop(int stopSeat) =>
-            _table.ShowCallout(StopResolver.IsBagaji(_round, stopSeat)
-                ? $"{SeatName(stopSeat)}\n바가지!"
-                : $"{SeatName(stopSeat)}\n스톱!");
+        /// <summary>스톱 선언 콜아웃: 성공=스톱(하늘), 실패=바가지(빨강).</summary>
+        private void AnnounceStop(int stopSeat)
+        {
+            var bagaji = StopResolver.IsBagaji(_round, stopSeat);
+            _table.ShowCallout(bagaji ? $"{SeatName(stopSeat)}\n바가지!" : $"{SeatName(stopSeat)}\n스톱!",
+                bagaji ? new Color(1f, 0.4f, 0.35f) : new Color(0.55f, 0.85f, 1f));
+        }
 
         private void OnPong()
         {

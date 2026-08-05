@@ -12,7 +12,7 @@ namespace Bbong.Client
     /// </summary>
     internal static class UiKit
     {
-        public static readonly Color Accent = new(1f, 0.85f, 0.3f);
+        public static readonly Color Accent = new(0.94f, 0.83f, 0.55f); // 전 화면 공용 소프트 골드(노란 텍스트 단일 출처)
         public static readonly Color ButtonColor = new(0.95f, 0.95f, 0.95f);
 
         private static Font _font;

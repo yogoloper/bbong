@@ -74,10 +74,13 @@ namespace Bbong.Client
             bg.type = Image.Type.Sliced;
             bg.color = Color.white;
 
-            // 카드가 테이블에 떠 있는 느낌의 부드러운 그림자
+            // 카드가 테이블에 떠 있는 느낌 — 깊은 그림자 + 근접 그림자 이중으로 입체감
             var shadow = go.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0f, 0f, 0f, 0.35f);
-            shadow.effectDistance = new Vector2(5f, -5f);
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.5f);
+            shadow.effectDistance = new Vector2(8f, -8f);
+            var nearShadow = go.AddComponent<Shadow>();
+            nearShadow.effectColor = new Color(0f, 0f, 0f, 0.25f);
+            nearShadow.effectDistance = new Vector2(3f, -3f);
 
             var le = go.GetComponent<LayoutElement>();
             le.preferredWidth = width;
