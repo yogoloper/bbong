@@ -30,3 +30,7 @@ obj/
 
 # WebGL 배포 산출물은 커밋 대상(Pages 배포) — 전역 Build/ 무시 예외
 !webgl/Build/
+
+# Unity 크래시 복구 잔여물
+_Recovery/
+_Recovery.meta
