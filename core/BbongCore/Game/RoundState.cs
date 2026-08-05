@@ -34,6 +34,16 @@ public sealed class RoundState
     /// <summary>지금까지 바닥 더미를 재셔플한 횟수(rules.md §3).</summary>
     public int ReshuffleCount => _reshuffles;
 
+    /// <summary>지정 상태 그대로 판 복원 — 튜토리얼 시나리오 리깅·상태 복원용(셔플 없음).</summary>
+    public static RoundState Restore(
+        IEnumerable<Player> players,
+        IEnumerable<Card> drawPile,
+        IEnumerable<Card> discardPile,
+        int currentSeat,
+        IRandom random,
+        int reshuffles = 0) =>
+        new(players, drawPile, discardPile, currentSeat, random, reshuffles);
+
     /// <summary>드로우 가능 여부: 바닥에 카드가 있거나, 재셔플 한도 내에서 버림 더미로 채울 수 있을 때.</summary>
     public bool CanDraw =>
         _drawPile.Count > 0 || (_reshuffles < GameConfig.MaxReshuffles && _discardPile.Count > 1);

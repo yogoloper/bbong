@@ -17,6 +17,28 @@ public class RoundStateTests
     private static Hand HandOf(params Card[] cards) => new(cards);
 
     [Test]
+    public void Restore_builds_round_from_explicit_state()
+    {
+        // 지정 손패/더미/턴 그대로 복원(튜토리얼 시나리오·상태 복원용)
+        var players = new[]
+        {
+            new Player(0, HandOf(Card(8, CardColor.Red), Card(8, CardColor.Blue))),
+            new Player(1, HandOf(Card(3, CardColor.Green))),
+            new Player(2, HandOf(Card(4, CardColor.Red)))
+        };
+
+        // 직전 버림자 = seat1(현재 턴 2의 앞) → seat0이 8 페어로 뽕 가능
+        var round = RoundState.Restore(players, new[] { Card(5, CardColor.Yellow) },
+            new[] { Card(8, CardColor.Green) }, currentSeat: 2, new SeededRandom(1));
+
+        Assert.That(round.CurrentSeat, Is.EqualTo(2));
+        Assert.That(round.Players[0].Hand.Cards, Is.EqualTo(players[0].Hand.Cards));
+        Assert.That(round.DrawPile.Single(), Is.EqualTo(Card(5, CardColor.Yellow)));
+        Assert.That(round.DiscardPile.Last(), Is.EqualTo(Card(8, CardColor.Green)));
+        Assert.That(round.CanPong(0), Is.True); // 복원 상태 위에서 규칙 판정이 그대로 동작
+    }
+
+    [Test]
     public void Deal_gives_each_player_five_cards()
     {
         var round = Deal(playerCount: 4);
