@@ -71,7 +71,8 @@ namespace Bbong.Client
         private RectTransform _shakeRoot;
         private Coroutine _shakeFx;
         private Transform _leaderboardRows; // 좌상단 상시 누적 리더보드
-        private List<Card> _meldSet; // 족보 완성 시 6장(버림 비우고 표시)
+        private List<Card> _meldSet;   // 판 종료 공개 패(족보 6장/스톱 손패) — 버림 비우고 표시
+        private int _meldLaidSeat = -1; // 공개 패의 주인 좌석 — 그 좌석의 손패(내 손/상대 뒷면)를 숨김
 
         // ── UI 생성 ──
 
@@ -449,6 +450,11 @@ namespace Bbong.Client
 
                 UiKit.Anchor(label.rectTransform, new Vector2(0f, 0.55f), new Vector2(1f, 1f));
 
+                if (seatView.seat == _meldLaidSeat)
+                {
+                    continue; // 공개 패 주인 — 손패는 전부 테이블에 내려놓은 상태(뒷면 안 그림)
+                }
+
                 // 상대 손패 수: 뒤집힌 카드
                 const float bw = 36f, bh = 50f, step = bw + 3f;
                 var total = (seatView.handCount - 1) * step + bw;
@@ -471,6 +477,11 @@ namespace Bbong.Client
             foreach (Transform child in _handRow)
             {
                 Destroy(child.gameObject);
+            }
+
+            if (_meldLaidSeat == MySeat)
+            {
+                return; // 내 공개 패 — 전부 테이블에 내려놓음(ShowMeldSet이 펼침)
             }
 
             var cards = new List<Card>();
@@ -566,8 +577,15 @@ namespace Bbong.Client
             halo.transform.SetSiblingIndex(top.transform.GetSiblingIndex()); // 카드 바로 아래로
         }
 
-        /// <summary>족보 완성 6장 표시(다음 판 시작 ClearTimeline까지 유지).</summary>
-        public void ShowMeldSet(IEnumerable<Card> cards) => _meldSet = TableArt.Sorted(cards);
+        /// <summary>
+        /// 판 종료 공개 패(족보/스톱 손패)를 테이블에 펼침(다음 판 시작 ClearTimeline까지 유지).
+        /// laidSeat 좌석의 손패는 숨겨져 "내려놓는" 연출이 된다(내 손패든 상대 좌석 뒷면이든).
+        /// </summary>
+        public void ShowMeldSet(IEnumerable<Card> cards, int laidSeat = -1)
+        {
+            _meldSet = TableArt.Sorted(cards);
+            _meldLaidSeat = laidSeat;
+        }
 
         private GameObject PlaceCard(Card card, float w, float h, Vector2 anchor, Vector2 offset, float rot)
         {
@@ -677,6 +695,7 @@ namespace Bbong.Client
             _timeline.Clear();
             _timelineShown = 0;
             _meldSet = null;
+            _meldLaidSeat = -1;
         }
 
         // ── 효과음/연출 ──

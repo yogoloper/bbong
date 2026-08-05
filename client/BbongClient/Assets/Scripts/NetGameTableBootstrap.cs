@@ -147,6 +147,8 @@ namespace Bbong.Client
                 case ServerMessageType.StopDeclared:
                     var stop = JsonUtility.FromJson<StopDeclaredMsg>(json);
                     _table.PlayStopSfx();
+                    // 정상 스톱=선언자, 바가지=박 먹인 승자의 손패를 테이블에 펼침
+                    _table.ShowMeldSet(stop.laid.Select(c => c.ToCard()), stop.laidSeat);
                     _table.ShowCallout($"{Nicknames[stop.seat]}\n{(stop.bagaji ? "바가지!" : "스톱!")}",
                         stop.bagaji ? new Color(1f, 0.4f, 0.35f) : new Color(0.55f, 0.85f, 1f));
                     break;
@@ -160,6 +162,7 @@ namespace Bbong.Client
 
                 case ServerMessageType.MeldDeclared:
                     var meld = JsonUtility.FromJson<MeldDeclaredMsg>(json);
+                    _table.ShowMeldSet(meld.laid.Select(c => c.ToCard()), meld.seat);
                     _table.PongFx($"{Nicknames[meld.seat]}\n{GameTableView.MeldKorean(meld.meldType)}!");
                     break;
 

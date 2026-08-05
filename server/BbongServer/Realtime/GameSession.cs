@@ -180,9 +180,14 @@ public sealed class GameSession
                 if (StopResolver.CanStop(_round, seat) && _bots[seat]!.ShouldStop(_round, seat))
                 {
                     var bagaji = StopResolver.IsBagaji(_round, seat);
-                    output.ToAll(new StopDeclaredMsg { seat = seat, bagaji = bagaji });
+                    var ender = StopEnderSeat(seat, bagaji);
+                    output.ToAll(new StopDeclaredMsg
+                    {
+                        seat = seat, bagaji = bagaji,
+                        laidSeat = ender, laid = CardDto.FromAll(_round.Players[ender].Hand.Cards)
+                    });
                     var reason = bagaji ? $"{_nicknames[seat]} 바가지 (+30)" : $"{_nicknames[seat]} 스톱";
-                    EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, StopEnderSeat(seat, bagaji));
+                    EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, ender);
                 }
                 else
                 {
@@ -198,7 +203,11 @@ public sealed class GameSession
                 var bot = _bots[seat]!;
                 if (_meld.Type != MeldType.None)
                 {
-                    output.ToAll(new MeldDeclaredMsg { seat = seat, meldType = _meld.Type.ToString(), meldScore = _meld.Score });
+                    output.ToAll(new MeldDeclaredMsg
+                    {
+                        seat = seat, meldType = _meld.Type.ToString(), meldScore = _meld.Score,
+                        laid = CardDto.FromAll(_round.Players[seat].Hand.Cards)
+                    });
                     EndRound(output, RoundSettlement.SettleByMeld(_round, seat, _meld),
                         $"{_nicknames[seat]} 족보 완성 [{MeldNames.Korean(_meld.Type)} {_meld.Score}점]", seat);
                     break;
@@ -545,9 +554,14 @@ public sealed class GameSession
         }
 
         var bagaji = StopResolver.IsBagaji(_round, seat);
-        output.ToAll(new StopDeclaredMsg { seat = seat, bagaji = bagaji });
+        var ender = StopEnderSeat(seat, bagaji); // 정상 스톱=선언자, 바가지=박 먹인 승자
+        output.ToAll(new StopDeclaredMsg
+        {
+            seat = seat, bagaji = bagaji,
+            laidSeat = ender, laid = CardDto.FromAll(_round.Players[ender].Hand.Cards)
+        });
         var reason = bagaji ? $"{_nicknames[seat]} 바가지 (+30)" : $"{_nicknames[seat]} 스톱";
-        EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, StopEnderSeat(seat, bagaji));
+        EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, ender);
     }
 
     private void HandleContinueTurn(SessionOutput output, int seat)
@@ -569,7 +583,11 @@ public sealed class GameSession
             return;
         }
 
-        output.ToAll(new MeldDeclaredMsg { seat = seat, meldType = _meld.Type.ToString(), meldScore = _meld.Score });
+        output.ToAll(new MeldDeclaredMsg
+        {
+            seat = seat, meldType = _meld.Type.ToString(), meldScore = _meld.Score,
+            laid = CardDto.FromAll(_round.Players[seat].Hand.Cards)
+        });
         EndRound(output, RoundSettlement.SettleByMeld(_round, seat, _meld),
             $"{_nicknames[seat]} 족보 완성 [{MeldNames.Korean(_meld.Type)} {_meld.Score}점]", seat);
     }

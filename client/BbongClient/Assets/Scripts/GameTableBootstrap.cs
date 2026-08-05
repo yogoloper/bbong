@@ -254,7 +254,7 @@ namespace Bbong.Client
                 var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
                 if (meld.Type != MeldType.None)
                 {
-                    _table.ShowMeldSet(_round.CurrentPlayer.Hand.Cards); // 족보: 버림 비우고 표시
+                    _table.ShowMeldSet(_round.CurrentPlayer.Hand.Cards, seat); // 족보: 버림 비우고 표시
                     _table.PongFx($"{SeatName(seat)}\n{MeldName(meld.Type)}!");
                     EndRound(RoundSettlement.SettleByMeld(_round, seat, meld), $"{SeatName(seat)} 족보 완성 [{MeldName(meld.Type)} {meld.Score}점]", seat);
                     yield break;
@@ -578,10 +578,12 @@ namespace Bbong.Client
             }
         }
 
-        /// <summary>스톱 선언 콜아웃: 성공=스톱(하늘), 실패=바가지(빨강).</summary>
+        /// <summary>스톱 선언 연출: 콜아웃(성공=하늘, 바가지=빨강) + 공개 손패 펼침(정상=선언자, 바가지=박 먹인 승자).</summary>
         private void AnnounceStop(int stopSeat)
         {
             var bagaji = StopResolver.IsBagaji(_round, stopSeat);
+            var ender = StopEnderSeat(stopSeat);
+            _table.ShowMeldSet(_round.Players[ender].Hand.Cards, ender);
             _table.ShowCallout(bagaji ? $"{SeatName(stopSeat)}\n바가지!" : $"{SeatName(stopSeat)}\n스톱!",
                 bagaji ? new Color(1f, 0.4f, 0.35f) : new Color(0.55f, 0.85f, 1f));
         }
@@ -649,7 +651,7 @@ namespace Bbong.Client
 
             CancelTurnTimer();
             _state = UiState.Resolving;
-            _table.ShowMeldSet(_round.Players[MySeat].Hand.Cards); // 족보: 버림 비우고 표시
+            _table.ShowMeldSet(_round.Players[MySeat].Hand.Cards, MySeat); // 손 전부 테이블에 펼침
             _table.PongFx($"{SeatName(MySeat)}\n{MeldName(_pendingMeld.Type)}!");
             EndRound(RoundSettlement.SettleByMeld(_round, MySeat, _pendingMeld), $"{SeatName(MySeat)} 족보 완성 [{MeldName(_pendingMeld.Type)} {_pendingMeld.Score}점]", MySeat);
         }

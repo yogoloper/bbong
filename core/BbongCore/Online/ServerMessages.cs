@@ -145,6 +145,8 @@ public sealed class StopDeclaredMsg
     public string type = ServerMessageType.StopDeclared;
     public int seat;
     public bool bagaji;
+    public int laidSeat;                                   // 손패를 공개할 좌석(정상 스톱=선언자, 바가지=박 먹인 승자)
+    public CardDto[] laid = Array.Empty<CardDto>();        // 공개 손패(테이블 펼침 연출)
 }
 
 [Serializable]
@@ -154,6 +156,7 @@ public sealed class MeldDeclaredMsg
     public int seat;
     public string meldType = "";
     public int meldScore;
+    public CardDto[] laid = Array.Empty<CardDto>(); // 족보 6장(테이블 펼침 연출)
 }
 
 /// <summary>이탈/무응답(rules.md §9-4) 좌석을 봇이 이어받음. 닉네임은 "(봇)" 표기로 갱신.</summary>

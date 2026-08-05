@@ -372,7 +372,10 @@ public class GameSessionTests
 
         var result = session.HandleAction(0, new StopDeclareMsg());
 
-        Assert.That(For<StopDeclaredMsg>(result, 1).bagaji, Is.False);
+        var declared = For<StopDeclaredMsg>(result, 1);
+        Assert.That(declared.bagaji, Is.False);
+        Assert.That(declared.laidSeat, Is.EqualTo(0)); // 정상 스톱 → 선언자 손패 공개
+        Assert.That(declared.laid.Select(c => c.ToCard()), Is.EqualTo(new[] { C(5, CardColor.Red) }));
         Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(0));
     }
 
@@ -383,7 +386,10 @@ public class GameSessionTests
 
         var result = session.HandleAction(0, new StopDeclareMsg());
 
-        Assert.That(For<StopDeclaredMsg>(result, 1).bagaji, Is.True);
+        var declared = For<StopDeclaredMsg>(result, 1);
+        Assert.That(declared.bagaji, Is.True);
+        Assert.That(declared.laidSeat, Is.EqualTo(1)); // 바가지 → 박 먹인 승자 손패 공개
+        Assert.That(declared.laid.Select(c => c.ToCard()), Is.EqualTo(new[] { C(3, CardColor.Blue) }));
         Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(1));
     }
 
@@ -416,7 +422,9 @@ public class GameSessionTests
 
         var result = session.HandleAction(0, new MeldDeclareMsg());
 
-        Assert.That(For<MeldDeclaredMsg>(result, 1).seat, Is.EqualTo(0));
+        var declared = For<MeldDeclaredMsg>(result, 1);
+        Assert.That(declared.seat, Is.EqualTo(0));
+        Assert.That(declared.laid, Has.Length.EqualTo(6)); // 족보 6장 전부 공개(테이블 펼침 연출용)
         Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(0));
     }
 
