@@ -15,12 +15,16 @@
 
 ## 배포 절차
 
-### 1. 서버 임시 배포 (사용자)
+### 1. 서버 배포 — fly.io (적용됨, 2026-08-05)
 
-- GitHub Pages는 https라서 서버도 **https/wss 필수** (Cloudflare Tunnel, ngrok, fly.io 등).
-- PostgreSQL 필요(compose.yaml 참고). Redis는 현재 미사용이라 없어도 기동됨.
-- 로컬+터널 최단 경로: `docker compose up -d` → `dotnet run`(5080) →
-  `cloudflared tunnel --url http://localhost:5080` → 발급된 https URL 사용.
+- 앱: **https://bbong.fly.dev** (nrt, shared-cpu-1x 512MB 1대) + PostgreSQL `bbong-db`(1노드).
+- 인메모리 친구방이라 **머신 1대 고정 필수** — 배포는 항상 `fly deploy --ha=false`.
+- 시크릿: `BBONG_JWT_KEY`(로컬 `~/.bbong-jwt-key`와 동일), `BBONG_DB_CONN`(Npgsql 키워드 형식,
+  bbong-db.flycast). public 레포라 코드의 dev fallback 키 사용 금지.
+- 재배포: 레포 루트에서 `fly deploy --ha=false` (Dockerfile/fly.toml 루트에 있음).
+- 심사 종료 후 정리: `fly apps destroy bbong && fly apps destroy bbong-db`.
+- (대안) 로컬+터널 최단 경로: `dotnet run`(5080) + `cloudflared tunnel --url http://localhost:5080`
+  — URL이 터널 재시작마다 바뀌므로 제출용으론 부적합.
 
 ### 2. 클라이언트 웹 빌드 (Unity)
 
@@ -32,7 +36,7 @@
 
 1. 레포 Settings → Pages → Source = **GitHub Actions**.
 2. `webgl/` 포함해서 push → Actions에서 "Deploy WebGL to Pages" 완료 대기.
-3. 접속: `https://yogoloper.github.io/bbong/?server=https://<서버주소>`
+3. 접속(제출용 최종 링크): `https://yogoloper.github.io/bbong/?server=https://bbong.fly.dev`
 
 ## 확인 체크리스트
 

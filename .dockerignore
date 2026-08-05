@@ -1,0 +1,12 @@
+# 서버 이미지 빌드에 불필요한 것 전부 제외(컨텍스트 축소)
+.git/
+client/
+webgl/
+demo/
+tools/
+docs/
+scripts/
+server/BbongServer.Tests/
+**/bin/
+**/obj/
+.env
