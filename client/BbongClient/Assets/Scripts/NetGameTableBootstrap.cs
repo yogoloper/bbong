@@ -88,7 +88,7 @@ namespace Bbong.Client
                         _table.ShuffleFx();
                     }
 
-                    _table.PlayDrawSfx();
+                    _table.DrawFx(drew.seat); // 덱 → 좌석 비행 연출 + 효과음
                     ApplyView(drew.view);
                     break;
 

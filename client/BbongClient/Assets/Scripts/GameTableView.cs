@@ -38,13 +38,22 @@ namespace Bbong.Client
 
         public GameObject CanvasGo => _canvasGo;
 
+        /// <summary>턴 카운트다운 "(N)" 표시 여부 — 타이머 없는 화면(튜토리얼)은 끈다.</summary>
+        public bool ShowTurnCountdown { get; set; } = true;
+
         private readonly List<(List<Card> cards, bool group, Vector2 pos, float rot)> _timeline = new();
         private int _timelineShown;
 
         private Font _font;
         private GameObject _canvasGo;
+        private static readonly Vector2 SeatCenter = new(0.50f, 0.58f); // 좌석 타원 중심/반경(좌석·비행 연출 공용)
+        private static readonly Vector2 SeatRadius = new(0.40f, 0.30f);
+        private static readonly Vector2 DeckAnchor = new(0.40f, 0.555f); // 드로우 덱 — 중앙에서 살짝 왼쪽(버림 더미와 한 세트)
+
         private Transform _seatsArea;
         private Transform _discardRow;
+        private GameObject _deckGroup;
+        private Text _deckCount;
         private Transform _handRow;
         private Transform _buttonBar;
         private Text _prompt;
@@ -109,6 +118,45 @@ namespace Bbong.Client
             discardGo.transform.SetParent(root, false);
             _discardRow = discardGo.transform;
             UiKit.Anchor((RectTransform)_discardRow, new Vector2(0.20f, 0.42f), new Vector2(0.80f, 0.72f));
+
+            // 엎어진 드로우 덱(버림 더미 왼쪽) — 겹친 카드백 2장 + 남은 장수
+            _deckGroup = new GameObject("DeckStack", typeof(RectTransform));
+            _deckGroup.transform.SetParent(root, false);
+            var deckRt = (RectTransform)_deckGroup.transform;
+            deckRt.anchorMin = deckRt.anchorMax = DeckAnchor;
+            deckRt.pivot = new Vector2(0.5f, 0.5f);
+            deckRt.sizeDelta = new Vector2(110f, 165f);
+            for (var i = 1; i >= 0; i--)
+            {
+                var back = UiKit.CreatePanel(_deckGroup.transform, Color.white);
+                back.sprite = UiArt.CardBack;
+                back.type = Image.Type.Simple;
+                back.raycastTarget = false;
+                var backRt = back.rectTransform;
+                backRt.anchorMin = Vector2.zero;
+                backRt.anchorMax = Vector2.one;
+                backRt.offsetMin = new Vector2(i * 5f, -i * 5f);
+                backRt.offsetMax = new Vector2(i * 5f, -i * 5f);
+                if (i == 1)
+                {
+                    back.color = new Color(0.75f, 0.75f, 0.8f); // 아래 장은 어둡게 — 쌓임 표현
+                }
+            }
+
+            var deckShadow = _deckGroup.AddComponent<Shadow>();
+            deckShadow.effectColor = new Color(0f, 0f, 0f, 0.45f);
+            deckShadow.effectDistance = new Vector2(6f, -6f);
+
+            _deckCount = UiKit.CreateText(_deckGroup.transform, "", 26, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            _deckCount.fontStyle = FontStyle.Bold;
+            _deckCount.color = new Color(0.95f, 0.95f, 1f);
+            TableArt.AddOutline(_deckCount);
+            var countRt = _deckCount.rectTransform;
+            countRt.anchorMin = new Vector2(0f, 0f);
+            countRt.anchorMax = new Vector2(1f, 0f);
+            countRt.pivot = new Vector2(0.5f, 1f);
+            countRt.offsetMin = new Vector2(0f, -40f);
+            countRt.offsetMax = new Vector2(0f, -6f);
 
             // 좌상단 상시 리더보드(누적 빚 순위) — 어떤 인원수에서도 좌석 타원과 안 겹치는 코너
             var lbPanel = UiKit.CreatePanel(root, new Color(0f, 0f, 0f, 0.38f));
@@ -312,7 +360,14 @@ namespace Bbong.Client
             RenderPrompt(view, naturalSelecting);
             RenderButtons(view, naturalSelecting);
             RenderLeaderboard(view);
+            RenderDeck(view);
             UpdateTurnCountdown(view, naturalSelecting);
+        }
+
+        private void RenderDeck(RoundView view)
+        {
+            _deckGroup.SetActive(view.drawPileCount > 0);
+            _deckCount.text = view.drawPileCount.ToString();
         }
 
         /// <summary>좌상단 상시 리더보드: 누적 빚 오름차순(공동 등수), 1위 골드·내 줄 ★.</summary>
@@ -356,10 +411,10 @@ namespace Bbong.Client
         /// </summary>
         private void UpdateTurnCountdown(RoundView view, bool naturalSelecting)
         {
-            var actionable =
-                (view.phase == RoundPhase.WaitingStop && view.currentSeat == MySeat)
+            var actionable = ShowTurnCountdown &&
+                ((view.phase == RoundPhase.WaitingStop && view.currentSeat == MySeat)
                 || (view.phase == RoundPhase.WaitingDiscard && view.currentSeat == MySeat)
-                || (view.phase == RoundPhase.WaitingPongDiscard && view.actorSeat == MySeat);
+                || (view.phase == RoundPhase.WaitingPongDiscard && view.actorSeat == MySeat));
             var key = actionable ? $"{view.phase}:{view.currentSeat}:{view.actorSeat}:{naturalSelecting}" : null;
             if (key == _turnCountdownKey)
             {
@@ -417,9 +472,6 @@ namespace Bbong.Client
                 Destroy(child.gameObject);
             }
 
-            var center = new Vector2(0.50f, 0.58f);
-            var radius = new Vector2(0.40f, 0.30f);
-
             // 뽕 창/턴 전환 간격 동안은 아무도 포커싱하지 않음. 뽕 추가 버림은 선언자를 포커싱.
             var focusSeat = view.phase == RoundPhase.PongWindow || view.phase == RoundPhase.TurnGap ? -1
                 : view.phase == RoundPhase.WaitingPongDiscard ? view.actorSeat
@@ -427,10 +479,7 @@ namespace Bbong.Client
 
             foreach (var seatView in view.seats)
             {
-                // 내 좌석이 항상 아래로 오도록 회전 배치
-                var displayIndex = (seatView.seat - MySeat + PlayerCount) % PlayerCount;
-                var angle = (-90f + displayIndex * 360f / PlayerCount) * Mathf.Deg2Rad;
-                var anchor = center + new Vector2(Mathf.Cos(angle) * radius.x, Mathf.Sin(angle) * radius.y);
+                var anchor = SeatAnchor(seatView.seat);
 
                 var mine = seatView.seat == MySeat;
                 var highlight = focusSeat == seatView.seat;
@@ -470,6 +519,14 @@ namespace Bbong.Client
                     brt.anchoredPosition = new Vector2(-total / 2f + bw / 2f + j * step, 0f);
                 }
             }
+        }
+
+        /// <summary>좌석 앵커(내 좌석이 항상 아래로 오는 회전 배치) — 좌석 패널·비행 연출 공용.</summary>
+        private Vector2 SeatAnchor(int seat)
+        {
+            var displayIndex = (seat - MySeat + PlayerCount) % PlayerCount;
+            var angle = (-90f + displayIndex * 360f / PlayerCount) * Mathf.Deg2Rad;
+            return SeatCenter + new Vector2(Mathf.Cos(angle) * SeatRadius.x, Mathf.Sin(angle) * SeatRadius.y);
         }
 
         private void RenderHand(RoundView view, ICollection<Card> hidden)
@@ -523,7 +580,7 @@ namespace Bbong.Client
             }
 
             const float w = 120f, h = 180f;
-            var heapAnchor = new Vector2(0.5f, 0.45f);
+            var heapAnchor = new Vector2(0.63f, 0.45f); // 버림 더미 — 중앙에서 살짝 오른쪽(덱과 한 세트)
             GameObject last = null;
             foreach (var (cards, group, pos, rot) in _timeline)
             {
@@ -701,6 +758,42 @@ namespace Bbong.Client
         // ── 효과음/연출 ──
 
         public void PlayDrawSfx() => _audio.PlayOneShot(_sfxDraw, 0.5f);
+
+        /// <summary>드로우 연출: 덱에서 카드 한 장(뒷면)이 해당 좌석으로 날아감 + 효과음.</summary>
+        public void DrawFx(int seat)
+        {
+            PlayDrawSfx();
+            StartCoroutine(FlyCardFromDeck(seat));
+        }
+
+        private IEnumerator FlyCardFromDeck(int seat)
+        {
+            var go = new GameObject("FlyCard", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(_shakeRoot, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = UiArt.CardBack;
+            img.raycastTarget = false;
+            var rt = (RectTransform)go.transform;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(100f, 150f);
+
+            var from = DeckAnchor;
+            var to = seat == MySeat ? new Vector2(0.5f, 0.15f) : SeatAnchor(seat); // 내 좌석은 손패로
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.28f)
+            {
+                if (go == null)
+                {
+                    yield break;
+                }
+
+                var eased = 1f - (1f - t) * (1f - t); // ease-out
+                rt.anchorMin = rt.anchorMax = Vector2.Lerp(from, to, eased);
+                rt.localScale = Vector3.one * Mathf.Lerp(1f, 0.55f, eased);
+                yield return null;
+            }
+
+            Destroy(go);
+        }
 
         public void PlayDiscardSfx() => _audio.PlayOneShot(_sfxDiscard, 0.5f);
 

@@ -248,6 +248,7 @@ namespace Bbong.Client
                 }
 
                 DrawCard();
+                _table.DrawFx(seat); // 봇도 덱에서 뽑는 연출
                 Refresh();
                 yield return new WaitForSeconds(BotDelay);
 
@@ -520,7 +521,7 @@ namespace Bbong.Client
             }
 
             DrawCard();
-            _table.PlayDrawSfx();
+            _table.DrawFx(MySeat); // 덱 → 손패 비행 연출 + 효과음
             _drawnCard = _round.CurrentPlayer.Hand.Cards[^1]; // 시간 초과 시 자동 버림 대상(§3)
             var meld = HandEvaluator.Evaluate(_round.CurrentPlayer.Hand);
             if (meld.Type != MeldType.None)
