@@ -16,7 +16,7 @@ public static class RealtimeConfig
     public const int TurnTimerSeconds = BbongCore.Config.GameConfig.TurnTimerSeconds;
 
     /// <summary>봇 대체 좌석의 행동 지연(ms) — 즉답 대신 사람 같은 한 박자(연습 모드 BotDelay와 유사).</summary>
-    public const int BotActDelayMs = 700;
+    public const int BotActDelayMs = 1000;
 
     public const int RoomCodeLength = 6;
 }

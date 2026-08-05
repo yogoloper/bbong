@@ -49,6 +49,8 @@ namespace Bbong.Client
         private static readonly Vector2 SeatCenter = new(0.50f, 0.58f); // 좌석 타원 중심/반경(좌석·비행 연출 공용)
         private static readonly Vector2 SeatRadius = new(0.40f, 0.30f);
         private static readonly Vector2 DeckAnchor = new(0.40f, 0.555f); // 드로우 덱 — 중앙에서 살짝 왼쪽(버림 더미와 한 세트)
+        private static readonly Vector2 HeapScreenAnchor = new(0.578f, 0.555f); // 버림 더미 중심(화면 좌표 — 비행 연출용)
+        private const float GroupSpread = 68f; // 그룹(뽕/공개 패) 부채꼴 카드 간격
 
         private Transform _seatsArea;
         private Transform _discardRow;
@@ -80,8 +82,7 @@ namespace Bbong.Client
         private RectTransform _shakeRoot;
         private Coroutine _shakeFx;
         private Transform _leaderboardRows; // 좌상단 상시 누적 리더보드
-        private List<Card> _meldSet;   // 판 종료 공개 패(족보 6장/스톱 손패) — 버림 비우고 표시
-        private int _meldLaidSeat = -1; // 공개 패의 주인 좌석 — 그 좌석의 손패(내 손/상대 뒷면)를 숨김
+        private int _meldLaidSeat = -1; // 판 종료 공개 패의 주인 좌석 — 그 좌석의 손패(내 손/상대 뒷면)를 숨김
 
         // ── UI 생성 ──
 
@@ -567,18 +568,6 @@ namespace Bbong.Client
                 Destroy(child.gameObject);
             }
 
-            // 족보 완성: 버림 타임라인 대신 족보 6장만 영역 정중앙에 펼쳐 표시
-            if (_meldSet != null)
-            {
-                for (var i = 0; i < _meldSet.Count; i++)
-                {
-                    var offset = (i - (_meldSet.Count - 1) / 2f) * 136f;
-                    PlaceCard(_meldSet[i], 128, 192, new Vector2(0.5f, 0.5f), new Vector2(offset, 0f), 0f);
-                }
-
-                return;
-            }
-
             const float w = 120f, h = 180f;
             var heapAnchor = new Vector2(0.63f, 0.45f); // 버림 더미 — 중앙에서 살짝 오른쪽(덱과 한 세트)
             GameObject last = null;
@@ -589,7 +578,7 @@ namespace Bbong.Client
                     for (var j = 0; j < cards.Count; j++)
                     {
                         var fan = j - (cards.Count - 1) / 2f;
-                        last = PlaceCard(cards[j], w, h, heapAnchor, pos + new Vector2(fan * 38f, j * 3f), rot + fan * 9f);
+                        last = PlaceCard(cards[j], w, h, heapAnchor, pos + new Vector2(fan * GroupSpread, -Mathf.Abs(fan) * 8f), rot - fan * 10f);
                     }
                 }
                 else
@@ -635,13 +624,21 @@ namespace Bbong.Client
         }
 
         /// <summary>
-        /// 판 종료 공개 패(족보/스톱 손패)를 테이블에 펼침(다음 판 시작 ClearTimeline까지 유지).
-        /// laidSeat 좌석의 손패는 숨겨져 "내려놓는" 연출이 된다(내 손패든 상대 좌석 뒷면이든).
+        /// 판 종료 공개 패(족보/스톱 손패)를 좌석에서 날려 버림 더미 위에 부채꼴로 올린다
+        /// (뽕 그룹과 동일 연출, 다음 판 ClearTimeline까지 유지).
+        /// laidSeat 좌석의 손패는 즉시 숨겨져 "내려놓는" 연출이 된다(내 손패든 상대 좌석 뒷면이든).
         /// </summary>
         public void ShowMeldSet(IEnumerable<Card> cards, int laidSeat = -1)
         {
-            _meldSet = TableArt.Sorted(cards);
             _meldLaidSeat = laidSeat;
+            if (laidSeat < 0)
+            {
+                AddGroup(cards); // 좌석 미지정 — 비행 없이 즉시 쌓기
+                RenderDiscard();
+                return;
+            }
+
+            GroupFx(laidSeat, cards);
         }
 
         private GameObject PlaceCard(Card card, float w, float h, Vector2 anchor, Vector2 offset, float rot)
@@ -708,14 +705,25 @@ namespace Bbong.Client
         /// <summary>마지막 그룹을 확정 카드 구성으로 치환(자리·회전 유지, 팝 연출 없음).</summary>
         public void ReplaceLastGroup(IEnumerable<Card> cards)
         {
+            if (_timeline.Count == 0 || !_timeline[^1].group)
+            {
+                AddGroup(cards); // 낙관 그룹이 아직 비행 중(미착지) — 확정 구성으로 바로 쌓기
+                return;
+            }
+
             var (_, _, pos, rot) = _timeline[^1];
             _timeline[^1] = (TableArt.Sorted(cards), true, pos, rot);
             _timelineShown = _timeline.Count;
         }
 
-        /// <summary>마지막 타임라인 항목 제거(낙관적 연출 원복).</summary>
+        /// <summary>마지막 타임라인 항목 제거(낙관적 연출 원복). 비행 중이라 아직 없으면 무시.</summary>
         public void RemoveLastTimelineEntry()
         {
+            if (_timeline.Count == 0)
+            {
+                return;
+            }
+
             _timeline.RemoveAt(_timeline.Count - 1);
             _timelineShown = Mathf.Min(_timelineShown, _timeline.Count);
         }
@@ -751,7 +759,6 @@ namespace Bbong.Client
         {
             _timeline.Clear();
             _timelineShown = 0;
-            _meldSet = null;
             _meldLaidSeat = -1;
         }
 
@@ -764,6 +771,133 @@ namespace Bbong.Client
         {
             PlayDrawSfx();
             StartCoroutine(FlyCardFromDeck(seat));
+        }
+
+        /// <summary>
+        /// 버림 연출: 좌석(내 좌석은 손패)에서 카드가 앞면으로 날아가 더미의 최종 위치·기울기
+        /// 그대로 착지한다(목표를 미리 추첨해 착지 점프 없음). 타임라인 추가도 착지 시점에 view가 수행.
+        /// </summary>
+        public void DiscardFx(int seat, Card card)
+        {
+            PlayDiscardSfx();
+            var pos = new Vector2(TableArt.Tri(150f), TableArt.Tri(50f)); // 최종 흩어짐을 미리 추첨
+            var rot = TableArt.Tri(28f);
+            StartCoroutine(FlyFace(seat, card, HeapToScreen(pos), rot, 120f, 180f, 0f, () =>
+            {
+                _timeline.Add((new List<Card> { card }, false, pos, rot));
+                _timelineShown = _timeline.Count; // 비행으로 이미 보여줬으니 착지 팝 없음
+                RenderDiscard();
+            }));
+        }
+
+        /// <summary>뽕/자연뽕 고정 패 연출: 좌석에서 카드들이 부채꼴 최종 위치로 각각 날아가 무더기로 쌓인다.</summary>
+        public void GroupFx(int seat, IEnumerable<Card> cards)
+        {
+            var sorted = TableArt.Sorted(cards);
+            var pos = new Vector2(TableArt.Tri(120f), TableArt.Tri(45f));
+            var rot = TableArt.Tri(16f);
+            var landed = 0;
+            for (var j = 0; j < sorted.Count; j++)
+            {
+                var fan = j - (sorted.Count - 1) / 2f;
+                var target = pos + new Vector2(fan * GroupSpread, -Mathf.Abs(fan) * 8f);
+                // 시차 없이 동시 출발 — 한 묶음이 부채꼴로 벌어지며 함께 날아간다
+                StartCoroutine(FlyFace(seat, sorted[j], HeapToScreen(target), rot - fan * 10f, 120f, 180f, 0f, () =>
+                {
+                    if (++landed == sorted.Count)
+                    {
+                        _timeline.Add((sorted, true, pos, rot));
+                        _timelineShown = _timeline.Count; // 착지 팝 없음
+                        RenderDiscard();
+                    }
+                }));
+            }
+        }
+
+        /// <summary>버림 더미 중심 기준 픽셀 오프셋 → 화면 정규 좌표(비행 목표 계산).</summary>
+        private Vector2 HeapToScreen(Vector2 offsetPx)
+        {
+            var size = _shakeRoot.rect.size;
+            return HeapScreenAnchor + new Vector2(offsetPx.x / size.x, offsetPx.y / size.y);
+        }
+
+        /// <summary>카드 앞면 한 장을 좌석에서 목표 지점·기울기로 비행시키고 착지 콜백 실행.</summary>
+        private IEnumerator FlyFace(int seat, Card card, Vector2 targetAnchor, float targetRot,
+            float w, float h, float delay, System.Action onLand)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+
+            var fly = TableArt.CreateCardFace(_shakeRoot, card, w, h, _font);
+            var rt = (RectTransform)fly.transform;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(w, h);
+
+            var from = seat == MySeat ? new Vector2(0.5f, 0.15f) : SeatAnchor(seat);
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.25f)
+            {
+                if (fly == null)
+                {
+                    yield break;
+                }
+
+                var eased = 1f - (1f - t) * (1f - t); // ease-out
+                rt.anchorMin = rt.anchorMax = Vector2.Lerp(from, targetAnchor, eased);
+                rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(0f, targetRot, eased));
+                yield return null;
+            }
+
+            Destroy(fly);
+            onLand?.Invoke();
+        }
+
+        /// <summary>재셔플 수렴 연출: 버림 더미 주변의 카드들이 뒷면으로 덮여 덱으로 모여든다.</summary>
+        private IEnumerator ShuffleGatherFx()
+        {
+            var backs = new List<RectTransform>();
+            for (var i = 0; i < 5; i++)
+            {
+                var back = UiKit.CreatePanel(_shakeRoot, Color.white);
+                back.sprite = UiArt.CardBack;
+                back.raycastTarget = false;
+                var rt = back.rectTransform;
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(100f, 150f);
+                rt.anchorMin = rt.anchorMax = HeapScreenAnchor
+                    + new Vector2((i - 2) * 0.02f, (i % 2 == 0 ? 1 : -1) * 0.015f); // 더미 주변에 흩어진 상태
+                rt.localRotation = Quaternion.Euler(0f, 0f, (i - 2) * 9f);
+                backs.Add(rt);
+            }
+
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.4f)
+            {
+                var eased = t * t; // ease-in — 빨려들 듯
+                for (var i = 0; i < backs.Count; i++)
+                {
+                    if (backs[i] == null)
+                    {
+                        continue;
+                    }
+
+                    var delay = Mathf.Clamp01((t - i * 0.06f) / 0.7f); // 한 장씩 시차
+                    var p = Mathf.SmoothStep(0f, 1f, delay);
+                    var start = HeapScreenAnchor + new Vector2((i - 2) * 0.02f, (i % 2 == 0 ? 1 : -1) * 0.015f);
+                    backs[i].anchorMin = backs[i].anchorMax = Vector2.Lerp(start, DeckAnchor, p);
+                    backs[i].localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp((i - 2) * 9f, 0f, p));
+                }
+
+                yield return null;
+            }
+
+            foreach (var back in backs)
+            {
+                if (back != null)
+                {
+                    Destroy(back.gameObject);
+                }
+            }
         }
 
         private IEnumerator FlyCardFromDeck(int seat)
@@ -810,13 +944,14 @@ namespace Bbong.Client
             Shake(12f, 0.28f);
         }
 
-        /// <summary>재셔플 연출: 콜아웃 + 플래시 + 셔플 효과음 + 약한 셰이크.</summary>
+        /// <summary>재셔플 연출: 버림 카드들이 뒷면으로 덱에 모여드는 수렴 + 콜아웃/플래시/효과음/셰이크.</summary>
         public void ShuffleFx()
         {
             ShowCallout("더미 셔플!", new Color(0.75f, 0.9f, 1f));
             Flash(new Color(1f, 1f, 1f, 0.3f));
             _audio.PlayOneShot(_sfxShuffle, 0.7f);
             Shake(7f, 0.22f);
+            StartCoroutine(ShuffleGatherFx());
         }
 
         /// <summary>화면 전체 흔들림(감쇠). 뽕/족보 같은 임팩트 순간용.</summary>

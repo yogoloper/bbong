@@ -212,8 +212,7 @@ namespace Bbong.Client
 
             var tossed = _clickedCard!.Value;
             _round = _round.Discard(tossed);
-            _table.AddDiscard(tossed);
-            _table.PlayDiscardSfx();
+            _table.DiscardFx(0, tossed);
             Show(RoundPhase.TurnGap, 1);
 
             Guide("잘하셨어요! 버린 카드는 가운데 더미에 쌓이고, 차례가 다음 사람에게 넘어갑니다.\n" +
@@ -239,8 +238,7 @@ namespace Bbong.Client
 
             var botToss = C(8, CardColor.Green);
             _round = _round.Discard(botToss);
-            _table.AddDiscard(botToss);
-            _table.PlayDiscardSfx();
+            _table.DiscardFx(1, botToss);
             Show(RoundPhase.PongWindow, 1, canPong: true, pongNumber: 8);
 
             Guide("사범이 8을 버렸습니다! 내 8 두 장과 합치면 세 장 —\n지금이 기회입니다. [뽕] 버튼을 누르세요!", false);
@@ -249,7 +247,7 @@ namespace Bbong.Client
 
             var laid = _round.Players[0].Hand.Cards.Where(c => c.Number == 8).ToList();
             _laidNow.AddRange(laid);
-            _table.AddGroup(laid);
+            _table.GroupFx(0, laid);
             _table.PongFx($"{_names[0]}\n8뽕!");
             Show(RoundPhase.WaitingPongDiscard, 0);
 
@@ -260,8 +258,7 @@ namespace Bbong.Client
             var toss = _clickedCard!.Value;
             _round = _round.Pong(0, toss);
             _laidNow.Clear();
-            _table.AddDiscard(toss);
-            _table.PlayDiscardSfx();
+            _table.DiscardFx(0, toss);
             Show(RoundPhase.TurnGap, 1);
 
             Guide("뽕 완성! 손패가 5장에서 2장으로 확 줄었습니다.\n" +
@@ -295,7 +292,7 @@ namespace Bbong.Client
 
             var laid = _round.Players[0].Hand.Cards.Where(c => c.Number == 5).Take(3).ToList();
             _laidNow.AddRange(laid);
-            _table.AddGroup(laid);
+            _table.GroupFx(0, laid);
             _table.PongFx($"{_names[0]}\n5자연뽕!");
             Show(RoundPhase.WaitingDiscard, 0);
             Guide("5 세 장을 내려놓았습니다.\n뽕과 마찬가지로 한 장을 더 버립니다 — 카드를 클릭하세요.", false);
@@ -304,8 +301,7 @@ namespace Bbong.Client
             var toss = _clickedCard!.Value;
             _round = _round.NaturalPong(5, toss);
             _laidNow.Clear();
-            _table.AddDiscard(toss);
-            _table.PlayDiscardSfx();
+            _table.DiscardFx(0, toss);
             Show(RoundPhase.TurnGap, 1);
 
             Guide("자연뽕 완성! 효과는 뽕과 같습니다 — 내려놓은 세 장은 0점.\n" +
@@ -336,12 +332,11 @@ namespace Bbong.Client
 
             var tossed = _clickedCard!.Value;
             _round = _round.Discard(tossed);
-            _table.AddDiscard(tossed);
-            _table.PlayDiscardSfx();
+            _table.DiscardFx(0, tossed);
 
             var laid = _round.Players[1].Hand.Cards.ToList(); // 사범 손의 9 두 장(버린 9는 더미에 그대로)
             _round = _round.Pong(1, null); // 사범의 두 번째 뽕 = 손 털기
-            _table.AddGroup(laid);
+            _table.GroupFx(1, laid);
             _table.PongFx($"{_names[1]}\n9뽕!");
             Show(RoundPhase.RoundOver, 1);
             _table.ShowCallout($"{_names[1]}\n손 털기!", new Color(1f, 0.4f, 0.35f));

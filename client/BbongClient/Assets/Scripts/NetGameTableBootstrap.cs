@@ -94,13 +94,12 @@ namespace Bbong.Client
 
                 case ServerMessageType.Discarded:
                     var discarded = JsonUtility.FromJson<DiscardedMsg>(json);
-                    _table.AddDiscard(discarded.card.ToCard());
                     if (discarded.seat == MySeat)
                     {
                         _pendingLaid.Clear(); // 내 뽕 추가 버림까지 서버 반영 완료
                     }
 
-                    _table.PlayDiscardSfx();
+                    _table.DiscardFx(discarded.seat, discarded.card.ToCard()); // 좌석 → 더미 비행 후 쌓임
                     ApplyView(discarded.view);
                     break;
 
@@ -235,7 +234,7 @@ namespace Bbong.Client
         private void OnLaid(int seat, int number, CardDto[] laid, string suffix)
         {
             var cards = laid.Select(c => c.ToCard()).ToList();
-            _table.AddGroup(cards);
+            _table.GroupFx(seat, cards); // 좌석 → 무더기 비행
             if (seat == MySeat)
             {
                 _pendingLaid.Clear();
@@ -295,7 +294,7 @@ namespace Bbong.Client
             var laid = _view.myHand.Select(c => c.ToCard()).Where(c => c.Number == number).Take(3).ToList();
             _pendingLaid.Clear();
             _pendingLaid.AddRange(laid);
-            _table.AddGroup(laid);
+            _table.GroupFx(MySeat, laid);
             _naturalLaidLocally = true;
             _table.PongFx($"{Nicknames[MySeat]}\n{number}자연뽕!");
 
