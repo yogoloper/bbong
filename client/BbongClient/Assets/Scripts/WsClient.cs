@@ -1,31 +1,47 @@
 using System;
 using System.Collections.Concurrent;
+using UnityEngine;
+#if UNITY_WEBGL && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+#else
 using System.IO;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using UnityEngine;
+#endif
 
 namespace Bbong.Client
 {
     /// <summary>
-    /// 서버 실시간(/ws) 연결. BCL ClientWebSocket — 외부 에셋 없음.
-    /// 수신은 백그라운드 스레드 → 큐 → Update 펌프로 메인 스레드에서 이벤트 발화
-    /// (Unity API는 메인 스레드 전용이라 큐 경유 필수).
+    /// 서버 실시간(/ws) 연결. 기본은 BCL ClientWebSocket(외부 에셋 없음),
+    /// WebGL은 브라우저 WebSocket(jslib 브리지) — 헤더 불가라 토큰은 쿼리로 전달.
+    /// 수신은 큐 → Update 펌프로 메인 스레드에서 이벤트 발화.
     /// </summary>
     public sealed class WsClient : MonoBehaviour
     {
         private static WsClient _instance;
 
-        private ClientWebSocket _socket;
         private readonly ConcurrentQueue<string> _received = new();
-        private readonly SemaphoreSlim _sendLock = new(1, 1);
         private volatile bool _closed;
         private string _closeReason;
         private bool _connectedNotified;
         private Action _onConnected;
         private Action<string> _onError;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")] private static extern void BbongWsConnect(string url);
+        [DllImport("__Internal")] private static extern int BbongWsState();
+        [DllImport("__Internal")] private static extern void BbongWsSend(string message);
+        [DllImport("__Internal")] private static extern IntPtr BbongWsReceive();
+        [DllImport("__Internal")] private static extern void BbongWsFree(IntPtr ptr);
+        [DllImport("__Internal")] private static extern void BbongWsClose();
+
+        private bool _webglStarted;
+#else
+        private ClientWebSocket _socket;
+        private readonly SemaphoreSlim _sendLock = new(1, 1);
+#endif
 
         /// <summary>수신 메시지(raw JSON, 메인 스레드). 화면 부트스트랩이 구독.</summary>
         public event Action<string> OnMessage;
@@ -51,10 +67,16 @@ namespace Bbong.Client
             }
         }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+        public bool IsConnected => _webglStarted && BbongWsState() == 1;
+#else
         public bool IsConnected => _socket is { State: WebSocketState.Open };
+#endif
 
         /// <summary>화면 전환 중 수신 펌프 일시정지(다음 화면이 구독한 뒤 재개 — 메시지 유실 방지).</summary>
         public bool Paused { get; set; }
+
+        private static string WsUrl => ServerApi.BaseUrl.Replace("http://", "ws://").Replace("https://", "wss://") + "/ws";
 
         /// <summary>연결 시작. 콜백은 메인 스레드(Update 펌프)에서 호출.</summary>
         public void Connect(Action onConnected, Action<string> onError)
@@ -70,7 +92,13 @@ namespace Bbong.Client
             _closed = false;
             _closeReason = null;
             _connectedNotified = false;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // 브라우저 WS는 Authorization 헤더 불가 → 서버가 허용하는 쿼리 토큰 사용
+            BbongWsConnect($"{WsUrl}?access_token={Uri.EscapeDataString(Session.Token)}");
+            _webglStarted = true;
+#else
             _ = ConnectAsync();
+#endif
         }
 
         public void Send(object message)
@@ -81,27 +109,62 @@ namespace Bbong.Client
             }
 
             var json = JsonUtility.ToJson(message);
+#if UNITY_WEBGL && !UNITY_EDITOR
+            BbongWsSend(json);
+#else
             _ = SendAsync(json);
+#endif
         }
 
         public void Disconnect()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (_webglStarted)
+            {
+                _webglStarted = false;
+                BbongWsClose();
+            }
+#else
             var socket = _socket;
             _socket = null;
             if (socket != null)
             {
                 _ = socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
             }
+#endif
         }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+        /// <summary>브리지 폴링: 수신 큐 옮기기 + 종료 감지(Update 초입에서 호출).</summary>
+        private void PollWebGl()
+        {
+            if (!_webglStarted)
+            {
+                return;
+            }
+
+            for (var ptr = BbongWsReceive(); ptr != IntPtr.Zero; ptr = BbongWsReceive())
+            {
+                _received.Enqueue(Marshal.PtrToStringUTF8(ptr));
+                BbongWsFree(ptr);
+            }
+
+            var state = BbongWsState();
+            if (state >= 2)
+            {
+                _webglStarted = false;
+                _closed = true;
+                _closeReason = state == 3 ? "연결 실패 또는 끊김" : "서버가 연결을 종료했습니다.";
+            }
+        }
+#else
         private async Task ConnectAsync()
         {
             try
             {
                 _socket = new ClientWebSocket();
                 _socket.Options.SetRequestHeader("Authorization", "Bearer " + Session.Token);
-                var url = ServerApi.BaseUrl.Replace("http://", "ws://").Replace("https://", "wss://") + "/ws";
-                await _socket.ConnectAsync(new Uri(url), CancellationToken.None);
+                await _socket.ConnectAsync(new Uri(WsUrl), CancellationToken.None);
                 _ = ReceiveLoopAsync(_socket);
             }
             catch (Exception ex)
@@ -162,9 +225,13 @@ namespace Bbong.Client
                 _sendLock.Release();
             }
         }
+#endif
 
         private void Update()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            PollWebGl();
+#endif
             if (!_connectedNotified && IsConnected)
             {
                 _connectedNotified = true;
@@ -189,7 +256,9 @@ namespace Bbong.Client
                     OnClosed?.Invoke(reason);
                 }
 
+#if !UNITY_WEBGL || UNITY_EDITOR
                 _socket = null;
+#endif
                 _connectedNotified = false;
             }
         }

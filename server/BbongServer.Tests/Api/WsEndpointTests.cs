@@ -103,6 +103,20 @@ public class WsEndpointTests
     }
 
     [Test]
+    public async Task Connect_with_query_token_is_accepted()
+    {
+        // 브라우저(WebGL) WebSocket은 Authorization 헤더 불가 → ?access_token= 병행 허용
+        var token = await GuestTokenAsync();
+        var wsClient = _factory.Server.CreateWebSocketClient();
+
+        var socket = await wsClient.ConnectAsync(
+            new Uri(_factory.Server.BaseAddress, $"/ws?access_token={token}"), CancellationToken.None);
+        var welcome = await ReceiveUntilAsync(socket, "welcome");
+
+        Assert.That(welcome.GetProperty("userId").GetString(), Is.Not.Empty);
+    }
+
+    [Test]
     public async Task Create_then_join_syncs_member_list()
     {
         var host = await ConnectAsync(await GuestTokenAsync());

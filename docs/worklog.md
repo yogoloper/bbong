@@ -5,7 +5,7 @@
 ## 현재 상태 (2026-08-03)
 
 - **Phase 0 규칙** ✅ / **1 코어** ✅ / **2 AI 봇** ✅ / **3 UI/UX** ✅ / **4 메타·수익화(서버)** 🚧 / **5 온라인 멀티 M1(친구방)** ✅ 동작
-- 테스트: 코어 **124개**, 서버 **118개** (NUnit, PG round-trip·WS 통합 포함).
+- 테스트: 코어 **124개**, 서버 **119개** (NUnit, PG round-trip·WS 통합 포함).
 - 클라: 연습(봇전, 무료) + **친구방 온라인 멀티**(초대코드, 2~6인, 서버 권위) 3클라 수동 검증 완료. 메인 로비 + 5개 모드 화면.
 - 서버: ASP.NET Core + EF Core/PostgreSQL + JWT + **WebSocket(/ws) 실시간**. 게스트/소셜 로그인·프로필·지갑·광고보상·매치 에스크로/정산 API.
 - 부하/정합 검증: `tools/BbongLoadSim` — 게스트 20명 동시 × 5게임, 394요청 실패 0, 잔액 정합 불일치 0.
@@ -42,6 +42,19 @@ compose.yaml          dev 인프라 PG(5432)+Redis(6379). 서버 앱은 컨테�
 - 봇 게임만: 빈 GameObject에 `GameTableBootstrap`만 붙이고 Play (서버 불필요)
 - 정식 흐름(로그인~): ① `docker compose up -d` ② `cd server/BbongServer && dotnet run` (포트 5080) ③ Unity에서 AuthBootstrap Play → 게스트 시작
 - 게임 로그: Unity Console `[BBONG]` (화면 로그는 제거됨)
+
+## 세션 (2026-08-05) — 해커톤 웹(WebGL) 배포 준비
+
+- **용도**: 게임 해커톤 사전과제(웹 플레이 링크 필요). 웹은 임시 경로 — 정식 타깃은 스토어 출시.
+- **WsClient WebGL 분기**: 브라우저 WebSocket jslib 브리지(`Plugins/WebGL/BbongWebSocket.jslib`,
+  단일 연결 폴링). 헤더 불가 → 토큰 쿼리 전달. 기존 BCL 경로는 #if로 보존(에디터/모바일 무변화).
+- **서버**: `/ws?access_token=` 쿼리 토큰 병행 허용(JwtBearer OnMessageReceived) + CORS AnyOrigin
+  (Bearer라 무방). TDD 서버 118→**119**.
+- **서버 주소 주입**: WebGL은 페이지 URL `?server=https://...`로 지정(ServerApi.ResolveBaseUrl) —
+  재빌드 없이 서버 교체.
+- **빌드/배포**: WebGL 압축 Gzip+Decompression Fallback(GitHub Pages 헤더 문제 대응),
+  `webgl/**` push 시 Pages 자동 배포 워크플로(.github/workflows/pages.yml). 절차 = docs/web-deploy.md.
+- 원격 연결: origin = github.com/yogoloper/bbong.
 
 ## 세션 (2026-08-04) — 테이블 UI 단일 틀 1단계
 

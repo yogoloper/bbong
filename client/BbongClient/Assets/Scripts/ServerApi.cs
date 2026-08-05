@@ -13,7 +13,24 @@ namespace Bbong.Client
     public static class ServerApi
     {
         // 개발: 에디터에서 로컬 서버. 실기기는 같은 네트워크 PC IP, 운영은 호스팅 도메인.
-        public static string BaseUrl = "http://localhost:5080";
+        public static string BaseUrl = ResolveBaseUrl();
+
+        /// <summary>
+        /// WebGL(GitHub Pages 등)에서는 페이지 URL의 ?server=https://... 로 서버를 지정할 수 있다
+        /// — 재빌드 없이 임시 배포 서버 교체용. 그 외 플랫폼은 기본값.
+        /// </summary>
+        private static string ResolveBaseUrl()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            var match = System.Text.RegularExpressions.Regex.Match(
+                Application.absoluteURL ?? "", "[?&]server=([^&#]+)");
+            if (match.Success)
+            {
+                return Uri.UnescapeDataString(match.Groups[1].Value).TrimEnd('/');
+            }
+#endif
+            return "http://localhost:5080";
+        }
 
         [Serializable] public class AuthResult { public string accessToken; public string userId; public string nickname; public bool isGuest; }
         [Serializable] public class MeResult { public string userId; public string nickname; public bool isGuest; public long balance; }

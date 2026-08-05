@@ -51,8 +51,29 @@ builder.Services.AddSingleton<ISocialTokenVerifier>(_ =>
     socialBypass ? new DevBypassSocialVerifier() : new NotConfiguredSocialVerifier());
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options => options.TokenValidationParameters = jwt.ValidationParameters());
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = jwt.ValidationParameters();
+        // 브라우저(WebGL) WebSocket은 Authorization 헤더를 못 실음 → /ws 한정 쿼리 토큰 병행 허용
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/ws"))
+                {
+                    context.Token = token;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+    });
 builder.Services.AddAuthorization();
+
+// WebGL(GitHub Pages) 클라 허용. 쿠키 미사용(Bearer 토큰)이라 AnyOrigin 무방.
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
+    policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 // enum을 JSON 문자열로(요청의 provider="Google" 바인딩, 응답 가독성)
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -66,6 +87,7 @@ using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetService<BbongDbContext>()?.Database.Migrate();
 }
 
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseWebSockets();
