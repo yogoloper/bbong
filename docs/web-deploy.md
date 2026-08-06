@@ -38,6 +38,20 @@
 2. `webgl/` 포함해서 push → Actions에서 "Deploy WebGL to Pages" 완료 대기.
 3. 접속(제출용 최종 링크): `https://yogoloper.github.io/bbong/?server=https://bbong.fly.dev`
 
+## 자동 스모크 테스트 (Playwright)
+
+배포 전후로 게임이 실제로 도는지 자동 확인:
+
+```bash
+pip3 install playwright && python3 -m playwright install chromium   # 최초 1회
+python3 scripts/web-smoke.py                                        # 로컬 빌드+서버
+python3 scripts/web-smoke.py --url https://yogoloper.github.io/bbong --server https://bbong.fly.dev  # 배포본
+```
+
+헤드리스 브라우저로 로드 → 게스트 로그인 → 연습 게임 진입 → 봇 진행 20초를 돌리고,
+페이지 에러 0건 + 판/턴 로그로 통과 판정(종료 코드 0/1). 스크린샷은 /tmp/bbong-smoke-*.png.
+캔버스 렌더라 좌표 클릭 방식 — 로그인/로비 UI 앵커를 바꾸면 스크립트의 ANCHORS도 갱신할 것.
+
 ## 확인 체크리스트
 
 - [ ] `?server=` 없이 열면 연습 모드(봇전)만 동작(서버 불필요) — 이것만으로도 심사 플레이 가능
