@@ -65,6 +65,9 @@ namespace Bbong.Client
         private Coroutine _turnTimer; // 내 행동 대기 5초 제한(rules.md §3) — 초과 시 자동 진행
         private int _turnToken;       // 이전 턴의 타이머가 다음 턴에 오발화하지 않도록 무효화 토큰
         private Card _drawnCard;      // 시간 초과 시 자동으로 버릴 방금 드로우한 카드
+        // 봇 뽕/자연뽕은 코어에 추가 버림까지 원자 반영되지만 토스 연출은 한 박자 뒤 —
+        // 그 사이 좌석 손패 수가 미리 줄어 보이지 않게 +1 보정할 좌석(-1=없음)
+        private int _pendingTossSeat = -1;
         private MeldResult _pendingMeld; // 족보 선언 대기 중인 족보(MeldDecision)
         private readonly List<int[]> _roundHistory = new(); // 게임 내 판별 점수
         private Button _nextBtn, _lobbyBtn;
@@ -131,6 +134,7 @@ namespace Bbong.Client
                 dealerSeat: _dealerSeat);
             _state = UiState.NeedDiscard;
             _turnGap = false;
+            _pendingTossSeat = -1;
             _table.ClearTimeline();
             _pendingLaid.Clear();
             _table.SetEndReason("");
@@ -281,12 +285,14 @@ namespace Bbong.Client
 
                     var toss = _bots[seat].ChoosePongDiscard(rest);
                     _round = _round.NaturalPong(number, toss);
+                    _pendingTossSeat = seat; // 토스 표시 전까지 좌석 손패 3장 유지
                     SetLog($"P{seat} 자연뽕! {number} 3장 고정");
                     _table.PongFx($"{SeatName(seat)}\n{number}자연뽕!");
                     _table.GroupFx(seat, laid);
                     Refresh();
                     yield return new WaitForSeconds(TossDelay); // 내려놓기 먼저, 버림은 한 박자 뒤
 
+                    _pendingTossSeat = -1;
                     _table.DiscardFx(seat, toss);
                     _turnGap = true;
                     Refresh();
@@ -407,6 +413,7 @@ namespace Bbong.Client
 
             var toss = _bots[seat].ChoosePongDiscard(rest);
             _round = _round.Pong(seat, toss); // 코어는 즉시 반영, 버림 표시만 지연
+            _pendingTossSeat = seat; // 토스 표시 전까지 좌석 손패 수 유지
             SetLog($"P{seat} 뽕! {number} 3장 고정");
             _table.PongFx($"{SeatName(seat)}\n{number}뽕!");
             _table.GroupFx(seat, laid);
@@ -425,6 +432,7 @@ namespace Bbong.Client
         private IEnumerator EndAfterToss(Card toss, int seat, int discarderSeat)
         {
             yield return new WaitForSeconds(TossDelay);
+            _pendingTossSeat = -1;
             _table.DiscardFx(seat, toss);
             EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} 손 털기 · {SeatName(discarderSeat)} 박 +20", seat);
         }
@@ -438,6 +446,7 @@ namespace Bbong.Client
                 yield break; // 그 사이 판이 끝났으면 다음 판에서 더미가 리셋됨
             }
 
+            _pendingTossSeat = -1;
             _table.DiscardFx(seat, toss);
             Refresh();
         }
@@ -873,7 +882,7 @@ namespace Bbong.Client
                 {
                     seat = s,
                     nickname = _names[s],
-                    handCount = _round.Players[s].Hand.Count,
+                    handCount = _round.Players[s].Hand.Count + (s == _pendingTossSeat ? 1 : 0),
                     pongCount = _round.Players[s].PongCount,
                     hasPonged = _round.Players[s].HasPonged,
                     cumulativeDebt = _game.CumulativeDebts[s]
