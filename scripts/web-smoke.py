@@ -85,10 +85,10 @@ def main() -> int:
         browser.close()
 
     game_logs = [line for line in logs if "BBONG" in line]
-    started = any("판 시작" in line for line in game_logs)
+    started = any("라운드 시작" in line for line in game_logs)
     turns = sum("턴 시작" in line for line in game_logs)
 
-    print(f"\n결과: 게임 로그 {len(game_logs)}건 / 판 시작 {'O' if started else 'X'} / 턴 진행 {turns}회 / 페이지 에러 {len(errors)}건")
+    print(f"\n결과: 게임 로그 {len(game_logs)}건 / 라운드 시작 {'O' if started else 'X'} / 턴 진행 {turns}회 / 페이지 에러 {len(errors)}건")
     print(f"스크린샷: {args.shots}-title/-lobby/-game.png")
     for line in game_logs[-8:]:
         print(f"  {line.strip()[:120]}")
