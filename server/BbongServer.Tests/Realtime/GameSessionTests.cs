@@ -698,6 +698,26 @@ public class GameSessionTests
     }
 
     [Test]
+    public void Voluntary_leave_hands_seat_to_bot_immediately()
+    {
+        // seat0이 버림 대기 중 나가기 → 즉시 봇 전환 + 봇 행동 예약 → 봇이 알아서 버림
+        var (session, _) = Rigged(
+            new[] { P(0, C(1, CardColor.Red), C(2, CardColor.Red), C(3, CardColor.Blue)), P(1, C(11, CardColor.Red), C(12, CardColor.Red)) },
+            drawPile: new[] { C(5, CardColor.Green), C(6, CardColor.Red) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+
+        var replaced = session.ReplaceSeatWithBot(0);
+
+        var took = For<BotTookOverMsg>(replaced, 1);
+        Assert.That(took.seat, Is.EqualTo(0));
+        Assert.That(took.nickname, Does.Contain("봇"));
+
+        var acted = session.HandleBotAct(BotActToken(replaced));
+        Assert.That(For<DiscardedMsg>(acted, 1).seat, Is.EqualTo(0));
+    }
+
+    [Test]
     public void Stale_turn_timeout_is_ignored()
     {
         var (session, output) = Rigged(

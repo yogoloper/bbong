@@ -94,10 +94,10 @@ public sealed class Room
                 HandleJoin(join.Member);
                 break;
             case LeaveCmd leave:
-                HandleLeaveOrDisconnect(leave.UserId);
+                HandleLeaveOrDisconnect(leave.UserId, voluntary: true);
                 break;
             case DisconnectCmd gone:
-                HandleLeaveOrDisconnect(gone.UserId);
+                HandleLeaveOrDisconnect(gone.UserId, voluntary: false);
                 break;
             case StartGameCmd start:
                 HandleStart(start.UserId);
@@ -164,7 +164,7 @@ public sealed class Room
         BroadcastRoomUpdate();
     }
 
-    private void HandleLeaveOrDisconnect(Guid userId)
+    private void HandleLeaveOrDisconnect(Guid userId, bool voluntary)
     {
         var member = _members.FirstOrDefault(m => m.UserId == userId);
         if (member is null)
@@ -174,12 +174,19 @@ public sealed class Room
 
         if (Phase == RoomPhase.Playing)
         {
-            // 게임 중 이탈 → 방 유지. 좌석은 5초 룰로 진행되다 판 종료 시 봇 대체(§9-4).
+            // 게임 중 이탈 → 방 유지(§9-4).
+            // 명시적 나가기는 즉시 봇 대체, 끊김(앱 백그라운드 가능성)은 판 종료까지 자리 보전.
             _absent.Add(userId);
             _registry.Detach(userId);
             if (_members.All(m => _absent.Contains(m.UserId)))
             {
                 CloseRoom("모든 참가자가 나가 방이 해체되었습니다.");
+                return;
+            }
+
+            if (voluntary && _session is not null)
+            {
+                Apply(_session.ReplaceSeatWithBot(_members.IndexOf(member)));
             }
 
             return;

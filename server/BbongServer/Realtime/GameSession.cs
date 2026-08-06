@@ -753,11 +753,46 @@ public sealed class GameSession
                 continue;
             }
 
-            _botSeats.Add(seat);
-            _bots[seat] = new Bot(BotDifficulty.Normal);
-            _nicknames[seat] += " (봇)";
-            output.ToAll(new BotTookOverMsg { seat = seat, nickname = _nicknames[seat] });
+            BotifySeat(output, seat);
         }
+    }
+
+    private void BotifySeat(SessionOutput output, int seat)
+    {
+        _botSeats.Add(seat);
+        _bots[seat] = new Bot(BotDifficulty.Normal);
+        _nicknames[seat] += " (봇)";
+        output.ToAll(new BotTookOverMsg { seat = seat, nickname = _nicknames[seat] });
+    }
+
+    /// <summary>
+    /// 명시적 나가기(§9-4): 판 종료를 기다리지 않고 즉시 봇으로 전환.
+    /// 그 좌석이 지금 행동 차례면(버림/스톱/뽕 추가버림/뽕 창) 봇 행동을 바로 예약한다.
+    /// </summary>
+    public SessionOutput ReplaceSeatWithBot(int seat)
+    {
+        var output = new SessionOutput();
+        if (seat < 0 || seat >= _playerCount || _botSeats.Contains(seat))
+        {
+            return output;
+        }
+
+        BotifySeat(output, seat);
+
+        var actorPhase = _phase == RoundPhase.WaitingStop || _phase == RoundPhase.WaitingDiscard
+            ? _round.CurrentSeat
+            : _phase == RoundPhase.WaitingPongDiscard ? _pongDeclarerSeat : -1;
+        if (actorPhase == seat)
+        {
+            _turnToken++; // 사람용 5초 타이머 무효화(봇 행동과 중복 방지)
+            ArmBotAct(output);
+        }
+        else if (_phase == RoundPhase.PongWindow && _pongEligible.Contains(seat) && !_pongPassed.Contains(seat))
+        {
+            ArmBotAct(output); // 뽕 창 대기 중이면 봇이 대신 선언/패스
+        }
+
+        return output;
     }
 
     /// <summary>§9-4: 이탈(봇 대체) 좌석은 우승 후보 제외 — 남은 사람 중 최저 빚이 우승.</summary>

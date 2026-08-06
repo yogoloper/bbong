@@ -36,10 +36,16 @@ namespace Bbong.Client
 
         public event Action PassClicked;
 
+        /// <summary>나가기 확정(확인 모달에서 "나가기" 선택) — 실제 퇴장 처리는 드라이버 몫.</summary>
+        public event Action ExitConfirmed;
+
         public GameObject CanvasGo => _canvasGo;
 
         /// <summary>턴 카운트다운 "(N)" 표시 여부 — 타이머 없는 화면(튜토리얼)은 끈다.</summary>
         public bool ShowTurnCountdown { get; set; } = true;
+
+        /// <summary>나가기 확인 모달 문구(모드별로 교체 가능).</summary>
+        public string ExitConfirmText { get; set; } = "게임에서 나가시겠습니까?\n진행 중인 판은 포기됩니다.";
 
         private readonly List<(List<Card> cards, bool group, Vector2 pos, float rot)> _timeline = new();
         private int _timelineShown;
@@ -82,6 +88,8 @@ namespace Bbong.Client
         private RectTransform _shakeRoot;
         private Coroutine _shakeFx;
         private Transform _leaderboardRows; // 좌상단 상시 누적 리더보드
+        private GameObject _exitModal;      // 나가기 확인 모달
+        private Text _exitModalText;
         private int _meldLaidSeat = -1; // 판 종료 공개 패의 주인 좌석 — 그 좌석의 손패(내 손/상대 뒷면)를 숨김
 
         // ── UI 생성 ──
@@ -320,6 +328,76 @@ namespace Bbong.Client
             _sfxPong = TableArt.Noise("pong", 0.16f, 42f);
             _sfxStop = TableArt.Tone("stop", 520f, 0.28f, 7f);
             _sfxShuffle = TableArt.Noise("shuffle", 0.35f, 10f);
+
+            BuildExitUi(root);
+        }
+
+        /// <summary>나가기 버튼(우상단 코너 — 손패·액션 버튼과 대각선 반대라 오클릭 최소) + 확인 모달.</summary>
+        private void BuildExitUi(Transform root)
+        {
+            var exitBtn = UiKit.CreateButton(root, "나가기",
+                new Vector2(0.928f, 0.945f), new Vector2(0.995f, 0.993f), ShowExitConfirm, 22);
+            exitBtn.GetComponent<Image>().color = new Color(0.45f, 0.18f, 0.20f, 0.92f);
+            var exitLabel = exitBtn.GetComponentInChildren<Text>();
+            exitLabel.color = new Color(1f, 0.85f, 0.85f);
+            exitLabel.fontStyle = FontStyle.Bold;
+            TableArt.AddOutline(exitLabel);
+
+            // 확인 모달 — 캔버스 직속(셰이크 무관), 표시할 때 최상위로 올림
+            var dim = UiKit.CreatePanel(_canvasGo.transform, new Color(0f, 0f, 0f, 0.65f));
+            dim.raycastTarget = true; // 뒤 클릭 차단
+            UiKit.Stretch(dim.rectTransform);
+            _exitModal = dim.gameObject;
+
+            var box = UiKit.CreatePanel(dim.transform, new Color(0.10f, 0.13f, 0.22f, 0.98f));
+            if (UiArt.Panel9 != null)
+            {
+                box.sprite = UiArt.Panel9;
+                box.type = Image.Type.Sliced;
+            }
+
+            UiKit.Anchor(box.rectTransform, new Vector2(0.33f, 0.38f), new Vector2(0.67f, 0.62f));
+            var boxShadow = box.gameObject.AddComponent<Shadow>();
+            boxShadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
+            boxShadow.effectDistance = new Vector2(8f, -8f);
+
+            _exitModalText = UiKit.CreateText(box.transform, "", 30, TextAnchor.MiddleCenter,
+                new Vector2(0.05f, 0.42f), new Vector2(0.95f, 0.92f));
+            _exitModalText.fontStyle = FontStyle.Bold;
+            _exitModalText.color = new Color(0.96f, 0.95f, 0.90f);
+            TableArt.AddOutline(_exitModalText);
+            FitText(_exitModalText, 18, 30);
+
+            var stay = UiKit.CreateButton(box.transform, "계속하기",
+                new Vector2(0.08f, 0.10f), new Vector2(0.46f, 0.34f), () => _exitModal.SetActive(false), 28);
+            stay.GetComponent<Image>().color = new Color(0.36f, 0.46f, 0.66f);
+            StyleModalButton(stay);
+
+            var leave = UiKit.CreateButton(box.transform, "나가기",
+                new Vector2(0.54f, 0.10f), new Vector2(0.92f, 0.34f), () =>
+                {
+                    _exitModal.SetActive(false);
+                    ExitConfirmed?.Invoke();
+                }, 28);
+            leave.GetComponent<Image>().color = new Color(0.90f, 0.30f, 0.25f);
+            StyleModalButton(leave);
+
+            _exitModal.SetActive(false);
+        }
+
+        private static void StyleModalButton(Button button)
+        {
+            var text = button.GetComponentInChildren<Text>();
+            text.color = Color.white;
+            text.fontStyle = FontStyle.Bold;
+            TableArt.AddOutline(text);
+        }
+
+        private void ShowExitConfirm()
+        {
+            _exitModalText.text = ExitConfirmText;
+            _exitModal.transform.SetAsLastSibling(); // 안내 패널 등 무엇보다 위
+            _exitModal.SetActive(true);
         }
 
         /// <summary>버튼 바에 버튼 추가 — 컬러 버튼(흰 글씨+아웃라인+그림자). tint 미지정 시 블루그레이(이동/진행 계열).</summary>

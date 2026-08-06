@@ -53,6 +53,8 @@ namespace Bbong.Client
             _table.NaturalPongClicked += () => _naturalPressed = true;
             _table.MeldClicked += () => _meldPressed = true;
             _table.StopClicked += () => _stopPressed = true;
+            _table.ExitConfirmText = "튜토리얼을 종료하시겠습니까?\n언제든 다시 시작할 수 있습니다.";
+            _table.ExitConfirmed += () => UiKit.GoTo<MainLobbyBootstrap>(_table.CanvasGo, this);
 
             BuildGuidePanel();
             StartCoroutine(RunTutorial());

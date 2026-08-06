@@ -44,6 +44,8 @@ namespace Bbong.Client
             _table.NaturalPongClicked += OnNaturalPong;
             _table.PongClicked += () => WsClient.Instance.Send(new PongDeclareMsg());
             _table.PassClicked += OnPass;
+            _table.ExitConfirmText = "게임에서 나가시겠습니까?\n내 자리는 봇이 이어받습니다.";
+            _table.ExitConfirmed += OnExitConfirmed;
 
             WsClient.Instance.OnMessage += HandleMessage;
             WsClient.Instance.OnClosed += HandleClosed;
@@ -248,6 +250,13 @@ namespace Bbong.Client
         {
             SetLog($"방 종료: {reason}");
             UiKit.GoTo<MainLobbyBootstrap>(_table.CanvasGo, this);
+        }
+
+        /// <summary>자발적 나가기: leaveRoom 전송 — 서버가 내 자리를 즉시 봇으로 대체(§9-4). 소켓은 로비에서 재사용.</summary>
+        private void OnExitConfirmed()
+        {
+            WsClient.Instance.Send(new LeaveRoomMsg());
+            LeaveToLobby("게임에서 나갔습니다.");
         }
 
         // ── 입력 ──

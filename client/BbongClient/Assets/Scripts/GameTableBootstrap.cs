@@ -117,6 +117,7 @@ namespace Bbong.Client
             _table.NaturalPongClicked += OnNaturalPong;
             _table.PongClicked += OnPong;
             _table.PassClicked += OnPass;
+            _table.ExitConfirmed += () => UiKit.GoTo<MainLobbyBootstrap>(_table.CanvasGo, this);
 
             _game = GameState.Start(PlayerCount);
             StartRound();

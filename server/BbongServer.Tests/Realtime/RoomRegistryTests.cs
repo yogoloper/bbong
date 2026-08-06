@@ -176,6 +176,20 @@ public class RoomRegistryTests
     }
 
     [Test]
+    public void Leave_during_game_hands_seat_to_bot_immediately()
+    {
+        var (room, hostSink, host) = CreatedRoom();
+        var guest = Join(room, "손님", out _);
+        room.Execute(new StartGameCmd(host.UserId));
+
+        room.Execute(new LeaveCmd(guest.UserId)); // 명시적 나가기 — 끊김과 달리 즉시 봇 대체
+
+        Assert.That(room.Phase, Is.EqualTo(RoomPhase.Playing));
+        Assert.That(hostSink.Last<BotTookOverMsg>().seat, Is.EqualTo(1));
+        Assert.That(_registry.FindByUser(guest.UserId), Is.Null);
+    }
+
+    [Test]
     public void Room_closes_when_every_player_disconnects_mid_game()
     {
         var (room, _, host) = CreatedRoom();
