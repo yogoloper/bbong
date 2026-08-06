@@ -117,6 +117,12 @@ public static class WsEndpoint
             case StartGameMsg:
                 room?.Dispatch(new StartGameCmd(member.UserId));
                 break;
+            case AddBotMsg:
+                room?.Dispatch(new AddBotCmd(member.UserId));
+                break;
+            case RemoveBotMsg:
+                room?.Dispatch(new RemoveBotCmd(member.UserId));
+                break;
             default:
                 // 게임 액션은 방 루프가 좌석 판정 후 세션에 전달
                 if (room is null)

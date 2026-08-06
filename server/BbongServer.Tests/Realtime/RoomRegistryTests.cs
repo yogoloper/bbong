@@ -202,6 +202,80 @@ public class RoomRegistryTests
         Assert.That(room.Phase, Is.EqualTo(RoomPhase.Closed));
     }
 
+    // ── 봇 추가/삭제 (대기실) ──
+
+    [Test]
+    public void Host_can_add_and_remove_bots()
+    {
+        var (room, hostSink, host) = CreatedRoom();
+
+        room.Execute(new AddBotCmd(host.UserId));
+        room.Execute(new AddBotCmd(host.UserId));
+
+        var update = hostSink.Last<RoomUpdateMsg>();
+        Assert.That(update.members, Has.Length.EqualTo(3)); // 나 + 봇 2
+        Assert.That(update.members.Count(m => m.isBot), Is.EqualTo(2));
+
+        room.Execute(new RemoveBotCmd(host.UserId));
+        Assert.That(hostSink.Last<RoomUpdateMsg>().members.Count(m => m.isBot), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Non_host_cannot_manage_bots()
+    {
+        var (room, _, _) = CreatedRoom();
+        var guest = Join(room, "손님", out var guestSink);
+
+        room.Execute(new AddBotCmd(guest.UserId));
+
+        Assert.That(guestSink.Last<ErrorMsg>().code, Is.EqualTo("not_host"));
+    }
+
+    [Test]
+    public void Bots_count_toward_room_capacity()
+    {
+        var (room, hostSink, host) = CreatedRoom();
+        for (var i = 0; i < 5; i++) // 나 + 봇 5 = 정원 6
+        {
+            room.Execute(new AddBotCmd(host.UserId));
+        }
+
+        room.Execute(new AddBotCmd(host.UserId)); // 7번째
+        Assert.That(hostSink.Last<ErrorMsg>().code, Is.EqualTo("room_full"));
+
+        Join(room, "지각생", out var lateSink); // 사람 입장도 봇 포함 정원에 막힘
+        Assert.That(lateSink.Last<ErrorMsg>().code, Is.EqualTo("room_full"));
+    }
+
+    [Test]
+    public void Start_with_bots_includes_bot_seats_in_game()
+    {
+        var (room, hostSink, host) = CreatedRoom();
+        var guest = Join(room, "손님", out var guestSink);
+        room.Execute(new AddBotCmd(host.UserId));
+        room.Execute(new AddBotCmd(host.UserId));
+
+        room.Execute(new StartGameCmd(host.UserId));
+
+        var started = hostSink.Last<GameStartedMsg>();
+        Assert.That(started.playerCount, Is.EqualTo(4)); // 사람 2 + 봇 2
+        Assert.That(started.yourSeat, Is.EqualTo(0));
+        Assert.That(guestSink.Last<GameStartedMsg>().yourSeat, Is.EqualTo(1));
+        Assert.That(started.nicknames.Count(n => n.Contains("봇")), Is.EqualTo(2)); // 봇 좌석 2, 3
+    }
+
+    [Test]
+    public void Host_alone_can_start_with_a_bot()
+    {
+        var (room, hostSink, host) = CreatedRoom();
+        room.Execute(new AddBotCmd(host.UserId));
+
+        room.Execute(new StartGameCmd(host.UserId));
+
+        Assert.That(hostSink.Last<GameStartedMsg>().playerCount, Is.EqualTo(2));
+        Assert.That(room.Phase, Is.EqualTo(RoomPhase.Playing));
+    }
+
     // ── 게임 시작 ──
 
     [Test]

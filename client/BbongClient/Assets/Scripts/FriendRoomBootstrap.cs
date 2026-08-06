@@ -1,3 +1,5 @@
+using System.Linq;
+using BbongCore.Config;
 using BbongCore.Online;
 using UnityEngine;
 using UnityEngine.UI;
@@ -107,8 +109,19 @@ namespace Bbong.Client
 
             if (Session.UserId == _room.hostUserId)
             {
+                // 방장 전용 봇 관리 — 둘이서만 하면 루즈하니 봇으로 자리를 채운다(사람+봇 최대 정원)
+                var botCount = _room.members.Count(m => m.isBot);
+                var addBot = UiKit.CreateButton(root, "봇 추가",
+                    new Vector2(0.30f, 0.19f), new Vector2(0.48f, 0.27f),
+                    () => WsClient.Instance.Send(new AddBotMsg()), 30);
+                addBot.interactable = _room.members.Length < GameConfig.MaxPlayers;
+                var removeBot = UiKit.CreateButton(root, "봇 빼기",
+                    new Vector2(0.52f, 0.19f), new Vector2(0.70f, 0.27f),
+                    () => WsClient.Instance.Send(new RemoveBotMsg()), 30);
+                removeBot.interactable = botCount > 0;
+
                 var start = UiKit.PrimaryCta(root, "게임 시작", () => WsClient.Instance.Send(new StartGameMsg()));
-                start.interactable = _room.members.Length >= 2;
+                start.interactable = _room.members.Length >= 2; // 봇 포함 2명 이상
             }
             else
             {

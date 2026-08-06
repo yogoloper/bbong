@@ -18,6 +18,8 @@ public static class ClientMessageType
     public const string JoinRoom = "joinRoom";
     public const string LeaveRoom = "leaveRoom";
     public const string StartGame = "startGame";
+    public const string AddBot = "addBot";
+    public const string RemoveBot = "removeBot";
     public const string StopDeclare = "stopDeclare";
     public const string ContinueTurn = "continueTurn";
     public const string Discard = "discard";
@@ -51,6 +53,20 @@ public sealed class LeaveRoomMsg
 public sealed class StartGameMsg
 {
     public string type = ClientMessageType.StartGame;
+}
+
+/// <summary>대기실에서 방장이 봇 한 명 추가(사람+봇 합계 최대 정원까지).</summary>
+[Serializable]
+public sealed class AddBotMsg
+{
+    public string type = ClientMessageType.AddBot;
+}
+
+/// <summary>대기실에서 방장이 마지막 봇 제거.</summary>
+[Serializable]
+public sealed class RemoveBotMsg
+{
+    public string type = ClientMessageType.RemoveBot;
 }
 
 [Serializable]

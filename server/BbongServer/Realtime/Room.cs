@@ -24,6 +24,14 @@ public sealed class Room
 {
     private readonly Channel<RoomCommand> _channel = Channel.CreateUnbounded<RoomCommand>();
     private readonly List<RoomMember> _members = new();
+
+    // 대기실에서 방장이 채운 봇 자리(닉네임만 보관 — 시작 시 뒷좌석에 배치)
+    private readonly List<string> _botNames = new();
+
+    private static readonly string[] BotNamePool =
+    {
+        "너구리", "수달", "부엉이", "고슴도치", "펭귄", "다람쥐"
+    };
     private readonly HashSet<Guid> _absent = new(); // 게임 중 이탈(끊김/종료) — 좌석 유지, 판 종료 시 봇 대체(§9-4)
     private readonly RoomRegistry _registry;
     private bool _loopRunning;
@@ -102,6 +110,12 @@ public sealed class Room
             case StartGameCmd start:
                 HandleStart(start.UserId);
                 break;
+            case AddBotCmd addBot:
+                HandleAddBot(addBot.RequesterUserId);
+                break;
+            case RemoveBotCmd removeBot:
+                HandleRemoveBot(removeBot.RequesterUserId);
+                break;
             case ActionCmd action:
                 HandleAction(action.UserId, action.Message);
                 break;
@@ -153,7 +167,7 @@ public sealed class Room
             return;
         }
 
-        if (_members.Count >= GameConfig.MaxPlayers)
+        if (_members.Count + _botNames.Count >= GameConfig.MaxPlayers)
         {
             Send(member.Sink, new ErrorMsg { code = "room_full", message = "방 정원이 가득 찼습니다." });
             return;
@@ -209,6 +223,55 @@ public sealed class Room
         BroadcastRoomUpdate();
     }
 
+    /// <summary>대기실 봇 추가(방장 전용). 사람+봇 합계가 정원(rules.md §9-4 봇과 동일 로직 재사용).</summary>
+    private void HandleAddBot(Guid userId)
+    {
+        var requester = _members.FirstOrDefault(m => m.UserId == userId);
+        if (requester is null || Phase != RoomPhase.Waiting)
+        {
+            return;
+        }
+
+        if (userId != HostUserId)
+        {
+            Send(requester.Sink, new ErrorMsg { code = "not_host", message = "호스트만 봇을 관리할 수 있습니다." });
+            return;
+        }
+
+        if (_members.Count + _botNames.Count >= GameConfig.MaxPlayers)
+        {
+            Send(requester.Sink, new ErrorMsg { code = "room_full", message = "방 정원이 가득 찼습니다." });
+            return;
+        }
+
+        var name = BotNamePool.First(n => !_botNames.Contains($"{n} (봇)"));
+        _botNames.Add($"{name} (봇)");
+        BroadcastRoomUpdate();
+    }
+
+    private void HandleRemoveBot(Guid userId)
+    {
+        var requester = _members.FirstOrDefault(m => m.UserId == userId);
+        if (requester is null || Phase != RoomPhase.Waiting)
+        {
+            return;
+        }
+
+        if (userId != HostUserId)
+        {
+            Send(requester.Sink, new ErrorMsg { code = "not_host", message = "호스트만 봇을 관리할 수 있습니다." });
+            return;
+        }
+
+        if (_botNames.Count == 0)
+        {
+            return;
+        }
+
+        _botNames.RemoveAt(_botNames.Count - 1);
+        BroadcastRoomUpdate();
+    }
+
     private void HandleStart(Guid userId)
     {
         var requester = _members.FirstOrDefault(m => m.UserId == userId);
@@ -223,26 +286,27 @@ public sealed class Room
             return;
         }
 
-        if (Phase != RoomPhase.Waiting || _members.Count < GameConfig.MinPlayers)
+        if (Phase != RoomPhase.Waiting || _members.Count + _botNames.Count < GameConfig.MinPlayers)
         {
             Send(requester.Sink, new ErrorMsg { code = "not_enough_players", message = $"최소 {GameConfig.MinPlayers}명이 필요합니다." });
             return;
         }
 
         Phase = RoomPhase.Playing;
-        var nicknames = _members.Select(m => m.Nickname).ToArray();
+        var nicknames = _members.Select(m => m.Nickname).Concat(_botNames).ToArray();
         for (var seat = 0; seat < _members.Count; seat++)
         {
             Send(_members[seat].Sink, new GameStartedMsg
             {
                 yourSeat = seat,
-                playerCount = _members.Count,
+                playerCount = nicknames.Length,
                 nicknames = nicknames,
                 setRounds = new GameConfig().SetRounds
             });
         }
 
-        _session = new GameSession(nicknames, () => new SeededRandom(Random.Shared.Next()));
+        var botSeats = Enumerable.Range(_members.Count, _botNames.Count);
+        _session = new GameSession(nicknames, () => new SeededRandom(Random.Shared.Next()), botSeats: botSeats);
         Apply(_session.StartMatch());
     }
 
@@ -341,7 +405,10 @@ public sealed class Room
         {
             code = Code,
             hostUserId = HostUserId.ToString(),
-            members = _members.Select(m => new RoomMemberDto { userId = m.UserId.ToString(), nickname = m.Nickname }).ToArray()
+            members = _members
+                .Select(m => new RoomMemberDto { userId = m.UserId.ToString(), nickname = m.Nickname })
+                .Concat(_botNames.Select(n => new RoomMemberDto { nickname = n, isBot = true }))
+                .ToArray()
         };
         Broadcast(update);
     }

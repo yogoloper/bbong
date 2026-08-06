@@ -13,6 +13,11 @@ public sealed record LeaveCmd(Guid UserId) : RoomCommand;
 
 public sealed record StartGameCmd(Guid UserId) : RoomCommand;
 
+/// <summary>대기실에서 방장이 봇 추가/삭제(사람+봇 합계가 정원).</summary>
+public sealed record AddBotCmd(Guid RequesterUserId) : RoomCommand;
+
+public sealed record RemoveBotCmd(Guid RequesterUserId) : RoomCommand;
+
 /// <summary>게임 중 클라 액션(파싱된 BbongCore.Online 메시지 객체).</summary>
 public sealed record ActionCmd(Guid UserId, object Message) : RoomCommand;
 

@@ -718,6 +718,29 @@ public class GameSessionTests
     }
 
     [Test]
+    public void Initial_bot_seat_acts_automatically_and_rejects_player_input()
+    {
+        // 대기실에서 추가된 봇 좌석(ctor botSeats) — 자기 턴에 봇 타이머, 사람 입력은 거부
+        var session = new GameSession(new[] { "P0", "너구리 (봇)" }, () => new SeededRandom(1), botSeats: new[] { 1 });
+        var round = new RoundState(
+            new[] { P(0, C(1, CardColor.Red), C(2, CardColor.Red)), P(1, C(11, CardColor.Red), C(12, CardColor.Red), C(5, CardColor.Blue)) },
+            new[] { C(9, CardColor.Green), C(6, CardColor.Yellow) },
+            Array.Empty<Card>(),
+            currentSeat: 1,
+            new SeededRandom(1));
+        var output = session.RigRoundForTest(round);
+
+        Assert.That(output.Timers.Any(t => t.Command is BotActCmd), Is.True); // 사람용 5초 타이머 대신 봇 예약
+        Assert.That(HasMsg<BotTookOverMsg>(output), Is.False); // 교대가 아니므로 안내 없음
+
+        var rejected = session.HandleAction(1, new DiscardMsg { card = CardDto.From(C(11, CardColor.Red)) });
+        Assert.That(For<ErrorMsg>(rejected, 1).code, Is.EqualTo("seat_replaced"));
+
+        var acted = session.HandleBotAct(BotActToken(output));
+        Assert.That(For<DiscardedMsg>(acted, 0).seat, Is.EqualTo(1)); // 봇이 알아서 버림
+    }
+
+    [Test]
     public void Stale_turn_timeout_is_ignored()
     {
         var (session, output) = Rigged(

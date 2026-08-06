@@ -46,6 +46,7 @@ public sealed class RoomMemberDto
 {
     public string userId = "";
     public string nickname = "";
+    public bool isBot;
 }
 
 [Serializable]

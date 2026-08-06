@@ -54,7 +54,8 @@ public sealed class GameSession
     private readonly Bot?[] _bots;
     private int _botToken;
 
-    public GameSession(string[] nicknames, Func<IRandom> rngFactory, int setRounds = 5)
+    public GameSession(string[] nicknames, Func<IRandom> rngFactory, int setRounds = 5,
+        IEnumerable<int>? botSeats = null)
     {
         _nicknames = nicknames;
         _rngFactory = rngFactory;
@@ -63,6 +64,13 @@ public sealed class GameSession
         _acted = new bool[_playerCount];
         _timedOut = new bool[_playerCount];
         _bots = new Bot?[_playerCount];
+
+        // 대기실에서 방장이 채운 봇 좌석 — 시작부터 봇 플레이(닉네임은 방에서 "(봇)" 포함 전달)
+        foreach (var seat in botSeats ?? Array.Empty<int>())
+        {
+            _botSeats.Add(seat);
+            _bots[seat] = new Bot(BotDifficulty.Normal);
+        }
     }
 
     // ── 진입점 ──
