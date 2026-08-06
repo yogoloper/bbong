@@ -32,19 +32,9 @@ namespace Bbong.Client
 
         public BotDifficulty Difficulty { get; set; } = BotDifficulty.Normal;
 
-        // 닉네임 = "형용사 명사" 조합(띄어쓰기 포함 최대 9자, GameConfig.MaxNicknameLength=12 이내).
-        // 나 포함 전원 게임마다 중복 없이 무작위 배정.
-        private static readonly string[] NickAdjectives =
-        {
-            "수줍은", "용감한", "날쌘", "졸린", "명랑한",
-            "시크한", "엉뚱한", "우아한", "씩씩한", "능청스런"
-        };
-
-        private static readonly string[] NickNouns =
-        {
-            "너구리", "두더지", "고슴도치", "다람쥐", "부엉이",
-            "수달", "알파카", "펭귄", "사막여우", "호랑나비"
-        };
+        // 닉네임 풀은 코어 NicknamePool 공유(서버 게스트/봇 닉과 동일 스타일·단일 관리).
+        private static readonly string[] NickAdjectives = NicknamePool.Adjectives;
+        private static readonly string[] NickNouns = NicknamePool.Animals;
 
         private string[] _names;
         private Bot[] _bots;
@@ -80,7 +70,7 @@ namespace Bbong.Client
             _seed = Random.Range(1, 1_000_000); // Play마다 다른 패(고정 시드 버그 수정)
             _bots = Enumerable.Range(0, PlayerCount).Select(_ => new Bot(Difficulty)).ToArray();
 
-            // 내 좌석 = 계정 닉네임(로그인 전 단독 실행 시에만 랜덤), 봇 = "형용사 명사" 무작위 배정
+            // 내 좌석 = 계정 닉네임(로그인 전 단독 실행 시에만 랜덤), 봇 = "형용사 명사 봇" 무작위 배정
             _names = new string[PlayerCount];
             var used = new HashSet<string>();
             if (!string.IsNullOrEmpty(Session.Nickname))
@@ -96,10 +86,11 @@ namespace Bbong.Client
                     continue;
                 }
 
+                var suffix = s == MySeat ? "" : " 봇"; // 내 좌석은 로그인 전 랜덤 배정이어도 봇 아님
                 string name;
                 do
                 {
-                    name = $"{NickAdjectives[Random.Range(0, NickAdjectives.Length)]} {NickNouns[Random.Range(0, NickNouns.Length)]}";
+                    name = $"{NickAdjectives[Random.Range(0, NickAdjectives.Length)]} {NickNouns[Random.Range(0, NickNouns.Length)]}{suffix}";
                 }
                 while (!used.Add(name));
 
@@ -263,7 +254,7 @@ namespace Bbong.Client
                 {
                     _table.ShowMeldSet(_round.CurrentPlayer.Hand.Cards, seat); // 족보: 버림 비우고 표시
                     _table.PongFx($"{SeatName(seat)}\n{MeldName(meld.Type)}!");
-                    EndRound(RoundSettlement.SettleByMeld(_round, seat, meld), $"{SeatName(seat)} 족보 완성 [{MeldName(meld.Type)} {meld.Score}점]", seat);
+                    EndRound(RoundSettlement.SettleByMeld(_round, seat, meld), $"{SeatName(seat)} - {MeldName(meld.Type)}", seat);
                     yield break;
                 }
 
@@ -279,7 +270,7 @@ namespace Bbong.Client
                         _round = _round.NaturalPong(number, null);
                         _table.GroupFx(seat, laid);
                         _table.PongFx($"{SeatName(seat)}\n{number}자연뽕!");
-                        EndRound(RoundSettlement.SettleByHandClear(_round, seat), $"{SeatName(seat)} 자연뽕 손 털기", seat);
+                        EndRound(RoundSettlement.SettleByHandClear(_round, seat), $"{SeatName(seat)} - 자연뽕 손 털기", seat);
                         yield break;
                     }
 
@@ -407,7 +398,7 @@ namespace Bbong.Client
                 _round = _round.Pong(seat, null);
                 _table.PongFx($"{SeatName(seat)}\n{number}뽕!");
                 _table.GroupFx(seat, laid);
-                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} 손 털기 · {SeatName(discarderSeat)} 박 +20", seat);
+                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} - 손 털기 · {SeatName(discarderSeat)} 박", seat);
                 return;
             }
 
@@ -434,7 +425,7 @@ namespace Bbong.Client
             yield return new WaitForSeconds(TossDelay);
             _pendingTossSeat = -1;
             _table.DiscardFx(seat, toss);
-            EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} 손 털기 · {SeatName(discarderSeat)} 박 +20", seat);
+            EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} - 손 털기 · {SeatName(discarderSeat)} 박", seat);
         }
 
         /// <summary>봇 뽕의 추가 버림을 한 박자 뒤에 표시(내려놓기 → 버림 단계 연출).</summary>
@@ -590,8 +581,8 @@ namespace Bbong.Client
         }
 
         private string StopReason(int stopSeat) => StopResolver.IsBagaji(_round, stopSeat)
-            ? $"{SeatName(stopSeat)} 바가지 (+30)"
-            : $"{SeatName(stopSeat)} 스톱";
+            ? $"{SeatName(stopSeat)} - 바가지"
+            : $"{SeatName(stopSeat)} - 스톱";
 
         private static string MeldName(MeldType type) => MeldNames.Korean(type); // 단일 출처: 코어 MeldNames
 
@@ -701,7 +692,7 @@ namespace Bbong.Client
             _state = UiState.Resolving;
             _table.ShowMeldSet(_round.Players[MySeat].Hand.Cards, MySeat); // 손 전부 테이블에 펼침
             _table.PongFx($"{SeatName(MySeat)}\n{MeldName(_pendingMeld.Type)}!");
-            EndRound(RoundSettlement.SettleByMeld(_round, MySeat, _pendingMeld), $"{SeatName(MySeat)} 족보 완성 [{MeldName(_pendingMeld.Type)} {_pendingMeld.Score}점]", MySeat);
+            EndRound(RoundSettlement.SettleByMeld(_round, MySeat, _pendingMeld), $"{SeatName(MySeat)} - {MeldName(_pendingMeld.Type)}", MySeat);
         }
 
         private void OnNaturalPong()

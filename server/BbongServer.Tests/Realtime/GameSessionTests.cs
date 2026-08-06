@@ -632,7 +632,7 @@ public class GameSessionTests
         Assert.That(HasMsg<RoundEndedMsg>(ended), Is.True);
         var bot = For<BotTookOverMsg>(ended, 0);
         Assert.That(bot.seat, Is.EqualTo(0));
-        Assert.That(bot.nickname, Does.Contain("봇"));
+        Assert.That(bot.nickname, Is.EqualTo("P0")); // 이탈해도 게임 끝까지 원래 닉네임 유지
     }
 
     [Test]
@@ -711,7 +711,7 @@ public class GameSessionTests
 
         var took = For<BotTookOverMsg>(replaced, 1);
         Assert.That(took.seat, Is.EqualTo(0));
-        Assert.That(took.nickname, Does.Contain("봇"));
+        Assert.That(took.nickname, Is.EqualTo("P0")); // 이탈해도 게임 끝까지 원래 닉네임 유지
 
         var acted = session.HandleBotAct(BotActToken(replaced));
         Assert.That(For<DiscardedMsg>(acted, 1).seat, Is.EqualTo(0));

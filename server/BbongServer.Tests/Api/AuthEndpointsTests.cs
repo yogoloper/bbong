@@ -52,7 +52,9 @@ public class AuthEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.That(body.GetProperty("accessToken").GetString(), Is.Not.Empty);
-        Assert.That(body.GetProperty("nickname").GetString(), Does.StartWith("게스트"));
+        var nickname = body.GetProperty("nickname").GetString()!.Split(' '); // "형용사 동물"
+        Assert.That(BbongCore.Config.NicknamePool.Adjectives, Does.Contain(nickname[0]));
+        Assert.That(BbongCore.Config.NicknamePool.Animals, Does.Contain(nickname[1]));
     }
 
     [Test]

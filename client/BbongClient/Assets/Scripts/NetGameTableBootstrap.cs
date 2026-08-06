@@ -155,7 +155,7 @@ namespace Bbong.Client
                     break;
 
                 case ServerMessageType.BotTookOver:
-                    // 이탈/무응답 좌석을 봇이 이어받음(§9-4). 닉네임 "(봇)" 갱신 — 점수판/콜아웃에 반영.
+                    // 이탈/무응답 좌석을 봇이 이어받음(§9-4). 닉네임은 원래 게이머 것 유지.
                     var bot = JsonUtility.FromJson<BotTookOverMsg>(json);
                     Nicknames[bot.seat] = bot.nickname;
                     _table.ShowCallout($"{bot.nickname}\n자리 교대");

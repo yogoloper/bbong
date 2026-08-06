@@ -160,7 +160,7 @@ public sealed class MeldDeclaredMsg
     public CardDto[] laid = Array.Empty<CardDto>(); // 족보 6장(테이블 펼침 연출)
 }
 
-/// <summary>이탈/무응답(rules.md §9-4) 좌석을 봇이 이어받음. 닉네임은 "(봇)" 표기로 갱신.</summary>
+/// <summary>이탈/무응답(rules.md §9-4) 좌석을 봇이 이어받음. 닉네임은 게임 끝까지 원래 게이머 것 유지.</summary>
 [Serializable]
 public sealed class BotTookOverMsg
 {

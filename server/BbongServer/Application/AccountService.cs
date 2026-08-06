@@ -98,5 +98,5 @@ public sealed class AccountService
     }
 
     /// <summary>id 기반 결정적 기본 닉네임("게스트 a1b2c3d4"). 고유 id 앞 8 hex라 충돌 사실상 없음, 12자.</summary>
-    private static string GuestNickname(Guid id) => $"게스트 {id:N}"[..12];
+    private static string GuestNickname(Guid _) => BbongCore.Config.NicknamePool.Pick(Random.Shared);
 }

@@ -83,6 +83,8 @@ namespace Bbong.Client
         private int _countdownRemaining;  // 0 = 카운트다운 미표시
 
         private AudioSource _audio;
+        private int _flightsActive;      // 비행 중 카드 수 — 점수판은 전부 착지한 뒤에 노출
+        private Coroutine _scoreDelay;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop, _sfxShuffle;
         private Image _flash;
         private RectTransform _shakeRoot;
@@ -181,10 +183,10 @@ namespace Bbong.Client
             lbRt.anchorMin = lbRt.anchorMax = new Vector2(0f, 1f); // 좌상단 고정
             lbRt.pivot = new Vector2(0f, 1f);
             lbRt.anchoredPosition = new Vector2(10f, -10f);
-            lbRt.sizeDelta = new Vector2(345f, 0f); // 높이는 인원수에 맞춰 자동(아래 여백 없음)
+            lbRt.sizeDelta = new Vector2(312f, 0f); // 높이는 인원수에 맞춰 자동. 닉네임 12자 한 줄 폭 + 6인 좌석과 간섭 없는 높이
             var lbLayout = lbPanel.gameObject.AddComponent<VerticalLayoutGroup>();
-            lbLayout.padding = new RectOffset(12, 12, 8, 8);
-            lbLayout.spacing = 3;
+            lbLayout.padding = new RectOffset(8, 8, 6, 6);
+            lbLayout.spacing = 2;
             lbLayout.childControlWidth = true;
             lbLayout.childControlHeight = true;
             lbLayout.childForceExpandHeight = false;
@@ -327,7 +329,7 @@ namespace Bbong.Client
             _sfxDiscard = TableArt.Tone("discard", 300f, 0.12f, 16f);
             _sfxPong = TableArt.Noise("pong", 0.16f, 42f);
             _sfxStop = TableArt.Tone("stop", 520f, 0.28f, 7f);
-            _sfxShuffle = TableArt.Noise("shuffle", 0.35f, 10f);
+            _sfxShuffle = TableArt.Riffle("shuffle", 0.55f);
 
             BuildExitUi(root);
         }
@@ -470,17 +472,38 @@ namespace Bbong.Client
                 }
 
                 var mine = seat.seat == MySeat;
-                var row = UiKit.CreateText(_leaderboardRows,
-                    $"{rank}위 {seat.nickname}  {seat.cumulativeDebt}",
-                    26, TextAnchor.MiddleLeft, Vector2.zero, Vector2.one);
-                row.color = mine ? MineText : new Color(0.80f, 0.82f, 0.87f);
-                if (mine)
-                {
-                    row.fontStyle = FontStyle.Bold;
-                }
+                var color = mine ? MineText : new Color(0.80f, 0.82f, 0.87f);
+                var row = new GameObject("LbRow", typeof(RectTransform)).AddComponent<HorizontalLayoutGroup>();
+                row.transform.SetParent(_leaderboardRows, false);
+                row.spacing = 4;
+                row.childControlWidth = true;
+                row.childControlHeight = true;
+                row.childForceExpandWidth = false;
+                row.gameObject.AddComponent<LayoutElement>().preferredHeight = 28f;
 
-                TableArt.AddOutline(row);
-                FitText(row, 16, 26);
+                LeaderboardCell(row.transform, $"{rank}위", 44f, color, mine);
+                LeaderboardCell(row.transform, seat.nickname, 190f, color, mine, fit: true); // 12자 × 최소 15px가 한 줄에 들어가는 폭
+                LeaderboardCell(row.transform, seat.cumulativeDebt.ToString(), 54f, color, mine);
+            }
+        }
+
+        /// <summary>리더보드 셀: 고정 폭 + 가운데 정렬(선 없는 표).</summary>
+        private void LeaderboardCell(Transform row, string text, float width, Color color, bool bold, bool fit = false)
+        {
+            var cell = UiKit.CreateText(row, text, 22, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            cell.color = color;
+            if (bold)
+            {
+                cell.fontStyle = FontStyle.Bold;
+            }
+
+            TableArt.AddOutline(cell);
+            var le = cell.gameObject.AddComponent<LayoutElement>();
+            le.preferredWidth = width;
+            le.flexibleWidth = 0f;
+            if (fit)
+            {
+                FitText(cell, 15, 22);
             }
         }
 
@@ -903,6 +926,7 @@ namespace Bbong.Client
         private IEnumerator FlyFace(int seat, Card card, Vector2 targetAnchor, float targetRot,
             float w, float h, float delay, System.Action onLand)
         {
+            _flightsActive++;
             if (delay > 0f)
             {
                 yield return new WaitForSeconds(delay);
@@ -918,6 +942,7 @@ namespace Bbong.Client
             {
                 if (fly == null)
                 {
+                    _flightsActive--;
                     yield break;
                 }
 
@@ -927,6 +952,7 @@ namespace Bbong.Client
                 yield return null;
             }
 
+            _flightsActive--;
             Destroy(fly);
             onLand?.Invoke();
         }
@@ -980,6 +1006,7 @@ namespace Bbong.Client
 
         private IEnumerator FlyCardFromDeck(int seat)
         {
+            _flightsActive++;
             var go = new GameObject("FlyCard", typeof(RectTransform), typeof(Image));
             go.transform.SetParent(_shakeRoot, false);
             var img = go.GetComponent<Image>();
@@ -995,6 +1022,7 @@ namespace Bbong.Client
             {
                 if (go == null)
                 {
+                    _flightsActive--;
                     yield break;
                 }
 
@@ -1004,6 +1032,7 @@ namespace Bbong.Client
                 yield return null;
             }
 
+            _flightsActive--;
             Destroy(go);
         }
 
@@ -1098,9 +1127,30 @@ namespace Bbong.Client
             : value < 0 ? new Color(0.5f, 0.8f, 1f)
             : new Color(0.72f, 0.72f, 0.78f);
 
-        /// <summary>중앙 점수표: 등수 헤더 + 판별 점수 행(줄무늬) + 합계 행. fadeOut이면 잠시 후 사라지고 onFadedOut 호출.</summary>
+        /// <summary>중앙 점수표: 마지막 카드가 착지하고 1초 뒤에 노출(연출을 가리지 않게).</summary>
         public void ShowScorePopup(string title, IReadOnlyList<int> debts, IReadOnlyList<int[]> roundHistory, bool fadeOut,
             Action onFadedOut = null)
+        {
+            if (_scoreDelay != null)
+            {
+                StopCoroutine(_scoreDelay);
+            }
+
+            _scoreDelay = StartCoroutine(ShowScorePopupAfterFlights(title, debts, roundHistory, fadeOut, onFadedOut));
+        }
+
+        private IEnumerator ShowScorePopupAfterFlights(string title, IReadOnlyList<int> debts,
+            IReadOnlyList<int[]> roundHistory, bool fadeOut, Action onFadedOut)
+        {
+            yield return new WaitWhile(() => _flightsActive > 0);
+            yield return new WaitForSeconds(1f);
+            _scoreDelay = null;
+            ShowScorePopupNow(title, debts, roundHistory, fadeOut, onFadedOut);
+        }
+
+        /// <summary>등수 헤더 + 판별 점수 행(줄무늬) + 합계 행. fadeOut이면 잠시 후 사라지고 onFadedOut 호출.</summary>
+        private void ShowScorePopupNow(string title, IReadOnlyList<int> debts, IReadOnlyList<int[]> roundHistory, bool fadeOut,
+            Action onFadedOut)
         {
             _scoreTitle.text = title;
             _scoreSubtitle.text = _endReason.text; // 종료 사유를 점수판 안에도 표시
@@ -1179,6 +1229,12 @@ namespace Bbong.Client
 
         public void HideScorePopup()
         {
+            if (_scoreDelay != null)
+            {
+                StopCoroutine(_scoreDelay);
+                _scoreDelay = null;
+            }
+
             if (_scoreFade != null)
             {
                 StopCoroutine(_scoreFade);

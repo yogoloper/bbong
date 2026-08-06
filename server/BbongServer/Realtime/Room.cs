@@ -27,11 +27,6 @@ public sealed class Room
 
     // 대기실에서 방장이 채운 봇 자리(닉네임만 보관 — 시작 시 뒷좌석에 배치)
     private readonly List<string> _botNames = new();
-
-    private static readonly string[] BotNamePool =
-    {
-        "너구리", "수달", "부엉이", "고슴도치", "펭귄", "다람쥐"
-    };
     private readonly HashSet<Guid> _absent = new(); // 게임 중 이탈(끊김/종료) — 좌석 유지, 판 종료 시 봇 대체(§9-4)
     private readonly RoomRegistry _registry;
     private bool _loopRunning;
@@ -244,8 +239,13 @@ public sealed class Room
             return;
         }
 
-        var name = BotNamePool.First(n => !_botNames.Contains($"{n} (봇)"));
-        _botNames.Add($"{name} (봇)");
+        string name;
+        do
+        {
+            name = $"{NicknamePool.Pick(Random.Shared)} 봇";
+        } while (_botNames.Contains(name) || _members.Any(m => m.Nickname == name));
+
+        _botNames.Add(name);
         BroadcastRoomUpdate();
     }
 

@@ -158,6 +158,29 @@ namespace Bbong.Client
             return clip;
         }
 
+        /// <summary>카드 리플 셔플 "스르르륵" — 저역 통과 노이즈에 가속하는 튕김 변조 + 페이드 인/아웃.</summary>
+        public static AudioClip Riffle(string name, float duration)
+        {
+            var rate = 44100;
+            var count = Mathf.RoundToInt(rate * duration);
+            var data = new float[count];
+            var lp = 0f;
+            var phase = 0f;
+            for (var i = 0; i < count; i++)
+            {
+                var p = i / (float)count;
+                lp += 0.18f * (Random.value * 2f - 1f - lp);            // 저역 통과 → 거친 "치익" 대신 "스르르"
+                phase += Mathf.Lerp(18f, 70f, p) / rate;                // 카드 튕김이 점점 빨라지는 리플감
+                var flick = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Mathf.PI * phase));
+                var env = Mathf.Sin(Mathf.PI * p);                      // 부드러운 페이드 인/아웃
+                data[i] = Mathf.Clamp(lp * flick * env * 2.4f, -1f, 1f);
+            }
+
+            var clip = AudioClip.Create(name, count, 1, rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
         public static AudioClip Noise(string name, float duration, float decay)
         {
             var rate = 44100;

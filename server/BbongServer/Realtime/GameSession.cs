@@ -194,7 +194,7 @@ public sealed class GameSession
                         seat = seat, bagaji = bagaji,
                         laidSeat = ender, laid = CardDto.FromAll(_round.Players[ender].Hand.Cards)
                     });
-                    var reason = bagaji ? $"{_nicknames[seat]} 바가지 (+30)" : $"{_nicknames[seat]} 스톱";
+                    var reason = bagaji ? $"{_nicknames[seat]} - 바가지" : $"{_nicknames[seat]} - 스톱";
                     EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, ender);
                 }
                 else
@@ -217,7 +217,7 @@ public sealed class GameSession
                         laid = CardDto.FromAll(_round.Players[seat].Hand.Cards)
                     });
                     EndRound(output, RoundSettlement.SettleByMeld(_round, seat, _meld),
-                        $"{_nicknames[seat]} 족보 완성 [{MeldNames.Korean(_meld.Type)} {_meld.Score}점]", seat);
+                        $"{_nicknames[seat]} - {MeldNames.Korean(_meld.Type)}", seat);
                     break;
                 }
 
@@ -280,7 +280,7 @@ public sealed class GameSession
             {
                 seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
             });
-            EndRound(output, RoundSettlement.SettleByHandClear(_round, seat), $"{_nicknames[seat]} 자연뽕 손 털기", seat);
+            EndRound(output, RoundSettlement.SettleByHandClear(_round, seat), $"{_nicknames[seat]} - 자연뽕 손 털기", seat);
             return;
         }
 
@@ -484,7 +484,7 @@ public sealed class GameSession
                 seat = seat, number = _pongNumber, laid = CardDto.FromAll(laid), view = BuildView(s)
             });
             EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat),
-                $"{_nicknames[seat]} 손 털기 · {_nicknames[_pongDiscarderSeat]} 박 +20", seat);
+                $"{_nicknames[seat]} - 손 털기 · {_nicknames[_pongDiscarderSeat]} 박", seat);
             return;
         }
 
@@ -544,7 +544,7 @@ public sealed class GameSession
         {
             EmitEach(output, s => new DiscardedMsg { seat = seat, card = CardDto.From(card), view = BuildView(s) });
             EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat),
-                $"{_nicknames[seat]} 손 털기 · {_nicknames[_pongDiscarderSeat]} 박 +20", seat);
+                $"{_nicknames[seat]} - 손 털기 · {_nicknames[_pongDiscarderSeat]} 박", seat);
             return;
         }
 
@@ -597,7 +597,7 @@ public sealed class GameSession
             laid = CardDto.FromAll(_round.Players[seat].Hand.Cards)
         });
         EndRound(output, RoundSettlement.SettleByMeld(_round, seat, _meld),
-            $"{_nicknames[seat]} 족보 완성 [{MeldNames.Korean(_meld.Type)} {_meld.Score}점]", seat);
+            $"{_nicknames[seat]} - {MeldNames.Korean(_meld.Type)}", seat);
     }
 
     private void HandleNaturalPong(SessionOutput output, int seat, NaturalPongMsg msg)
@@ -621,7 +621,7 @@ public sealed class GameSession
             {
                 seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
             });
-            EndRound(output, RoundSettlement.SettleByHandClear(_round, seat), $"{_nicknames[seat]} 자연뽕 손 털기", seat);
+            EndRound(output, RoundSettlement.SettleByHandClear(_round, seat), $"{_nicknames[seat]} - 자연뽕 손 털기", seat);
             return;
         }
 
@@ -768,8 +768,8 @@ public sealed class GameSession
     private void BotifySeat(SessionOutput output, int seat)
     {
         _botSeats.Add(seat);
-        _bots[seat] = new Bot(BotDifficulty.Normal);
-        _nicknames[seat] += " (봇)";
+        _bots[seat] = new Bot(BotDifficulty.Normal); // 이어받는 봇은 중간 난이도
+        // 닉네임은 게임 끝까지 원래 게이머 것 유지 — 남은 사람들이 헷갈리지 않게
         output.ToAll(new BotTookOverMsg { seat = seat, nickname = _nicknames[seat] });
     }
 

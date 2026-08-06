@@ -214,7 +214,17 @@ public class RoomRegistryTests
 
         var update = hostSink.Last<RoomUpdateMsg>();
         Assert.That(update.members, Has.Length.EqualTo(3)); // 나 + 봇 2
-        Assert.That(update.members.Count(m => m.isBot), Is.EqualTo(2));
+        var bots = update.members.Where(m => m.isBot).ToArray();
+        Assert.That(bots, Has.Length.EqualTo(2));
+        foreach (var bot in bots) // "형용사 동물 봇" 형식
+        {
+            var parts = bot.nickname.Split(' ');
+            Assert.That(parts, Has.Length.EqualTo(3));
+            Assert.That(BbongCore.Config.NicknamePool.Adjectives, Does.Contain(parts[0]));
+            Assert.That(BbongCore.Config.NicknamePool.Animals, Does.Contain(parts[1]));
+            Assert.That(parts[2], Is.EqualTo("봇"));
+        }
+        Assert.That(bots[0].nickname, Is.Not.EqualTo(bots[1].nickname)); // 방 안에서 중복 없음
 
         room.Execute(new RemoveBotCmd(host.UserId));
         Assert.That(hostSink.Last<RoomUpdateMsg>().members.Count(m => m.isBot), Is.EqualTo(1));
