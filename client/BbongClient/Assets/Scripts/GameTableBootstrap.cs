@@ -54,6 +54,9 @@ namespace Bbong.Client
         private Coroutine _botLoop;
         private Coroutine _turnTimer; // 내 행동 대기 5초 제한(rules.md §3) — 초과 시 자동 진행
         private int _turnToken;       // 이전 턴의 타이머가 다음 턴에 오발화하지 않도록 무효화 토큰
+        // 봇 뽕 대기(BotPongThenResume)는 추적 없는 코루틴이라, 새 흐름(턴 진행/뽕 창/판 종료)이
+        // 시작되면 이 토큰을 올려 낡은 대기가 늦뽕으로 턴을 가로채지 못하게 한다
+        private int _flowToken;
         private Card _drawnCard;      // 시간 초과 시 자동으로 버릴 방금 드로우한 카드
         // 봇 뽕/자연뽕은 코어에 추가 버림까지 원자 반영되지만 토스 연출은 한 박자 뒤 —
         // 그 사이 좌석 손패 수가 미리 줄어 보이지 않게 +1 보정할 좌석(-1=없음)
@@ -102,7 +105,7 @@ namespace Bbong.Client
             _table.PlayerCount = PlayerCount;
             _table.Nicknames = _names;
             _table.Build();
-            _nextBtn = _table.AddBarButton("다음 판", OnNext);
+            _nextBtn = _table.AddBarButton("다음 라운드", OnNext);
             _lobbyBtn = _table.AddBarButton("로비로", OnLobby);
 
             _table.CardClicked += OnCardClicked;
@@ -131,12 +134,13 @@ namespace Bbong.Client
             _table.SetEndReason("");
             _table.HideScorePopup();
 
-            SetLog($"{_roundIndex + 1}판 시작.");
+            SetLog($"{_roundIndex + 1}라운드 시작.");
             RunBots();
         }
 
         private void EndRound(int[] scores, string reason, int enderSeat)
         {
+            _flowToken++; // 판 종료 — 대기 중인 봇 뽕 흐름 전부 무효
             CancelTurnTimer();
             _table.SetEndReason(reason); // 버림 더미 아래에 종료 사유 표시
             _table.PlayStopSfx();
@@ -153,14 +157,14 @@ namespace Bbong.Client
             {
                 var winners = _game.WinnerSeats();
                 var who = string.Join(", ", winners.Select(s => _names[s]));
-                SetLog($"━━ 게임 종료(5판) ━━ 사유: {reason} → 다음 선 P{enderSeat} | 1등 {who} | 점수[{detail}] 누적[{cumulative}]");
+                SetLog($"━━ 게임 종료(5라운드) ━━ 사유: {reason} → 다음 선 P{enderSeat} | 1등 {who} | 점수[{detail}] 누적[{cumulative}]");
                 title = $"게임 종료 — 1등 {who}";
                 _state = UiState.SetOver;
             }
             else
             {
-                SetLog($"━━ {_roundIndex}판 종료 ━━ 사유: {reason} → 다음 선 P{enderSeat} | 점수[{detail}] 누적[{cumulative}]");
-                title = $"{_roundIndex}판 종료";
+                SetLog($"━━ {_roundIndex}라운드 종료 ━━ 사유: {reason} → 다음 선 P{enderSeat} | 점수[{detail}] 누적[{cumulative}]");
+                title = $"{_roundIndex}라운드 종료";
                 _state = UiState.RoundOver;
             }
 
@@ -181,6 +185,7 @@ namespace Bbong.Client
         /// <summary>봇 루프를 항상 단일로 유지(이전 코루틴 중지). 중복 실행 → 드로우 2번 버그 방지.</summary>
         private void RunBots()
         {
+            _flowToken++;
             if (_botLoop != null)
             {
                 StopCoroutine(_botLoop);
@@ -214,6 +219,8 @@ namespace Bbong.Client
                 SetLog($"P{seat} 턴 시작 ({SeatName(seat)}, 남은 더미 {_round.DrawPile.Count})");
                 if (seat == MySeat)
                 {
+                    _flowToken++; // 내 턴 개시 — 이전 버림에 대한 봇 뽕 대기는 여기서 무효
+
                     // 스톱 가능하면 결정(스톱/계속), 아니면 자동 드로우 후 버림 대기
                     if (StopResolver.CanStop(_round, MySeat))
                     {
@@ -296,7 +303,9 @@ namespace Bbong.Client
                         yield break;
                     }
 
-                    continue;
+                    // 자연뽕 추가 버림에도 다른 봇의 뽕 기회(서버와 동일 규칙)
+                    yield return BotPongThenResume(seat, BotDelay - TurnGapDelay);
+                    yield break;
                 }
 
                 var discard = _bots[seat].ChooseDiscard(_round.CurrentPlayer.Hand);
@@ -323,7 +332,13 @@ namespace Bbong.Client
         /// <summary>내 버림 카드가 더미에 착지한 뒤 봇 반응(뽕 판정 → 진행)을 시작한다.</summary>
         private IEnumerator BotsAfterLanding()
         {
+            var flow = _flowToken;
             yield return new WaitForSeconds(0.3f); // 비행(0.25초) 착지 대기
+            if (flow != _flowToken)
+            {
+                yield break;
+            }
+
             yield return BotPongThenResume(MySeat, BotDelay - 0.3f);
         }
 
@@ -333,6 +348,7 @@ namespace Bbong.Client
         /// </summary>
         private IEnumerator BotPongThenResume(int discarderSeat, float thinkDelay)
         {
+            var flow = _flowToken; // StartCoroutine은 첫 yield까지 즉시 실행 — 호출 시점 흐름을 캡처
             var ponger = FindBotPonger();
             if (ponger < 0)
             {
@@ -341,9 +357,9 @@ namespace Bbong.Client
             }
 
             yield return new WaitForSeconds(thinkDelay); // 버림 착지 기준 총 1초가 되도록 조정된 고민 시간
-            if (_state == UiState.RoundOver || _state == UiState.SetOver)
+            if (flow != _flowToken || _state == UiState.RoundOver || _state == UiState.SetOver)
             {
-                yield break;
+                yield break; // 그 사이 다른 흐름(내 턴 개시 등)이 시작됨 — 늦뽕 금지
             }
 
             if (!_round.CanPong(ponger))
@@ -359,7 +375,7 @@ namespace Bbong.Client
             }
 
             yield return new WaitForSeconds(TossDelay + 0.3f); // 추가 버림 비행 착지까지 대기
-            if (_state == UiState.RoundOver || _state == UiState.SetOver)
+            if (flow != _flowToken || _state == UiState.RoundOver || _state == UiState.SetOver)
             {
                 yield break;
             }
@@ -398,7 +414,20 @@ namespace Bbong.Client
                 _round = _round.Pong(seat, null);
                 _table.PongFx($"{SeatName(seat)}\n{number}뽕!");
                 _table.GroupFx(seat, laid);
-                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} - 손 털기 · {SeatName(discarderSeat)} 박", seat);
+                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(discarderSeat)} - 뽕 바가지", seat);
+                return;
+            }
+
+            if (_round.CanPongThenNaturalPong(seat))
+            {
+                // 남은 3장이 같은 숫자 → 토스 대신 자연뽕 손 소진(뽕 바가지) — 봇에게 항상 이득
+                var clear = _round.Players[seat].Hand.Cards.Where(c => c.Number != number).ToList();
+                _round = _round.PongThenNaturalPong(seat);
+                _table.PongFx($"{SeatName(seat)}\n{number}뽕!");
+                _table.GroupFx(seat, laid);
+                _table.GroupFx(seat, clear);
+                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat),
+                    $"{SeatName(discarderSeat)} - 뽕 바가지", seat);
                 return;
             }
 
@@ -425,7 +454,7 @@ namespace Bbong.Client
             yield return new WaitForSeconds(TossDelay);
             _pendingTossSeat = -1;
             _table.DiscardFx(seat, toss);
-            EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(seat)} - 손 털기 · {SeatName(discarderSeat)} 박", seat);
+            EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(discarderSeat)} - 뽕 바가지", seat);
         }
 
         /// <summary>봇 뽕의 추가 버림을 한 박자 뒤에 표시(내려놓기 → 버림 단계 연출).</summary>
@@ -446,6 +475,7 @@ namespace Bbong.Client
 
         private void OpenPongWindow(int discarderSeat)
         {
+            _flowToken++;
             _pongNumber = TopDiscardNumber();
             _pongDiscarderSeat = discarderSeat;
             _state = UiState.PongWindow;
@@ -581,7 +611,7 @@ namespace Bbong.Client
         }
 
         private string StopReason(int stopSeat) => StopResolver.IsBagaji(_round, stopSeat)
-            ? $"{SeatName(stopSeat)} - 바가지"
+            ? $"{SeatName(stopSeat)} - 스톱 바가지"
             : $"{SeatName(stopSeat)} - 스톱";
 
         private static string MeldName(MeldType type) => MeldNames.Korean(type); // 단일 출처: 코어 MeldNames
@@ -624,7 +654,7 @@ namespace Bbong.Client
             var bagaji = StopResolver.IsBagaji(_round, stopSeat);
             var ender = StopEnderSeat(stopSeat);
             _table.ShowMeldSet(_round.Players[ender].Hand.Cards, ender);
-            _table.ShowCallout(bagaji ? $"{SeatName(stopSeat)}\n바가지!" : $"{SeatName(stopSeat)}\n스톱!",
+            _table.ShowCallout(bagaji ? $"{SeatName(stopSeat)}\n스톱 바가지!" : $"{SeatName(stopSeat)}\n스톱!",
                 bagaji ? new Color(1f, 0.4f, 0.35f) : new Color(0.55f, 0.85f, 1f));
         }
 
@@ -643,7 +673,7 @@ namespace Bbong.Client
                 _round = _round.Pong(MySeat, null);
                 _table.PongFx($"{SeatName(MySeat)}\n{_pongNumber}뽕!");
                 _table.GroupFx(MySeat, pongLaid);
-                EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(MySeat)} 손 털기 · {SeatName(_pongDiscarderSeat)} 박 +20", MySeat);
+                EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(_pongDiscarderSeat)} - 뽕 바가지", MySeat);
                 return;
             }
 
@@ -697,6 +727,21 @@ namespace Bbong.Client
 
         private void OnNaturalPong()
         {
+            if (_state == UiState.PongDiscardSelect && _round.CanPongThenNaturalPong(MySeat))
+            {
+                // 뽕 토스 대신 남은 같은 숫자 3장 자연뽕 → 손 소진, 뽕 준 사람이 뽕 바가지
+                CancelTurnTimer();
+                _state = UiState.Resolving;
+                var clear = _round.Players[MySeat].Hand.Cards.Where(c => c.Number != _pongNumber).ToList();
+                _round = _round.PongThenNaturalPong(MySeat);
+                _pendingLaid.AddRange(clear); // 뽕 2장은 이미 내려놓음 — 남은 3장 추가
+                _table.GroupFx(MySeat, clear);
+                _table.PongFx($"{SeatName(MySeat)}\n{clear[0].Number}자연뽕!");
+                EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat),
+                    $"{SeatName(_pongDiscarderSeat)} - 뽕 바가지", MySeat);
+                return;
+            }
+
             if ((_state != UiState.NeedDiscard && _state != UiState.MeldDecision) || _round.CurrentSeat != MySeat || !_round.CanNaturalPong())
             {
                 return;
@@ -714,7 +759,7 @@ namespace Bbong.Client
                 _round = _round.NaturalPong(_naturalPongNumber, null);
                 _table.GroupFx(MySeat, laid);
                 _table.PongFx($"{SeatName(MySeat)}\n{_naturalPongNumber}자연뽕!");
-                EndRound(RoundSettlement.SettleByHandClear(_round, MySeat), $"{SeatName(MySeat)} 자연뽕 손 털기", MySeat);
+                EndRound(RoundSettlement.SettleByHandClear(_round, MySeat), $"{SeatName(MySeat)} - 자연뽕 손 털기", MySeat);
                 return;
             }
 
@@ -727,7 +772,7 @@ namespace Bbong.Client
             _state = UiState.NaturalPongSelect;
             SetLog($"자연뽕! {_naturalPongNumber} 외 버릴 카드 클릭");
             Refresh();
-            _table.SetPrompt($"자연뽕! {_naturalPongNumber} 외 버릴 카드 클릭");
+            _table.SetPrompt("버릴 카드를 클릭하세요.");
             StartTurnTimer();
         }
 
@@ -799,7 +844,7 @@ namespace Bbong.Client
                     if (_round.Players[MySeat].Hand.Count == 0)
                     {
                         // 추가 버림까지 내고 손이 비면 손 털기 종료
-                        EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(MySeat)} 손 털기 · {SeatName(_pongDiscarderSeat)} 박 +20", MySeat);
+                        EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(_pongDiscarderSeat)} - 뽕 바가지", MySeat);
                         break;
                     }
 
@@ -832,7 +877,7 @@ namespace Bbong.Client
         {
             _table.Render(BuildRoundView(), _pendingLaid, _state == UiState.NaturalPongSelect);
             _nextBtn.gameObject.SetActive(_state == UiState.RoundOver || _state == UiState.SetOver);
-            GameTableView.SetButtonLabel(_nextBtn, _state == UiState.SetOver ? "새 게임" : "다음 판");
+            GameTableView.SetButtonLabel(_nextBtn, _state == UiState.SetOver ? "새 게임" : "다음 라운드");
             _lobbyBtn.gameObject.SetActive(_state == UiState.SetOver);
         }
 
@@ -850,8 +895,9 @@ namespace Bbong.Client
                 _ => RoundPhase.WaitingDiscard // NeedDiscard/MeldDecision/NaturalPongSelect/Resolving
             };
 
-            var canNatural = (_state == UiState.NeedDiscard || _state == UiState.MeldDecision)
-                && myTurn && _round.CanNaturalPong();
+            var canNatural = ((_state == UiState.NeedDiscard || _state == UiState.MeldDecision)
+                && myTurn && _round.CanNaturalPong())
+                || (_state == UiState.PongDiscardSelect && _round.CanPongThenNaturalPong(MySeat));
             return new RoundView
             {
                 mySeat = MySeat,
@@ -866,7 +912,8 @@ namespace Bbong.Client
                 meldType = _state == UiState.MeldDecision ? _pendingMeld.Type.ToString() : "",
                 meldScore = _state == UiState.MeldDecision ? _pendingMeld.Score : 0,
                 canNaturalPong = canNatural,
-                naturalPongNumber = canNatural ? TripleNumber(_round.Players[MySeat].Hand) : 0,
+                naturalPongNumber = canNatural ? TripleNumber(_round.Players[MySeat].Hand) : 0, // 2,2,5,5,5도 트리플은 5 하나뿐
+
                 canPong = _state == UiState.PongWindow,
                 myHand = CardDto.FromAll(_round.Players[MySeat].Hand.Cards),
                 seats = Enumerable.Range(0, PlayerCount).Select(s => new SeatView

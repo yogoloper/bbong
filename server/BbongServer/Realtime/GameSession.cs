@@ -131,7 +131,11 @@ public sealed class GameSession
         var output = new SessionOutput();
         if (_phase == RoundPhase.PongWindow && token == _pongToken)
         {
-            ClosePongWindow(output);
+            BotPongDecisions(output); // 사람이 5초 안에 선언 안 함 → 대기하던 봇 기회
+            if (_phase == RoundPhase.PongWindow)
+            {
+                ClosePongWindow(output);
+            }
         }
 
         return output;
@@ -194,7 +198,7 @@ public sealed class GameSession
                         seat = seat, bagaji = bagaji,
                         laidSeat = ender, laid = CardDto.FromAll(_round.Players[ender].Hand.Cards)
                     });
-                    var reason = bagaji ? $"{_nicknames[seat]} - 바가지" : $"{_nicknames[seat]} - 스톱";
+                    var reason = bagaji ? $"{_nicknames[seat]} - 스톱 바가지" : $"{_nicknames[seat]} - 스톱";
                     EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, ender);
                 }
                 else
@@ -236,6 +240,12 @@ public sealed class GameSession
             case RoundPhase.WaitingPongDiscard when _botSeats.Contains(_pongDeclarerSeat):
             {
                 var seat = _pongDeclarerSeat;
+                if (_round.CanPongThenNaturalPong(seat))
+                {
+                    PongClear(output, seat); // 남은 3장 자연뽕 손 소진(뽕 바가지) — 봇에게 항상 이득
+                    break;
+                }
+
                 var toss = _bots[seat]!.ChoosePongDiscard(new Hand(_round.Players[seat].Hand.Cards.Except(_pongLaid)));
                 ApplyPongDiscard(output, seat, toss);
                 break;
@@ -243,20 +253,9 @@ public sealed class GameSession
 
             case RoundPhase.PongWindow:
             {
-                foreach (var seat in _pongEligible.Where(s => _botSeats.Contains(s) && !_pongPassed.Contains(s)).ToList())
+                if (!HumanPongPending())
                 {
-                    if (_phase != RoundPhase.PongWindow)
-                    {
-                        break; // 선행 봇의 뽕/마지막 패스로 창이 닫힘
-                    }
-
-                    if (_bots[seat]!.ShouldPong())
-                    {
-                        DeclarePong(output, seat);
-                        break;
-                    }
-
-                    HandlePongPass(output, seat);
+                    BotPongDecisions(output); // 사람 우선 — 사람 창이 남아 있으면 봇은 대기
                 }
 
                 break;
@@ -484,7 +483,7 @@ public sealed class GameSession
                 seat = seat, number = _pongNumber, laid = CardDto.FromAll(laid), view = BuildView(s)
             });
             EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat),
-                $"{_nicknames[seat]} - 손 털기 · {_nicknames[_pongDiscarderSeat]} 박", seat);
+                $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", seat);
             return;
         }
 
@@ -507,13 +506,55 @@ public sealed class GameSession
         }
 
         _pongPassed.Add(seat);
-        if (_pongPassed.Count < _pongEligible.Count)
+        if (_pongPassed.Count >= _pongEligible.Count)
         {
+            _pongToken++;
+            ClosePongWindow(output);
             return;
         }
 
-        _pongToken++;
-        ClosePongWindow(output);
+        if (!HumanPongPending() && !_botSeats.Contains(seat))
+        {
+            ArmBotAct(output); // 마지막 사람이 패스 → 대기하던 봇이 한 박자 뒤 결정
+        }
+    }
+
+    /// <summary>아직 창이 살아있는 사람 좌석이 있는지 — 봇 뽕은 사람 우선 원칙으로 그동안 대기.</summary>
+    private bool HumanPongPending() =>
+        _pongEligible.Any(s => !_botSeats.Contains(s) && !_pongPassed.Contains(s));
+
+    private void BotPongDecisions(SessionOutput output)
+    {
+        foreach (var seat in _pongEligible.Where(s => _botSeats.Contains(s) && !_pongPassed.Contains(s)).ToList())
+        {
+            if (_phase != RoundPhase.PongWindow)
+            {
+                break; // 선행 봇의 뽕/마지막 패스로 창이 닫힘
+            }
+
+            if (_bots[seat]!.ShouldPong())
+            {
+                DeclarePong(output, seat);
+                break;
+            }
+
+            HandlePongPass(output, seat);
+        }
+    }
+
+    /// <summary>뽕 후 남은 같은 숫자 3장을 자연뽕으로 내려놓아 손 소진 종료. 뽕 준 사람이 뽕 바가지.</summary>
+    private void PongClear(SessionOutput output, int seat)
+    {
+        var rest = _round.Players[seat].Hand.Cards.Where(c => c.Number != _pongNumber).ToList();
+        var number = rest[0].Number;
+        _round = _round.PongThenNaturalPong(seat);
+        _turnToken++;
+        EmitEach(output, s => new NaturalPongedMsg
+        {
+            seat = seat, number = number, laid = CardDto.FromAll(rest), view = BuildView(s)
+        });
+        EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat),
+            $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", seat);
     }
 
     private void HandlePongDiscard(SessionOutput output, int seat, PongDiscardMsg msg)
@@ -544,7 +585,7 @@ public sealed class GameSession
         {
             EmitEach(output, s => new DiscardedMsg { seat = seat, card = CardDto.From(card), view = BuildView(s) });
             EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat),
-                $"{_nicknames[seat]} - 손 털기 · {_nicknames[_pongDiscarderSeat]} 박", seat);
+                $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", seat);
             return;
         }
 
@@ -568,7 +609,7 @@ public sealed class GameSession
             seat = seat, bagaji = bagaji,
             laidSeat = ender, laid = CardDto.FromAll(_round.Players[ender].Hand.Cards)
         });
-        var reason = bagaji ? $"{_nicknames[seat]} 바가지 (+30)" : $"{_nicknames[seat]} 스톱";
+        var reason = bagaji ? $"{_nicknames[seat]} - 스톱 바가지" : $"{_nicknames[seat]} - 스톱";
         EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, ender);
     }
 
@@ -602,6 +643,12 @@ public sealed class GameSession
 
     private void HandleNaturalPong(SessionOutput output, int seat, NaturalPongMsg msg)
     {
+        if (_phase == RoundPhase.WaitingPongDiscard && seat == _pongDeclarerSeat && _round.CanPongThenNaturalPong(seat))
+        {
+            PongClear(output, seat); // 토스 대신 남은 3장 자연뽕 → 손 소진(뽕 바가지)
+            return;
+        }
+
         if (_phase != RoundPhase.WaitingDiscard || seat != _round.CurrentSeat || !_canNaturalPong)
         {
             Error(output, seat, "cannot_natural_pong", "자연뽕할 수 없습니다.");
@@ -843,7 +890,8 @@ public sealed class GameSession
             canMeld = _phase == RoundPhase.WaitingDiscard && seat == current && _meld.Type != MeldType.None,
             meldType = _meld.Type.ToString(),
             meldScore = _meld.Score,
-            canNaturalPong = _phase == RoundPhase.WaitingDiscard && seat == current && _canNaturalPong,
+            canNaturalPong = (_phase == RoundPhase.WaitingDiscard && seat == current && _canNaturalPong)
+                || (_phase == RoundPhase.WaitingPongDiscard && seat == _pongDeclarerSeat && _round.CanPongThenNaturalPong(seat)),
             naturalPongNumber = _naturalPongNumber,
             canPong = _phase == RoundPhase.PongWindow && _pongEligible.Contains(seat) && !_pongPassed.Contains(seat),
             myHand = CardDto.FromAll(_round.Players[seat].Hand.Cards),

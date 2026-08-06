@@ -199,7 +199,7 @@ namespace Bbong.Client
 
             Guide("「뽕」에 오신 것을 환영합니다!\n" +
                   "같은 숫자 카드를 모아 \"뽕!\"을 외치는 게임입니다.\n" +
-                  "판마다 점수(빚)를 적게 쌓고, 5판 뒤 빚이 가장 적은 사람이 우승합니다.", true);
+                  "라운드마다 점수(빚)를 적게 쌓고, 5라운드 뒤 빚이 가장 적은 사람이 우승합니다.", true);
             yield return WaitNext();
 
             Guide("차례가 오면 자동으로 덱에서 한 장을 뽑아 손패가 6장이 되고,\n" +
@@ -253,7 +253,7 @@ namespace Bbong.Client
             _table.PongFx($"{_names[0]}\n8뽕!");
             Show(RoundPhase.WaitingPongDiscard, 0);
 
-            Guide("8 세 장을 테이블에 내려놓았습니다. 내려놓은 카드는 판이 끝날 때 0점!\n" +
+            Guide("8 세 장을 테이블에 내려놓았습니다. 내려놓은 카드는 라운드가 끝날 때 0점!\n" +
                   "뽕을 한 뒤에는 한 장을 더 버립니다 — 남은 카드 중 하나를 클릭하세요.", false);
             yield return WaitCard(c => c.Number != 8);
 
@@ -264,7 +264,7 @@ namespace Bbong.Client
             Show(RoundPhase.TurnGap, 1);
 
             Guide("뽕 완성! 손패가 5장에서 2장으로 확 줄었습니다.\n" +
-                  "손패가 적을수록 판이 끝날 때 남는 빚도 적습니다.\n" +
+                  "손패가 적을수록 라운드가 끝날 때 남는 빚도 적습니다.\n" +
                   "차례는 뽕한 사람의 다음 사람부터 이어집니다.", true);
             yield return WaitNext();
         }
@@ -307,7 +307,7 @@ namespace Bbong.Client
             Show(RoundPhase.TurnGap, 1);
 
             Guide("자연뽕 완성! 효과는 뽕과 같습니다 — 내려놓은 세 장은 0점.\n" +
-                  "그런데 한 판에 뽕을 두 번 하면 손패가 전부 사라지겠죠?\n" +
+                  "그런데 한 라운드에 뽕을 두 번 하면 손패가 전부 사라지겠죠?\n" +
                   "그때 무슨 일이 벌어지는지, 다음 레슨에서 확인해봅시다.", true);
             yield return WaitNext();
         }
@@ -324,7 +324,7 @@ namespace Bbong.Client
                 draw: new[] { C(3, CardColor.Green) }, discard: new Card[0], currentSeat: 0);
             Show(RoundPhase.TurnGap, 0);
 
-            Guide("누군가 뽕을 두 번 해서 손패를 전부 털면 '손 털기' — 그 즉시 판이 끝납니다.\n" +
+            Guide("누군가 뽕을 두 번 해서 손패를 전부 털면 '손 털기' — 그 즉시 라운드가 끝납니다.\n" +
                   "지금 너구리 사범은 뽕을 한 번 한 상태라 손이 딱 2장 남았습니다.", true);
             yield return WaitNext();
 
@@ -343,7 +343,7 @@ namespace Bbong.Client
             Show(RoundPhase.RoundOver, 1);
             _table.ShowCallout($"{_names[1]}\n손 털기!", new Color(1f, 0.4f, 0.35f));
 
-            Guide("사범이 내 9를 받아 두 번째 뽕 — 손패를 모두 털고 판이 즉시 끝났습니다!\n" +
+            Guide("사범이 내 9를 받아 두 번째 뽕 — 손패를 모두 털고 라운드가 즉시 끝났습니다!\n" +
                   "게다가 마지막 카드를 건네준 나는 '박'으로 +20 벌점까지 받습니다.\n" +
                   "손패가 2장뿐인 상대가 있다면, 버리는 카드를 신중하게 고르세요.", true);
             yield return WaitNext();
@@ -362,7 +362,7 @@ namespace Bbong.Client
             Show(RoundPhase.TurnGap, 0);
 
             Guide("'족보'는 한 방 역전기입니다.\n" +
-                  "카드를 뽑은 직후 6장이 특별한 조합을 이루면,\n그 자리에서 선언해 판을 끝내고 점수를 크게 깎을 수 있습니다.", true);
+                  "카드를 뽑은 직후 6장이 특별한 조합을 이루면,\n그 자리에서 선언해 라운드를 끝내고 점수를 크게 깎을 수 있습니다.", true);
             yield return WaitNext();
 
             _round = _round.Draw();
@@ -395,12 +395,12 @@ namespace Bbong.Client
                 draw: new[] { C(7, CardColor.Green) }, discard: new Card[0], currentSeat: 0);
             Show(RoundPhase.TurnGap, 0);
 
-            Guide("이번엔 '스톱'. 판에서 두 명 이상이 뽕을 한 상태라면,\n" +
-                  "뽕을 했던 사람은 남은 손패 합이 10 이하일 때 스스로 판을 끝낼 수 있습니다.", true);
+            Guide("이번엔 '스톱'. 라운드에서 두 명 이상이 뽕을 한 상태라면,\n" +
+                  "뽕을 했던 사람은 남은 손패 합이 10 이하일 때 스스로 라운드를 끝낼 수 있습니다.", true);
             yield return WaitNext();
 
             Show(RoundPhase.WaitingStop, 0, canStop: true);
-            Guide("지금 나와 사범 둘 다 뽕을 했고, 내 남은 손패는 1+2=3.\n[스톱] 버튼으로 판을 끝내세요!", false);
+            Guide("지금 나와 사범 둘 다 뽕을 했고, 내 남은 손패는 1+2=3.\n[스톱] 버튼으로 라운드를 끝내세요!", false);
             yield return new WaitUntil(() => _stopPressed);
             _stopPressed = false;
 
@@ -409,7 +409,8 @@ namespace Bbong.Client
             _table.ShowCallout($"{_names[0]}\n스톱!", new Color(0.55f, 0.85f, 1f));
             Show(RoundPhase.RoundOver, 0);
 
-            Guide("스톱! 나는 빚 없이 판을 끝내고, 다른 사람들은 남은 손패 합만큼 빚을 얻습니다.\n" +
+            Guide("스톱! 나를 포함해 전원이 남은 손패 합만큼 빚을 얻습니다.\n" +
+                  "내 합은 3점뿐 — 크게 잃기 전에 싸게 끊는 게 스톱의 기술입니다.\n" +
                   "단, 스톱에는 함정이 하나 있습니다... 다음 레슨에서!", true);
             yield return WaitNext();
         }
@@ -426,17 +427,17 @@ namespace Bbong.Client
                 draw: new[] { C(7, CardColor.Yellow) }, discard: new Card[0], currentSeat: 1);
             Show(RoundPhase.TurnGap, 1);
 
-            Guide("스톱의 함정, '바가지'!\n" +
+            Guide("스톱의 함정, '스톱 바가지'!\n" +
                   "지금 사범이 손패 합 8(3+5)로 스톱을 외치려 합니다.\n그런데 내 손패는 합 2(1+1)... 사범보다 낮습니다.", true);
             yield return WaitNext();
 
             _table.PlayStopSfx();
-            _table.ShowCallout($"{_names[1]}\n바가지!", new Color(1f, 0.4f, 0.35f));
+            _table.ShowCallout($"{_names[1]}\n스톱 바가지!", new Color(1f, 0.4f, 0.35f));
             _table.ShowMeldSet(_round.Players[0].Hand.Cards, 0);
             Show(RoundPhase.RoundOver, 1);
 
-            Guide("바가지! 스톱한 사람보다 손패 합이 낮은 뽕 플레이어가 있으면 스톱은 실패합니다.\n" +
-                  "사범은 +30 벌점을 물고, 가장 낮았던 내가 이 판의 승자 — 이게 '박 씌우기'입니다.\n" +
+            Guide("스톱 바가지! 스톱한 사람보다 손패 합이 낮은 뽕 플레이어가 있으면 스톱은 실패합니다.\n" +
+                  "사범은 +30 벌점을 물고, 가장 낮았던 내가 이 라운드의 승자 — 이게 '스톱 바가지'입니다.\n" +
                   "뽕을 했다면 손패 합을 최대한 낮게 유지하는 것이 공격과 수비 모두에 유리합니다.", true);
             yield return WaitNext();
         }

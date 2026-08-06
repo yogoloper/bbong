@@ -45,7 +45,7 @@ namespace Bbong.Client
         public bool ShowTurnCountdown { get; set; } = true;
 
         /// <summary>나가기 확인 모달 문구(모드별로 교체 가능).</summary>
-        public string ExitConfirmText { get; set; } = "게임에서 나가시겠습니까?\n진행 중인 판은 포기됩니다.";
+        public string ExitConfirmText { get; set; } = "게임에서 나가시겠습니까?\n진행 중인 라운드는 포기됩니다.";
 
         private readonly List<(List<Card> cards, bool group, Vector2 pos, float rot)> _timeline = new();
         private int _timelineShown;
@@ -769,7 +769,7 @@ namespace Bbong.Client
                 RoundPhase.WaitingDiscard when view.currentSeat == MySeat && view.canNaturalPong =>
                     "버릴 카드를 클릭하세요 (또는 자연뽕)",
                 RoundPhase.WaitingDiscard when view.currentSeat == MySeat => "버릴 카드를 클릭하세요.",
-                RoundPhase.WaitingPongDiscard when view.actorSeat == MySeat => $"뽕! {view.pongNumber} 외 버릴 카드 클릭",
+                RoundPhase.WaitingPongDiscard when view.actorSeat == MySeat => "버릴 카드를 클릭하세요.",
                 RoundPhase.PongWindow when view.canPong => $"{view.pongNumber} 뽕 기회!",
                 _ => ""
             });
@@ -1188,7 +1188,7 @@ namespace Bbong.Client
             }
 
             // 닉네임 행 — 내 닉네임은 하늘색으로만 구분
-            AddCell("판", GoldText, bold: true, size: 30);
+            AddCell("라운드", GoldText, bold: true, size: 30);
             for (var s = 0; s < PlayerCount; s++)
             {
                 AddCell(Nicknames[s], s == MySeat ? MineText : new Color(0.96f, 0.94f, 0.86f), bold: true, size: 26, fit: true);

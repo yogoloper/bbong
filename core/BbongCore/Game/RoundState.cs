@@ -158,6 +158,34 @@ public sealed class RoundState
     }
 
     /// <summary>
+    /// 뽕 후 남은 3장이 전부 같은 숫자면 토스 대신 자연뽕으로 손을 비워 즉시 종료 가능
+    /// (예: 2,2,5,5,5에서 2뽕 → 5,5,5 자연뽕). 버린 사람은 뽕 바가지 대상(rules.md §4).
+    /// </summary>
+    public bool CanPongThenNaturalPong(int seat)
+    {
+        if (!CanPong(seat))
+        {
+            return false;
+        }
+
+        var rest = RemoveCount(_players[seat].Hand.Cards, TopDiscard.Number, 2);
+        return rest.Count == 3 && rest.All(c => c.Number == rest[0].Number);
+    }
+
+    /// <summary>뽕(2장 + 버림 탑) 후 남은 같은 숫자 3장을 자연뽕으로 내려놓아 손 소진 종료. 뽕 2회 기록.</summary>
+    public RoundState PongThenNaturalPong(int seat)
+    {
+        var player = _players[seat];
+        var rest = RemoveCount(player.Hand.Cards, TopDiscard.Number, 2);
+        var cleared = player
+            .WithHand(new Hand(RemoveCount(rest, rest[0].Number, 3)))
+            .RecordPong()
+            .RecordPong();
+
+        return new RoundState(ReplaceAt(seat, cleared), _drawPile, DropTop(_discardPile), NextSeat(seat), _random, _reshuffles);
+    }
+
+    /// <summary>
     /// 자기 턴(드로우 후) 같은 숫자 3장을 들고 있으면 자연뽕 가능(rules.md §4-2).
     /// 손패 6장(일반)뿐 아니라 뽕 후 3장 상태에서도 성립.
     /// </summary>

@@ -222,4 +222,48 @@ public class PongTests
         Assert.That(after.Players[0].Hand.Count, Is.EqualTo(0)); // 손 소진
         Assert.That(after.CurrentSeat, Is.EqualTo(1));
     }
+    // ── 뽕 + 자연뽕 손 소진 (뽕 바가지, rules.md §4) ──
+
+    /// <summary>seat0가 2를 버린 직후. seat1 손패 = 2,2,5,5,5 — 뽕 후 남은 3장이 같은 숫자.</summary>
+    private static RoundState PongClearScenario()
+    {
+        var players = new[]
+        {
+            new Player(0, HandOf(C(9, CardColor.Red), C(10, CardColor.Red), C(11, CardColor.Red), C(12, CardColor.Red))),
+            new Player(1, HandOf(C(2, CardColor.Green), C(2, CardColor.Yellow), C(5, CardColor.Red), C(5, CardColor.Green), C(5, CardColor.Blue))),
+            new Player(2, HandOf(C(6, CardColor.Red), C(8, CardColor.Red), C(10, CardColor.Blue), C(12, CardColor.Blue), C(3, CardColor.Blue)))
+        };
+        var discard = new[] { C(2, CardColor.Red) }; // seat0가 버린 2
+        return new RoundState(players, Array.Empty<Card>(), discard, currentSeat: 1, new SeededRandom(1));
+    }
+
+    [Test]
+    public void CanPongThenNaturalPong_true_when_rest_is_three_of_a_kind()
+    {
+        Assert.That(PongClearScenario().CanPongThenNaturalPong(1), Is.True);
+    }
+
+    [Test]
+    public void CanPongThenNaturalPong_false_when_rest_is_mixed()
+    {
+        var players = new[]
+        {
+            new Player(0, HandOf(C(9, CardColor.Red), C(10, CardColor.Red), C(11, CardColor.Red), C(12, CardColor.Red))),
+            new Player(1, HandOf(C(2, CardColor.Green), C(2, CardColor.Yellow), C(5, CardColor.Red), C(5, CardColor.Green), C(7, CardColor.Blue))),
+        };
+        var round = new RoundState(players, Array.Empty<Card>(), new[] { C(2, CardColor.Red) }, currentSeat: 1, new SeededRandom(1));
+
+        Assert.That(round.CanPong(1), Is.True);
+        Assert.That(round.CanPongThenNaturalPong(1), Is.False); // 5,5,7 — 자연뽕 불가
+    }
+
+    [Test]
+    public void PongThenNaturalPong_clears_hand_and_records_two_pongs()
+    {
+        var after = PongClearScenario().PongThenNaturalPong(1);
+
+        Assert.That(after.Players[1].Hand.Count, Is.EqualTo(0)); // 2뽕 + 5,5,5 자연뽕 → 손 소진
+        Assert.That(after.Players[1].PongCount, Is.EqualTo(2));  // 뽕과 자연뽕 각각 기록
+        Assert.That(after.DiscardPile, Is.Empty);                // 뽕한 2는 나간 패, 5들도 나간 패
+    }
 }

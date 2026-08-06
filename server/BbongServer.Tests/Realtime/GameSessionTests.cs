@@ -740,6 +740,107 @@ public class GameSessionTests
         Assert.That(For<DiscardedMsg>(acted, 0).seat, Is.EqualTo(1)); // 봇이 알아서 버림
     }
 
+    // ── 뽕 + 자연뽕 손 소진 (뽕 바가지) ──
+
+    /// <summary>seat0가 2를 버림. seat1 손패 = 2,2,5,5,5 → 뽕 후 5,5,5 자연뽕으로 손 소진 가능.</summary>
+    private static (GameSession, SessionOutput) PongClearScenario()
+    {
+        var (session, _) = Rigged(
+            new[]
+            {
+                P(0, C(2, CardColor.Red), C(9, CardColor.Red), C(10, CardColor.Red)),
+                P(1, C(2, CardColor.Green), C(2, CardColor.Yellow), C(5, CardColor.Red), C(5, CardColor.Green), C(5, CardColor.Blue))
+            },
+            drawPile: new[] { C(7, CardColor.Red), C(8, CardColor.Red) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+        var output = session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(2, CardColor.Red)) });
+        return (session, output);
+    }
+
+    [Test]
+    public void Pong_then_natural_pong_clears_hand_and_bags_discarder()
+    {
+        var (session, _) = PongClearScenario();
+        var ponged = session.HandleAction(1, new PongDeclareMsg());
+        Assert.That(For<PongedMsg>(ponged, 0).view.canNaturalPong, Is.False); // 상대 뷰엔 아님
+        Assert.That(For<PongedMsg>(ponged, 1).view.canNaturalPong, Is.True);  // 선언자만 자연뽕 제안
+
+        var cleared = session.HandleAction(1, new NaturalPongMsg()); // 토스 대신 5,5,5 자연뽕
+
+        Assert.That(For<NaturalPongedMsg>(cleared, 0).seat, Is.EqualTo(1));
+        var ended = For<RoundEndedMsg>(cleared, 0);
+        Assert.That(ended.reason, Is.EqualTo("P0 - 뽕 바가지")); // 2를 버린 seat0이 바가지
+        Assert.That(ended.scores[0], Is.GreaterThan(0));         // 박 벌점
+        Assert.That(ended.scores[1], Is.EqualTo(0));             // 손 소진 승자
+    }
+
+    [Test]
+    public void Bot_pong_seat_auto_clears_when_possible()
+    {
+        var (session, _) = PongClearScenario();
+        var replaced = session.ReplaceSeatWithBot(1);
+        var ponged = session.HandleBotAct(BotActToken(replaced)); // 봇이 뽕 선언
+        Assert.That(HasMsg<PongedMsg>(ponged), Is.True);
+
+        var acted = session.HandleBotAct(BotActToken(ponged)); // 봇 추가 행동 = 자연뽕 손 소진
+
+        Assert.That(For<RoundEndedMsg>(acted, 0).reason, Is.EqualTo("P0 - 뽕 바가지"));
+    }
+
+    [Test]
+    public void Bot_waits_while_human_pong_window_is_open()
+    {
+        // seat0 버림 9 → 사람(1)과 봇(2) 모두 뽕 가능. 봇은 사람의 5초 창을 가로채면 안 됨.
+        var session = new GameSession(new[] { "P0", "P1", "너구리 봇" }, () => new SeededRandom(1), botSeats: new[] { 2 });
+        var round = new RoundState(
+            new[]
+            {
+                P(0, C(9, CardColor.Red), C(1, CardColor.Red)),
+                P(1, C(9, CardColor.Green), C(9, CardColor.Yellow), C(2, CardColor.Red), C(3, CardColor.Red)),
+                P(2, C(9, CardColor.Blue), C(9, CardColor.Red), C(4, CardColor.Red), C(5, CardColor.Red))
+            },
+            new[] { C(6, CardColor.Red), C(7, CardColor.Red), C(8, CardColor.Red) },
+            Array.Empty<Card>(),
+            currentSeat: 0,
+            new SeededRandom(1));
+        session.RigRoundForTest(round);
+        var opened = session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(9, CardColor.Red)) });
+
+        var acted = session.HandleBotAct(BotActToken(opened));
+        Assert.That(HasMsg<PongedMsg>(acted), Is.False); // 사람 창이 살아있는 동안 봇은 대기
+
+        // 사람이 5초 내 미선언 → 창 만료 시점에 봇이 기회를 가져감
+        var token = ((PongTimeoutCmd)opened.Timers.Single(t => t.Command is PongTimeoutCmd).Command).Token;
+        var timedOut = session.HandlePongTimeout(token);
+        Assert.That(For<PongedMsg>(timedOut, 0).seat, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Bot_gets_pong_chance_after_human_passes()
+    {
+        var session = new GameSession(new[] { "P0", "P1", "너구리 봇" }, () => new SeededRandom(1), botSeats: new[] { 2 });
+        var round = new RoundState(
+            new[]
+            {
+                P(0, C(9, CardColor.Red), C(1, CardColor.Red)),
+                P(1, C(9, CardColor.Green), C(9, CardColor.Yellow), C(2, CardColor.Red), C(3, CardColor.Red)),
+                P(2, C(9, CardColor.Blue), C(9, CardColor.Red), C(4, CardColor.Red), C(5, CardColor.Red))
+            },
+            new[] { C(6, CardColor.Red), C(7, CardColor.Red), C(8, CardColor.Red) },
+            Array.Empty<Card>(),
+            currentSeat: 0,
+            new SeededRandom(1));
+        session.RigRoundForTest(round);
+        session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(9, CardColor.Red)) });
+
+        var passed = session.HandleAction(1, new PongPassMsg()); // 마지막 사람 패스 → 봇 결정 예약
+        Assert.That(passed.Timers.Any(t => t.Command is BotActCmd), Is.True);
+
+        var acted = session.HandleBotAct(BotActToken(passed));
+        Assert.That(For<PongedMsg>(acted, 0).seat, Is.EqualTo(2));
+    }
+
     [Test]
     public void Stale_turn_timeout_is_ignored()
     {

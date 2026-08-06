@@ -150,7 +150,7 @@ namespace Bbong.Client
                     _table.PlayStopSfx();
                     // 정상 스톱=선언자, 바가지=박 먹인 승자의 손패를 테이블에 펼침
                     _table.ShowMeldSet(stop.laid.Select(c => c.ToCard()), stop.laidSeat);
-                    _table.ShowCallout($"{Nicknames[stop.seat]}\n{(stop.bagaji ? "바가지!" : "스톱!")}",
+                    _table.ShowCallout($"{Nicknames[stop.seat]}\n{(stop.bagaji ? "스톱 바가지!" : "스톱!")}",
                         stop.bagaji ? new Color(1f, 0.4f, 0.35f) : new Color(0.55f, 0.85f, 1f));
                     break;
 
@@ -172,7 +172,7 @@ namespace Bbong.Client
                     _pendingLaid.Clear();
                     _table.SetEndReason(ended.reason);
                     _roundHistory.Add(ended.scores);
-                    _table.ShowScorePopup($"{ended.roundIndex + 1}판 종료", ended.cumulativeDebts, _roundHistory, fadeOut: true);
+                    _table.ShowScorePopup($"{ended.roundIndex + 1}라운드 종료", ended.cumulativeDebts, _roundHistory, fadeOut: true);
                     ApplyView(ended.view);
                     break;
 
@@ -292,6 +292,12 @@ namespace Bbong.Client
                 return;
             }
 
+            if (_view.phase == RoundPhase.WaitingPongDiscard)
+            {
+                WsClient.Instance.Send(new NaturalPongMsg { hasDiscard = false }); // 뽕 후 남은 3장 자연뽕 → 손 소진
+                return;
+            }
+
             var number = _view.naturalPongNumber;
             if (_view.myHand.All(c => c.number == number))
             {
@@ -309,7 +315,7 @@ namespace Bbong.Client
 
             _naturalSelecting = true;
             Render();
-            _table.SetPrompt($"자연뽕! {number} 외 버릴 카드 클릭");
+            _table.SetPrompt("버릴 카드를 클릭하세요.");
         }
 
         private void OnPass() =>
