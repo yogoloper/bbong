@@ -34,3 +34,4 @@ obj/
 # Unity 크래시 복구 잔여물
 _Recovery/
 _Recovery.meta
+.DS_Store
