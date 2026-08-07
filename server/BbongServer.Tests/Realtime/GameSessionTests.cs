@@ -842,6 +842,23 @@ public class GameSessionTests
     }
 
     [Test]
+    public void Reshuffle_extends_turn_timer_by_fx_duration()
+    {
+        // 바닥 0장 + 버림 있음 → 다음 턴 드로우가 재셔플 → 사람 턴 타이머는 연출 시간만큼 가산
+        var (session, _) = Rigged(
+            new[] { P(0, C(1, CardColor.Red), C(2, CardColor.Red)), P(1, C(11, CardColor.Red), C(12, CardColor.Red)) },
+            drawPile: new[] { C(9, CardColor.Red) },
+            discard: new[] { C(5, CardColor.Blue), C(6, CardColor.Green) },
+            currentSeat: 0);
+
+        var discarded = session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(9, CardColor.Red)) });
+        var next = AdvanceTurnGap(session, discarded); // seat1 턴 — 바닥 0 → 재셔플 드로우
+
+        var timer = next.Timers.Single(t => t.Command is TurnTimeoutCmd);
+        Assert.That(timer.DelayMs, Is.EqualTo(RealtimeConfig.TurnTimerSeconds * 1000 + RealtimeConfig.ReshuffleFxMs));
+    }
+
+    [Test]
     public void Stale_turn_timeout_is_ignored()
     {
         var (session, output) = Rigged(

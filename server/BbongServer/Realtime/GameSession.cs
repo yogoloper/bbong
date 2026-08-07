@@ -51,6 +51,9 @@ public sealed class GameSession
     private readonly bool[] _acted;    // 이 판에 직접 입력했는가
     private readonly bool[] _timedOut; // 이 판에 턴 타임아웃을 겪었는가(턴이 안 온 좌석 보호)
     private readonly HashSet<int> _botSeats = new();
+
+    // 다음 타이머 1회에만 가산되는 연출 지연(재셔플 수렴 등) — ArmActorTimer 직전에 설정, 직후 리셋
+    private int _timerExtraMs;
     private readonly Bot?[] _bots;
     private int _botToken;
 
@@ -381,7 +384,9 @@ public sealed class GameSession
         _phase = RoundPhase.WaitingDiscard;
 
         EmitEach(output, seat => new DrewCardMsg { seat = current, reshuffled = reshuffled, view = BuildView(seat) });
+        _timerExtraMs = reshuffled ? RealtimeConfig.ReshuffleFxMs : 0; // 셔플 연출이 끝난 뒤부터 행동 시간
         ArmActorTimer(output);
+        _timerExtraMs = 0;
     }
 
     // ── 버림 ──
@@ -725,7 +730,7 @@ public sealed class GameSession
     private void ArmTurnTimer(SessionOutput output)
     {
         _turnToken++;
-        output.After(new TurnTimeoutCmd(_turnToken), RealtimeConfig.TurnTimerSeconds * 1000);
+        output.After(new TurnTimeoutCmd(_turnToken), RealtimeConfig.TurnTimerSeconds * 1000 + _timerExtraMs);
     }
 
     /// <summary>행동 주체가 봇이면 봇 행동 예약, 사람이면 5초 턴 타이머 예약.</summary>
@@ -745,7 +750,7 @@ public sealed class GameSession
     private void ArmBotAct(SessionOutput output)
     {
         _botToken++;
-        output.After(new BotActCmd(_botToken), RealtimeConfig.BotActDelayMs);
+        output.After(new BotActCmd(_botToken), RealtimeConfig.BotActDelayMs + _timerExtraMs);
     }
 
     /// <summary>턴 전환 간격 진입: 잠깐 아무도 턴이 아닌 상태(연습 모드 연출 이식). 만료 시 HandleTurnGap이 턴 진입.</summary>

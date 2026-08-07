@@ -86,11 +86,15 @@ namespace Bbong.Client
                     var drew = JsonUtility.FromJson<DrewCardMsg>(json);
                     if (drew.reshuffled)
                     {
+                        // 셔플 수렴이 끝난 뒤에 비행·손패 반영 — 카드가 연출보다 먼저 손에 들어오지 않게
                         _table.ClearTimeline(); // 버림 + 나간 패 전부 덱으로 복귀
                         _table.ShuffleFx();
+                        SetLog("재셔플 — 수렴 연출 대기");
+                        StartCoroutine(ApplyDrawAfterShuffle(drew));
+                        break;
                     }
 
-                    _table.DrawFx(drew.seat, drew.reshuffled ? 0.9f : 0f); // 셔플 수렴이 끝난 뒤 뽑는 연출
+                    _table.DrawFx(drew.seat);
                     ApplyView(drew.view);
                     break;
 
@@ -316,6 +320,14 @@ namespace Bbong.Client
             _naturalSelecting = true;
             Render();
             _table.SetPrompt("버릴 카드를 클릭하세요.");
+        }
+
+        private System.Collections.IEnumerator ApplyDrawAfterShuffle(DrewCardMsg drew)
+        {
+            yield return new WaitForSeconds(0.9f); // ShuffleFx 수렴 시간
+            SetLog($"재셔플 반영 — P{drew.seat} 드로우");
+            _table.DrawFx(drew.seat);
+            ApplyView(drew.view);
         }
 
         private void OnPass() =>

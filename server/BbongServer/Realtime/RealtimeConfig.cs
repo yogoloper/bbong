@@ -18,5 +18,8 @@ public static class RealtimeConfig
     /// <summary>봇 대체 좌석의 행동 지연(ms) — 즉답 대신 사람 같은 한 박자(연습 모드 BotDelay와 유사).</summary>
     public const int BotActDelayMs = 1000;
 
+    /// <summary>재셔플 수렴 연출 시간 — 연출이 끝난 뒤부터 행동 시간을 재도록 타이머에 가산(연습 모드와 동일 페이싱).</summary>
+    public const int ReshuffleFxMs = 900;
+
     public const int RoomCodeLength = 6;
 }
