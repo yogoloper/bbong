@@ -219,6 +219,29 @@ public class RoundStateTests
     }
 
     [Test]
+    public void Reshuffle_includes_cards_laid_out_by_pong()
+    {
+        // seat0가 7을 버리고 seat1이 뽕(7·7·7 나간 패 + 1R 토스). 바닥 0장 → seat2 드로우 시
+        // 재셔플은 버림 더미(1R)뿐 아니라 나간 패(7 세 장)도 전부 섞어야 한다.
+        var players = new[]
+        {
+            new Player(0, HandOf(Card(3, CardColor.Red), Card(4, CardColor.Red))),
+            new Player(1, HandOf(Card(7, CardColor.Green), Card(7, CardColor.Blue), Card(1, CardColor.Red), Card(2, CardColor.Blue))),
+            new Player(2, HandOf(Card(5, CardColor.Red), Card(6, CardColor.Red)))
+        };
+        var round = new RoundState(players, Array.Empty<Card>(), new[] { Card(7, CardColor.Red) }, currentSeat: 1, new SeededRandom(1));
+
+        var afterPong = round.Pong(1, Card(1, CardColor.Red)); // 7 세 장 나감, 1R 버림 → 턴 seat2
+        Assert.That(afterPong.DiscardPile.Single(), Is.EqualTo(Card(1, CardColor.Red)));
+
+        var afterDraw = afterPong.Draw(); // 바닥 0 → 재셔플(1R + 7·7·7 = 4장) → 1장 드로우
+
+        Assert.That(afterDraw.DrawPile.Count, Is.EqualTo(3));
+        Assert.That(afterDraw.DiscardPile, Is.Empty);
+        Assert.That(afterDraw.CurrentPlayer.Hand.Count, Is.EqualTo(3));
+    }
+
+    [Test]
     public void CanDraw_true_with_single_discard_and_empty_pile()
     {
         var players = new[] { new Player(0, HandOf(Card(3, CardColor.Red), Card(4, CardColor.Red))) };

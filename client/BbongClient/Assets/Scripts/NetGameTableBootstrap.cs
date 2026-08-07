@@ -86,11 +86,11 @@ namespace Bbong.Client
                     var drew = JsonUtility.FromJson<DrewCardMsg>(json);
                     if (drew.reshuffled)
                     {
-                        _table.KeepGroupsOnly();
+                        _table.ClearTimeline(); // 버림 + 나간 패 전부 덱으로 복귀
                         _table.ShuffleFx();
                     }
 
-                    _table.DrawFx(drew.seat); // 덱 → 좌석 비행 연출 + 효과음
+                    _table.DrawFx(drew.seat, drew.reshuffled ? 0.9f : 0f); // 셔플 수렴이 끝난 뒤 뽑는 연출
                     ApplyView(drew.view);
                     break;
 

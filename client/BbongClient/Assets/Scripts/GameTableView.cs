@@ -839,15 +839,6 @@ namespace Bbong.Client
         }
 
         /// <summary>재셔플: 고정 패는 남기고 단일 버림은 맨 위 1장만 유지.</summary>
-        /// <summary>재셔플: 버림 더미 전부가 덱으로 들어가므로 그룹(나간 패)만 남긴다.</summary>
-        public void KeepGroupsOnly()
-        {
-            var kept = _timeline.Where(e => e.group).ToList();
-            _timeline.Clear();
-            _timeline.AddRange(kept);
-            _timelineShown = _timeline.Count;
-        }
-
         public void ClearTimeline()
         {
             _timeline.Clear();
@@ -859,11 +850,10 @@ namespace Bbong.Client
 
         public void PlayDrawSfx() => _audio.PlayOneShot(_sfxDraw, 0.5f);
 
-        /// <summary>드로우 연출: 덱에서 카드 한 장(뒷면)이 해당 좌석으로 날아감 + 효과음.</summary>
-        public void DrawFx(int seat)
+        /// <summary>드로우 연출: 덱에서 카드 한 장(뒷면)이 해당 좌석으로 날아감 + 효과음. delay로 셔플 연출 뒤로 미룰 수 있다.</summary>
+        public void DrawFx(int seat, float delay = 0f)
         {
-            PlayDrawSfx();
-            StartCoroutine(FlyCardFromDeck(seat));
+            StartCoroutine(FlyCardFromDeck(seat, delay));
         }
 
         /// <summary>
@@ -996,9 +986,15 @@ namespace Bbong.Client
             }
         }
 
-        private IEnumerator FlyCardFromDeck(int seat)
+        private IEnumerator FlyCardFromDeck(int seat, float delay = 0f)
         {
             _flightsActive++;
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+
+            PlayDrawSfx();
             var go = new GameObject("FlyCard", typeof(RectTransform), typeof(Image));
             go.transform.SetParent(_shakeRoot, false);
             var img = go.GetComponent<Image>();

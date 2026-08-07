@@ -20,7 +20,7 @@ namespace Bbong.Client
     /// </summary>
     public sealed class GameTableBootstrap : MonoBehaviour
     {
-        private enum UiState { StopDecision, NeedDiscard, MeldDecision, PongWindow, PongDiscardSelect, NaturalPongSelect, Resolving, RoundOver, SetOver }
+        private enum UiState { StopDecision, NeedDiscard, MeldDecision, PongWindow, PongDiscardSelect, NaturalPongSelect, Resolving, BotTurn, RoundOver, SetOver }
 
         private const int MySeat = 0;
         private const float BotDelay = 1f;
@@ -238,6 +238,8 @@ namespace Bbong.Client
                     yield break;
                 }
 
+                _state = UiState.BotTurn; // 이전 턴의 NeedDiscard가 남아 내 문구·클릭이 살아있는 버그 방지
+
                 if (StopResolver.CanStop(_round, seat) && _bots[seat].ShouldStop(_round, seat))
                 {
                     yield return new WaitForSeconds(BotDelay); // 직전 카드 착지 후 한 박자 고민하고 선언
@@ -250,6 +252,12 @@ namespace Bbong.Client
                 {
                     EndRound(RoundSettlement.SettleByExhaustion(_round), "바닥 더미 소진(재셔플 2회 초과) → 강제 종료", seat);
                     yield break;
+                }
+
+                if (NeedsReshuffle)
+                {
+                    PlayReshuffleFx();
+                    yield return new WaitForSeconds(ShuffleFxSeconds); // 섞임이 끝난 뒤에 뽑는다
                 }
 
                 DrawCard();
@@ -293,6 +301,7 @@ namespace Bbong.Client
 
                     _pendingTossSeat = -1;
                     _table.DiscardFx(seat, toss);
+                    _state = UiState.Resolving;
                     _turnGap = true;
                     Refresh();
                     yield return new WaitForSeconds(TurnGapDelay);
@@ -311,6 +320,7 @@ namespace Bbong.Client
 
                 var discard = _bots[seat].ChooseDiscard(_round.CurrentPlayer.Hand);
                 _round = _round.Discard(discard);
+                _state = UiState.Resolving; // 뽕 대기·턴 전환 동안 아무 좌석도 포커스/문구 없음
                 SetLog($"P{seat} 버림 {CardLabel(discard)}");
                 _table.DiscardFx(seat, discard);
                 _turnGap = true;
@@ -567,18 +577,21 @@ namespace Bbong.Client
         /// </summary>
         private void DrawCard()
         {
-            var discardBefore = _round.DiscardPile.Count;
             _round = _round.Draw();
             SetLog($"P{_round.CurrentSeat} 드로우 {CardLabel(_round.CurrentPlayer.Hand.Cards[^1])} (남은 더미 {_round.DrawPile.Count}, 손패 {_round.CurrentPlayer.Hand.Count})");
+        }
 
-            if (discardBefore > 1 && _round.DiscardPile.Count < discardBefore)
-            {
-                // 고정 패(뽕/자연뽕)는 테이블에 남고, 단일 버림은 맨 위 1장만 유지
-                _table.KeepGroupsOnly();
-                SetLog("바닥 더미 소진 → 버림 더미 재셔플(맨 위 1장 유지)");
-                _table.ShuffleFx();
-                Refresh();
-            }
+        /// <summary>이번 드로우가 재셔플을 일으키는지 — 연출을 먼저 끝내고 드로우하기 위한 사전 판정.</summary>
+        private bool NeedsReshuffle => _round.DrawPile.Count == 0 && _round.CanDraw;
+
+        private const float ShuffleFxSeconds = 0.9f; // 수렴 연출이 끝나고 한 박자 쉬는 시간
+
+        private void PlayReshuffleFx()
+        {
+            _table.ClearTimeline(); // 버림 + 나간 패(그룹) 전부 덱으로 복귀 — 테이블 비움
+            SetLog("바닥 더미 소진 → 테이블 위 카드 전부 재셔플");
+            _table.ShuffleFx();
+            Refresh();
         }
 
         /// <summary>내 턴 자동 드로우 → 족보면 선언 대기, 아니면 버림 대기(NeedDiscard).</summary>
@@ -590,6 +603,30 @@ namespace Bbong.Client
                 return;
             }
 
+            if (NeedsReshuffle)
+            {
+                // 섞는 연출이 끝난 뒤에 카드를 받는다 — 그동안은 입력·문구 없음
+                _state = UiState.Resolving;
+                Refresh();
+                PlayReshuffleFx();
+                StartCoroutine(DrawMeAfterShuffle());
+                return;
+            }
+
+            FinishAutoDraw();
+        }
+
+        private IEnumerator DrawMeAfterShuffle()
+        {
+            yield return new WaitForSeconds(ShuffleFxSeconds);
+            if (_state == UiState.Resolving)
+            {
+                FinishAutoDraw();
+            }
+        }
+
+        private void FinishAutoDraw()
+        {
             DrawCard();
             _table.DrawFx(MySeat); // 덱 → 손패 비행 연출 + 효과음
             _drawnCard = _round.CurrentPlayer.Hand.Cards[^1]; // 시간 초과 시 자동 버림 대상(§3)
@@ -814,7 +851,10 @@ namespace Bbong.Client
             {
                 case UiState.NeedDiscard:
                 case UiState.MeldDecision: // 족보 선언 대신 버리고 계속
-                    if (_round.CurrentSeat != MySeat)
+                    // 드로우 직후 홀수 장(6장, 뽕 뒤엔 3장)에서만 유효 — 드로우 전(5장/2장) 낡은
+                    // 상태로 눌러도 버려지지 않게(스테일 NeedDiscard 이중 안전장치)
+                    if (_round.CurrentSeat != MySeat
+                        || (_round.CurrentPlayer.Hand.Count != GameConfig.HandSize + 1 && _round.CurrentPlayer.Hand.Count != 3))
                     {
                         return;
                     }
@@ -895,7 +935,8 @@ namespace Bbong.Client
                 UiState.PongDiscardSelect => RoundPhase.WaitingPongDiscard,
                 UiState.RoundOver => RoundPhase.RoundOver,
                 UiState.SetOver => RoundPhase.SetOver,
-                _ => RoundPhase.WaitingDiscard // NeedDiscard/MeldDecision/NaturalPongSelect/Resolving
+                UiState.Resolving => RoundPhase.TurnGap, // 진행 중 간극 — 포커스/내 문구 금지
+                _ => RoundPhase.WaitingDiscard // NeedDiscard/MeldDecision/NaturalPongSelect/BotTurn
             };
 
             var canNatural = ((_state == UiState.NeedDiscard || _state == UiState.MeldDecision)

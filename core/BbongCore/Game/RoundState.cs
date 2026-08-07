@@ -12,6 +12,8 @@ public sealed class RoundState
     private readonly List<Player> _players;
     private readonly List<Card> _drawPile;
     private readonly List<Card> _discardPile;
+    // 뽕/자연뽕으로 내려놓은 나간 패 — 손 점수에선 빠지지만 재셔플 때 덱으로 복귀한다(rules.md §3)
+    private readonly List<Card> _exhaustPile;
     private readonly IRandom _random;
     private readonly int _reshuffles;
 
@@ -21,11 +23,13 @@ public sealed class RoundState
         IEnumerable<Card> discardPile,
         int currentSeat,
         IRandom random,
-        int reshuffles = 0)
+        int reshuffles = 0,
+        IEnumerable<Card> exhaustPile = null)
     {
         _players = players.ToList();
         _drawPile = drawPile.ToList();
         _discardPile = discardPile.ToList();
+        _exhaustPile = exhaustPile?.ToList() ?? new List<Card>();
         CurrentSeat = currentSeat;
         _random = random;
         _reshuffles = reshuffles;
@@ -46,7 +50,7 @@ public sealed class RoundState
 
     /// <summary>드로우 가능 여부: 바닥에 카드가 있거나, 재셔플 한도 내에서 버림 더미로 채울 수 있을 때.</summary>
     public bool CanDraw =>
-        _drawPile.Count > 0 || (_reshuffles < GameConfig.MaxReshuffles && _discardPile.Count > 0);
+        _drawPile.Count > 0 || (_reshuffles < GameConfig.MaxReshuffles && _discardPile.Count + _exhaustPile.Count > 0);
 
     public IReadOnlyList<Player> Players => _players;
 
@@ -101,7 +105,8 @@ public sealed class RoundState
         var top = drawPile[0];
         var newPlayers = ReplaceCurrent(CurrentPlayer.WithHand(CurrentPlayer.Hand.Draw(top)));
 
-        return new RoundState(newPlayers, drawPile.Skip(1), discardPile, CurrentSeat, _random, reshuffles);
+        var exhaust = reshuffles > _reshuffles ? new List<Card>() : _exhaustPile; // 재셔플이 나간 패까지 흡수
+        return new RoundState(newPlayers, drawPile.Skip(1), discardPile, CurrentSeat, _random, reshuffles, exhaust);
     }
 
     /// <summary>현재 플레이어가 카드 1장을 버림 더미에 올리고 다음 좌석으로 넘깁니다(rules.md §3).</summary>
@@ -110,7 +115,7 @@ public sealed class RoundState
         var newPlayers = ReplaceCurrent(CurrentPlayer.WithHand(CurrentPlayer.Hand.Discard(card)));
         var newDiscard = _discardPile.Append(card); // 맨 위 = 마지막 원소
 
-        return new RoundState(newPlayers, _drawPile, newDiscard, NextSeat(CurrentSeat), _random, _reshuffles);
+        return new RoundState(newPlayers, _drawPile, newDiscard, NextSeat(CurrentSeat), _random, _reshuffles, _exhaustPile);
     }
 
     // ── 뽕 (rules.md §4) ──
@@ -140,12 +145,16 @@ public sealed class RoundState
         var keep = RemoveCount(player.Hand.Cards, pongedNumber, 2);
         var afterRemove = player.WithHand(new Hand(keep)).RecordPong();
 
-        var discardPile = DropTop(_discardPile); // 뽕한 카드는 나간 패로 사라짐
+        var discardPile = DropTop(_discardPile);
+        // 버림 탑 + 손 2장 = 나간 패로 이동(점수 0, 재셔플 때 덱으로 복귀)
+        var exhaust = _exhaustPile
+            .Append(TopDiscard)
+            .Concat(player.Hand.Cards.Where(c => c.Number == pongedNumber).Take(2));
 
         if (afterRemove.Hand.Count == 0)
         {
             // 둘째 뽕: 손 소진 → 추가 버림 없음, 판 종료(§4-3)
-            return new RoundState(ReplaceAt(seat, afterRemove), _drawPile, discardPile, NextSeat(seat), _random, _reshuffles);
+            return new RoundState(ReplaceAt(seat, afterRemove), _drawPile, discardPile, NextSeat(seat), _random, _reshuffles, exhaust);
         }
 
         if (cardToDiscardAfter is not { } extra)
@@ -154,7 +163,7 @@ public sealed class RoundState
         }
 
         var afterDiscard = afterRemove.WithHand(afterRemove.Hand.Discard(extra));
-        return new RoundState(ReplaceAt(seat, afterDiscard), _drawPile, discardPile.Append(extra), NextSeat(seat), _random, _reshuffles);
+        return new RoundState(ReplaceAt(seat, afterDiscard), _drawPile, discardPile.Append(extra), NextSeat(seat), _random, _reshuffles, exhaust);
     }
 
     /// <summary>
@@ -182,7 +191,8 @@ public sealed class RoundState
             .RecordPong()
             .RecordPong();
 
-        return new RoundState(ReplaceAt(seat, cleared), _drawPile, DropTop(_discardPile), NextSeat(seat), _random, _reshuffles);
+        var exhaust = _exhaustPile.Append(TopDiscard).Concat(player.Hand.Cards); // 탑 + 손 전부 나감
+        return new RoundState(ReplaceAt(seat, cleared), _drawPile, DropTop(_discardPile), NextSeat(seat), _random, _reshuffles, exhaust);
     }
 
     /// <summary>
@@ -201,11 +211,12 @@ public sealed class RoundState
         var player = CurrentPlayer;
         var keep = RemoveCount(player.Hand.Cards, number, 3);
         var afterRemove = player.WithHand(new Hand(keep)).RecordPong();
+        var exhaust = _exhaustPile.Concat(player.Hand.Cards.Where(c => c.Number == number).Take(3)); // 3장 나감
 
         if (afterRemove.Hand.Count == 0)
         {
             // 손 소진(3장 전부 같은 숫자) → 종료
-            return new RoundState(ReplaceAt(CurrentSeat, afterRemove), _drawPile, _discardPile, NextSeat(CurrentSeat), _random, _reshuffles);
+            return new RoundState(ReplaceAt(CurrentSeat, afterRemove), _drawPile, _discardPile, NextSeat(CurrentSeat), _random, _reshuffles, exhaust);
         }
 
         if (cardToDiscardAfter is not { } extra)
@@ -220,7 +231,8 @@ public sealed class RoundState
             _discardPile.Append(extra),
             NextSeat(CurrentSeat),
             _random,
-            _reshuffles);
+            _reshuffles,
+            exhaust);
     }
 
     // ── 내부 헬퍼 ──
@@ -254,12 +266,12 @@ public sealed class RoundState
     /// <summary>바닥 더미 소진 시: 버림 더미 맨 위 1장만 남기고 나머지를 셔플(rules.md §3).</summary>
     private (List<Card> draw, List<Card> discard) Reshuffle()
     {
-        if (_discardPile.Count == 0)
+        if (_discardPile.Count + _exhaustPile.Count == 0)
         {
             throw new InvalidOperationException("재셔플할 카드가 부족합니다.");
         }
 
-        // 버림 더미 전부를 섞어 새 바닥 더미로(맨 위도 남기지 않음)
-        return (Shuffler.Shuffle(_discardPile.ToList(), _random), new List<Card>());
+        // 버림 더미 + 나간 패 전부를 섞어 새 바닥 더미로 — 테이블 위 카드는 모두 순환에 복귀
+        return (Shuffler.Shuffle(_discardPile.Concat(_exhaustPile).ToList(), _random), new List<Card>());
     }
 }
