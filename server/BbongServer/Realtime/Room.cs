@@ -29,17 +29,24 @@ public sealed class Room
     private readonly List<string> _botNames = new();
     private readonly HashSet<Guid> _absent = new(); // 게임 중 이탈(끊김/종료) — 좌석 유지, 판 종료 시 봇 대체(§9-4)
     private readonly RoomRegistry _registry;
+    private readonly IStakeBank? _bank;
+    private Guid?[] _seatUsers = Array.Empty<Guid?>(); // 게임 시작 시점 좌석→유저(봇/이후 이탈과 무관한 정산 기준)
     private bool _loopRunning;
     private GameSession? _session;
 
-    internal Room(string code, RoomRegistry registry, Guid hostUserId)
+    internal Room(string code, RoomRegistry registry, Guid hostUserId, int stake = 0, IStakeBank? bank = null)
     {
         Code = code;
         _registry = registry;
         HostUserId = hostUserId;
+        Stake = stake;
+        _bank = bank;
     }
 
     public string Code { get; }
+
+    /// <summary>입장료(0 = 무료 친구방). 에스크로는 입장 전에 WsEndpoint가 수행.</summary>
+    public int Stake { get; }
 
     public Guid HostUserId { get; private set; }
 
@@ -159,12 +166,14 @@ public sealed class Room
         if (Phase == RoomPhase.Playing)
         {
             Send(member.Sink, new ErrorMsg { code = "room_playing", message = "이미 게임이 시작된 방입니다." });
+            RefundStake(member.UserId); // 입장 전 선차감된 에스크로 반환
             return;
         }
 
         if (_members.Count + _botNames.Count >= GameConfig.MaxPlayers)
         {
             Send(member.Sink, new ErrorMsg { code = "room_full", message = "방 정원이 가득 찼습니다." });
+            RefundStake(member.UserId);
             return;
         }
 
@@ -202,6 +211,7 @@ public sealed class Room
         }
 
         _members.Remove(member);
+        RefundStake(member.UserId); // 대기실 이탈 — 게임 전이므로 입장료 반환
         _registry.Detach(userId);
 
         if (_members.Count == 0)
@@ -294,11 +304,15 @@ public sealed class Room
 
         Phase = RoomPhase.Playing;
         var nicknames = _members.Select(m => m.Nickname).Concat(_botNames).ToArray();
+        _seatUsers = _members.Select(m => (Guid?)m.UserId)
+            .Concat(_botNames.Select(_ => (Guid?)null))
+            .ToArray(); // 정산은 시작 시점 기준 — 이탈해도 판돈은 팟에 남는다(§9-4 몰수)
         for (var seat = 0; seat < _members.Count; seat++)
         {
             Send(_members[seat].Sink, new GameStartedMsg
             {
                 yourSeat = seat,
+                stake = Stake,
                 playerCount = nicknames.Length,
                 nicknames = nicknames,
                 setRounds = new GameConfig().SetRounds
@@ -349,9 +363,47 @@ public sealed class Room
             ScheduleTimer(timer);
         }
 
-        if (output.Messages.Any(o => o.Message is SetEndedMsg))
+        if (output.Messages.Select(o => o.Message).OfType<SetEndedMsg>().FirstOrDefault() is { } setEnded)
         {
-            ReturnToWaiting(); // 세트 종료 → 대기실 복귀(재대결 가능)
+            HandleSetEnded(setEnded.winnerSeats);
+        }
+    }
+
+    /// <summary>세트 종료: 판돈 방은 우승자 배당 후 폭파(§9-2), 무료방은 대기실 복귀(재대결).</summary>
+    private void HandleSetEnded(int[] winnerSeats)
+    {
+        if (Stake <= 0 || _bank is null)
+        {
+            ReturnToWaiting();
+            return;
+        }
+
+        var winners = winnerSeats
+            .Where(seat => seat < _seatUsers.Length && _seatUsers[seat] is not null)
+            .Select(seat => _seatUsers[seat]!.Value)
+            .ToList();
+
+        if (winners.Count > 0)
+        {
+            var pot = (long)Stake * _seatUsers.Count(u => u is not null); // 사람 참가자 전원의 판돈(이탈자 몰수 포함)
+            var share = pot / winners.Count; // 공동 1등 균등 분배, 나머지 절사(§9-3)
+            foreach (var userId in winners)
+            {
+                _ = _bank.PayoutAsync(userId, share);
+            }
+        }
+
+        CloseRoom("게임 종료 — 정산 완료");
+    }
+
+    /// <summary>테스트 전용: 게임 결과를 주입해 정산/복귀 경로를 구동.</summary>
+    internal void ForceSetEndForTest(int[] winnerSeats) => HandleSetEnded(winnerSeats);
+
+    private void RefundStake(Guid userId)
+    {
+        if (Stake > 0 && _bank is not null)
+        {
+            _ = _bank.RefundAsync(userId, Stake);
         }
     }
 
@@ -405,6 +457,7 @@ public sealed class Room
         {
             code = Code,
             hostUserId = HostUserId.ToString(),
+            stake = Stake,
             members = _members
                 .Select(m => new RoomMemberDto { userId = m.UserId.ToString(), nickname = m.Nickname })
                 .Concat(_botNames.Select(n => new RoomMemberDto { nickname = n, isBot = true }))

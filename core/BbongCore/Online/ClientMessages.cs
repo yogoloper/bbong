@@ -34,6 +34,7 @@ public static class ClientMessageType
 public sealed class CreateRoomMsg
 {
     public string type = ClientMessageType.CreateRoom;
+    public int stake; // 0 = 무료(친구방), >0 = 맞춤게임 입장료(§9-1)
 }
 
 [Serializable]

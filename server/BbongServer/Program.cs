@@ -43,6 +43,7 @@ builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<ShopService>();
 builder.Services.AddScoped<MatchService>();
 builder.Services.AddSingleton<BbongServer.Realtime.RoomRegistry>(); // 친구방(인메모리, 단일 프로세스)
+builder.Services.AddSingleton<BbongServer.Realtime.IStakeBank, ScopedStakeBank>(); // 판돈 방 자금 흐름(§9)
 
 // 소셜 검증기: 개발은 bypass(앱 등록 전), 운영은 실제 provider 검증기로 교체 예정.
 var socialBypass = string.Equals(

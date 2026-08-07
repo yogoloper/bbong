@@ -55,6 +55,7 @@ public sealed class RoomUpdateMsg
     public string type = ServerMessageType.RoomUpdate;
     public string code = "";
     public string hostUserId = "";
+    public int stake; // 0 = 무료방
     public RoomMemberDto[] members = Array.Empty<RoomMemberDto>();
 }
 
@@ -63,6 +64,7 @@ public sealed class GameStartedMsg
 {
     public string type = ServerMessageType.GameStarted;
     public int yourSeat;
+    public int stake; // 0 = 무료방
     public int playerCount;
     public string[] nicknames = Array.Empty<string>();
     public int setRounds;

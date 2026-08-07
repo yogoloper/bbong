@@ -12,15 +12,15 @@ public sealed class RoomRegistry
     private readonly ConcurrentDictionary<string, Room> _rooms = new();
     private readonly ConcurrentDictionary<Guid, Room> _byUser = new();
 
-    /// <summary>방 생성 + 생성자 입장. runLoop=false는 테스트 전용(Execute 직접 구동).</summary>
-    public Room Create(RoomMember creator, bool runLoop = true)
+    /// <summary>방 생성 + 생성자 입장. runLoop=false는 테스트 전용(Execute 직접 구동). stake>0이면 맞춤게임.</summary>
+    public Room Create(RoomMember creator, bool runLoop = true, int stake = 0, IStakeBank? bank = null)
     {
         string code;
         Room room;
         do
         {
             code = Random.Shared.Next(0, 1_000_000).ToString("D6");
-            room = new Room(code, this, creator.UserId);
+            room = new Room(code, this, creator.UserId, stake, bank);
         }
         while (!_rooms.TryAdd(code, room));
 
@@ -46,6 +46,9 @@ public sealed class RoomRegistry
     }
 
     public Room? FindByUser(Guid userId) => _byUser.TryGetValue(userId, out var room) ? room : null;
+
+    /// <summary>초대코드로 방 조회(입장 전 판돈 에스크로 판단용).</summary>
+    public Room? FindByCode(string code) => _rooms.TryGetValue(code, out var room) ? room : null;
 
     internal void Index(Guid userId, Room room) => _byUser[userId] = room;
 
