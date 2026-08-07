@@ -86,7 +86,7 @@ namespace Bbong.Client
                     var drew = JsonUtility.FromJson<DrewCardMsg>(json);
                     if (drew.reshuffled)
                     {
-                        _table.KeepGroupsAndTopDiscard();
+                        _table.KeepGroupsOnly();
                         _table.ShuffleFx();
                     }
 

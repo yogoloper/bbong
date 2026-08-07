@@ -46,7 +46,7 @@ public sealed class RoundState
 
     /// <summary>드로우 가능 여부: 바닥에 카드가 있거나, 재셔플 한도 내에서 버림 더미로 채울 수 있을 때.</summary>
     public bool CanDraw =>
-        _drawPile.Count > 0 || (_reshuffles < GameConfig.MaxReshuffles && _discardPile.Count > 1);
+        _drawPile.Count > 0 || (_reshuffles < GameConfig.MaxReshuffles && _discardPile.Count > 0);
 
     public IReadOnlyList<Player> Players => _players;
 
@@ -254,13 +254,12 @@ public sealed class RoundState
     /// <summary>바닥 더미 소진 시: 버림 더미 맨 위 1장만 남기고 나머지를 셔플(rules.md §3).</summary>
     private (List<Card> draw, List<Card> discard) Reshuffle()
     {
-        if (_discardPile.Count <= 1)
+        if (_discardPile.Count == 0)
         {
             throw new InvalidOperationException("재셔플할 카드가 부족합니다.");
         }
 
-        var top = TopDiscard;
-        var rest = _discardPile.Take(_discardPile.Count - 1).ToList();
-        return (Shuffler.Shuffle(rest, _random), new List<Card> { top });
+        // 버림 더미 전부를 섞어 새 바닥 더미로(맨 위도 남기지 않음)
+        return (Shuffler.Shuffle(_discardPile.ToList(), _random), new List<Card>());
     }
 }

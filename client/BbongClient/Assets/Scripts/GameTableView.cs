@@ -839,27 +839,10 @@ namespace Bbong.Client
         }
 
         /// <summary>재셔플: 고정 패는 남기고 단일 버림은 맨 위 1장만 유지.</summary>
-        public void KeepGroupsAndTopDiscard()
+        /// <summary>재셔플: 버림 더미 전부가 덱으로 들어가므로 그룹(나간 패)만 남긴다.</summary>
+        public void KeepGroupsOnly()
         {
-            var kept = new List<(List<Card> cards, bool group, Vector2 pos, float rot)>();
-            (List<Card> cards, bool group, Vector2 pos, float rot) lastSingle = default;
-            foreach (var e in _timeline)
-            {
-                if (e.group)
-                {
-                    kept.Add(e);
-                }
-                else
-                {
-                    lastSingle = e;
-                }
-            }
-
-            if (lastSingle.cards != null)
-            {
-                kept.Add(lastSingle);
-            }
-
+            var kept = _timeline.Where(e => e.group).ToList();
             _timeline.Clear();
             _timeline.AddRange(kept);
             _timelineShown = _timeline.Count;

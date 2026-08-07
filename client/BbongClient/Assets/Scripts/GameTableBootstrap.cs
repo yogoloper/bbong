@@ -574,7 +574,7 @@ namespace Bbong.Client
             if (discardBefore > 1 && _round.DiscardPile.Count < discardBefore)
             {
                 // 고정 패(뽕/자연뽕)는 테이블에 남고, 단일 버림은 맨 위 1장만 유지
-                _table.KeepGroupsAndTopDiscard();
+                _table.KeepGroupsOnly();
                 SetLog("바닥 더미 소진 → 버림 더미 재셔플(맨 위 1장 유지)");
                 _table.ShuffleFx();
                 Refresh();
