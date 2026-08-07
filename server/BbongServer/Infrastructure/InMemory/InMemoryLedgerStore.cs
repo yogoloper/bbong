@@ -31,4 +31,20 @@ public sealed class InMemoryLedgerStore : ILedgerStore
             return Task.FromResult(Wallet.Rehydrate(userId, owned));
         }
     }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, System.Threading.SemaphoreSlim> _userLocks = new();
+
+    public async Task<T> WithWalletLockAsync<T>(Guid userId, Func<Task<T>> action)
+    {
+        var gate = _userLocks.GetOrAdd(userId, _ => new System.Threading.SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
 }

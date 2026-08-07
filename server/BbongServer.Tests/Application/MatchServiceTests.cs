@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using BbongServer.Application;
 using BbongServer.Domain.Matches;
@@ -171,5 +172,32 @@ public class MatchServiceTests
     public void Settle_unknown_match_not_found()
     {
         Assert.ThrowsAsync<KeyNotFoundException>(() => _service.SettleAsync(_user, Guid.NewGuid(), won: true, winnersCount: 1));
+    }
+
+    // ── R7: 지갑 동시성 — 동시 에스크로가 과인출을 만들면 안 된다 ──
+
+    [Test]
+    public async Task Concurrent_escrow_debits_cannot_overdraw()
+    {
+        await SeedBalanceAsync(10_000); // 판돈 10000 매치를 딱 1번 시작할 수 있는 잔액
+
+        var attempts = Enumerable.Range(0, 20)
+            .Select(_ => Task.Run(async () =>
+            {
+                try
+                {
+                    await _service.StartAsync(_user, 10_000, 4);
+                    return true;
+                }
+                catch (InvalidOperationException)
+                {
+                    return false; // 잔액 부족 — 정상 거절
+                }
+            }))
+            .ToArray();
+        var results = await Task.WhenAll(attempts);
+
+        Assert.That(results.Count(ok => ok), Is.EqualTo(1)); // 성공은 정확히 1건
+        Assert.That(await BalanceAsync(), Is.EqualTo(0));    // 과인출(음수) 금지
     }
 }

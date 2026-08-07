@@ -59,11 +59,13 @@ public sealed class ShopService
         await GrantAsync(userId, AdRewardKind.Bankruptcy, BankruptcyReward, LedgerReason.BankruptcyAid);
     }
 
-    private async Task GrantAsync(Guid userId, AdRewardKind kind, long amount, LedgerReason reason)
-    {
-        var wallet = await _ledger.LoadWalletAsync(userId);
-        var entry = wallet.Credit(amount, reason);
-        await _ledger.AppendAsync(new[] { entry });
-        await _rewards.AppendAsync(new AdRewardClaim(userId, kind, _clock.UtcNow));
-    }
+    private Task GrantAsync(Guid userId, AdRewardKind kind, long amount, LedgerReason reason) =>
+        _ledger.WithWalletLockAsync<object>(userId, async () =>
+        {
+            var wallet = await _ledger.LoadWalletAsync(userId);
+            var entry = wallet.Credit(amount, reason);
+            await _ledger.AppendAsync(new[] { entry });
+            await _rewards.AppendAsync(new AdRewardClaim(userId, kind, _clock.UtcNow));
+            return null;
+        });
 }
