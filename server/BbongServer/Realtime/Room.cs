@@ -165,6 +165,13 @@ public sealed class Room
     {
         if (Phase == RoomPhase.Playing)
         {
+            var seat = _members.FindIndex(m => m.UserId == member.UserId);
+            if (seat >= 0 && _session is not null)
+            {
+                Reconnect(seat, member); // 이탈했던 참가자 — 자리 복귀(§9-4 후속)
+                return;
+            }
+
             Send(member.Sink, new ErrorMsg { code = "room_playing", message = "이미 게임이 시작된 방입니다." });
             RefundStake(member.UserId); // 입장 전 선차감된 에스크로 반환
             return;
@@ -181,6 +188,31 @@ public sealed class Room
         _registry.Index(member.UserId, this);
         BroadcastRoomUpdate();
     }
+
+    /// <summary>재접속: 새 소켓으로 좌석 멤버 교체 + 게임 시작 정보/현재 판 상태 재전송 + 봇 자리 회수.</summary>
+    private void Reconnect(int seat, RoomMember member)
+    {
+        _members[seat] = member;
+        _absent.Remove(member.UserId);
+        _registry.Index(member.UserId, this);
+
+        var nicknames = _session!.Nicknames.ToArray();
+        Send(member.Sink, new GameStartedMsg
+        {
+            yourSeat = seat,
+            stake = Stake,
+            playerCount = nicknames.Length,
+            nicknames = nicknames,
+            setRounds = new GameConfig().SetRounds
+        });
+        Apply(_session.HandleReconnect(seat));
+    }
+
+    /// <summary>이 유저가 게임 중 좌석 보유자인지(재접속 — 입장료 재청구 금지 판단용).</summary>
+    public bool HasSeatFor(Guid userId) => Phase == RoomPhase.Playing && _members.Any(m => m.UserId == userId);
+
+    /// <summary>테스트 전용.</summary>
+    internal GameSession? SessionForTest => _session;
 
     private void HandleLeaveOrDisconnect(Guid userId, bool voluntary)
     {

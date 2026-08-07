@@ -12,6 +12,10 @@ namespace Bbong.Client
     /// </summary>
     public sealed class FriendRoomBootstrap : MonoBehaviour
     {
+        /// <summary>맞춤게임 설정 화면에서 전달하는 입장료(GoTo가 인스턴스를 안 돌려줘 정적 핸드오프). 0 = 친구방.</summary>
+        internal static int PendingStake;
+
+        private int _stake;
         private GameObject _canvas;
         private Text _status;
         private RoomUpdateMsg _room;
@@ -24,6 +28,8 @@ namespace Bbong.Client
             WsClient.Instance.Paused = false; // 전환 중 보존된 메시지 수신 재개
             if (_room == null)
             {
+                _stake = PendingStake;
+                PendingStake = 0;
                 BuildEntry();
             }
             else
@@ -49,10 +55,12 @@ namespace Bbong.Client
         private void BuildEntry()
         {
             Rebuild(out var root);
-            var title = UiKit.CreateText(root, "친구와 함께", 56, TextAnchor.MiddleCenter,
+            var title = UiKit.CreateText(root, _stake > 0 ? "맞춤게임" : "친구와 함께", 56, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.74f), new Vector2(0.9f, 0.86f));
             title.fontStyle = FontStyle.Bold;
-            UiKit.CreateText(root, "포인트 없이 친구들과 한 판 (입장료 없음)", 28, TextAnchor.MiddleCenter,
+            UiKit.CreateText(root,
+                _stake > 0 ? $"입장료 {_stake:N0} — 1등이 전부 가져갑니다" : "포인트 없이 친구들과 한 판 (입장료 없음)",
+                28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.66f), new Vector2(0.9f, 0.73f)).color = new Color(1f, 1f, 1f, 0.7f);
 
             UiKit.CreateButton(root, "방 만들기 (호스트)",
@@ -96,6 +104,13 @@ namespace Bbong.Client
             code.fontStyle = FontStyle.Bold;
             code.color = UiKit.Accent;
 
+            if (_room.stake > 0)
+            {
+                var humans = _room.members.Count(m => !m.isBot); // 봇은 입장료가 없어 상금에서 제외
+                UiKit.CreateText(root, $"입장료 {_room.stake:N0} · 현재 총상금 {(long)_room.stake * humans:N0}", 30,
+                    TextAnchor.MiddleCenter, new Vector2(0.1f, 0.63f), new Vector2(0.9f, 0.68f)).color = UiKit.Accent;
+            }
+
             var lines = "";
             foreach (var member in _room.members)
             {
@@ -134,6 +149,8 @@ namespace Bbong.Client
             {
                 WsClient.Instance.Send(new LeaveRoomMsg());
                 _room = null;
+                _stake = PendingStake;
+                PendingStake = 0;
                 BuildEntry();
             });
         }
@@ -157,7 +174,7 @@ namespace Bbong.Client
 
         // ── 액션 ──
 
-        private void OnCreateRoom() => EnsureConnected(() => WsClient.Instance.Send(new CreateRoomMsg()));
+        private void OnCreateRoom() => EnsureConnected(() => WsClient.Instance.Send(new CreateRoomMsg { stake = _stake }));
 
         private void JoinWithCode(string code)
         {
@@ -214,7 +231,9 @@ namespace Bbong.Client
                 case ServerMessageType.RoomClosed:
                     var closed = JsonUtility.FromJson<RoomClosedMsg>(json);
                     _room = null;
-                    BuildEntry();
+                    _stake = PendingStake;
+                PendingStake = 0;
+                BuildEntry();
                     _status.text = closed.reason;
                     break;
 

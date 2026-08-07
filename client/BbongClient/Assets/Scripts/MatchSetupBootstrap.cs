@@ -55,7 +55,7 @@ namespace Bbong.Client
                 new Vector2(0.1f, 0.2f), new Vector2(0.9f, 0.28f));
             _status.color = new Color(1f, 0.8f, 0.5f);
 
-            UiKit.PrimaryCta(root, "매칭 시작", OnMatch);
+            UiKit.PrimaryCta(root, "방 만들기 / 입장", OnMatch);
             UiKit.BackButton(root, Back);
         }
 
@@ -92,8 +92,12 @@ namespace Bbong.Client
             _prize.text = $"총상금 {(_stake * (long)_players):N0}";
         }
 
-        private void OnMatch() =>
-            _status.text = $"매칭 대기 중... ({_players}인 · {_stake:N0})\n(온라인 매칭은 Phase 5에서 구현)";
+        private void OnMatch()
+        {
+            // 방 흐름은 친구방과 단일 틀 — 입장료만 얹어 방 만들기/코드 입장 화면으로
+            FriendRoomBootstrap.PendingStake = _stake;
+            UiKit.GoTo<FriendRoomBootstrap>(_canvas, this);
+        }
 
         private void Back() => UiKit.GoTo<MainLobbyBootstrap>(_canvas, this);
     }

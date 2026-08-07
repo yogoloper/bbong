@@ -825,6 +825,37 @@ public sealed class GameSession
         output.ToAll(new BotTookOverMsg { seat = seat, nickname = _nicknames[seat] });
     }
 
+    /// <summary>해당 좌석이 현재 봇 플레이 중인지(재접속 복귀 판단용).</summary>
+    public bool IsBotSeat(int seat) => _botSeats.Contains(seat);
+
+    /// <summary>좌석 순 닉네임(재접속 시 GameStarted 재전송용).</summary>
+    public IReadOnlyList<string> Nicknames => _nicknames;
+
+    /// <summary>
+    /// 재접속: 봇이 대신 플레이 중이면 자리를 되돌려주고, 현재 판 상태를 본인에게 재동기화한다.
+    /// 닉네임은 이탈 중에도 원본 유지라 되돌릴 것이 없다.
+    /// </summary>
+    public SessionOutput HandleReconnect(int seat)
+    {
+        var output = new SessionOutput();
+        if (_botSeats.Remove(seat))
+        {
+            _bots[seat] = null;
+            _acted[seat] = false;
+            _timedOut[seat] = false; // 복귀자는 AFK 카운트 초기화 — 판 종료 시 재강퇴 방지
+
+            var actor = _phase == RoundPhase.WaitingPongDiscard ? _pongDeclarerSeat : _round.CurrentSeat;
+            if (actor == seat && _phase is RoundPhase.WaitingDiscard or RoundPhase.WaitingStop or RoundPhase.WaitingPongDiscard)
+            {
+                _botToken++; // 예약된 봇 행동 무효화 → 사람 턴 타이머로 교체
+                ArmActorTimer(output);
+            }
+        }
+
+        output.ToSeat(seat, new TurnBeganMsg { seat = _round.CurrentSeat, view = BuildView(seat) }); // 상태 재동기화
+        return output;
+    }
+
     /// <summary>
     /// 명시적 나가기(§9-4): 판 종료를 기다리지 않고 즉시 봇으로 전환.
     /// 그 좌석이 지금 행동 차례면(버림/스톱/뽕 추가버림/뽕 창) 봇 행동을 바로 예약한다.

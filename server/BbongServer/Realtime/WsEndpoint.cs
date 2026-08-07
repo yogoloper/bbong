@@ -124,7 +124,7 @@ public static class WsEndpoint
                     break;
                 }
 
-                if (target.Stake > 0 && !await bank.TryEscrowAsync(member.UserId, target.Stake))
+                if (target.Stake > 0 && !target.HasSeatFor(member.UserId) && !await bank.TryEscrowAsync(member.UserId, target.Stake))
                 {
                     _ = sink.SendAsync(new ErrorMsg { code = "insufficient_balance", message = "포인트가 부족합니다." });
                     break;
