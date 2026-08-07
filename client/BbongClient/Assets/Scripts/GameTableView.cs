@@ -613,19 +613,21 @@ namespace Bbong.Client
                     continue; // 공개 패 주인 — 손패는 전부 테이블에 내려놓은 상태(뒷면 안 그림)
                 }
 
-                // 상대 손패 수: 뒤집힌 카드
-                const float bw = 36f, bh = 50f, step = bw + 3f;
-                var total = (seatView.handCount - 1) * step + bw;
+                // 상대 손패 수: 뒤집힌 카드 — 크기·간격 고정, 가운데 정렬.
+                // 시작점을 정수로 반올림해 홀수 장일 때 생기는 0.5px 오프셋(테두리가 매번 다르게
+                // 리샘플링돼 크기가 변해 보이는 원인)을 제거한다. 최다 6장: 231 ≤ 패널 안폭 236.
+                const float bw = 36f, bh = 54f, step = bw + 3f;
+                var rowStart = Mathf.Round(-((seatView.handCount - 1) * step + bw) / 2f + bw / 2f);
                 for (var j = 0; j < seatView.handCount; j++)
                 {
                     var back = UiKit.CreatePanel(panel.transform, Color.white);
-                    back.sprite = UiArt.CardBack;
+                    back.sprite = UiArt.CardBackSmall; // 표시 크기 전용 — 축소 앨리어싱으로 테두리가 제각각 보이는 문제 방지
                     back.type = Image.Type.Simple;
                     var brt = back.rectTransform;
                     brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.28f);
                     brt.pivot = new Vector2(0.5f, 0.5f);
                     brt.sizeDelta = new Vector2(bw, bh);
-                    brt.anchoredPosition = new Vector2(-total / 2f + bw / 2f + j * step, 0f);
+                    brt.anchoredPosition = new Vector2(rowStart + j * step, 0f);
                 }
             }
         }

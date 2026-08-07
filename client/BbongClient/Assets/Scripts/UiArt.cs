@@ -10,6 +10,7 @@ namespace Bbong.Client
         private static Sprite _felt;
         private static Sprite _button;
         private static Sprite _cardBack;
+        private static Sprite _cardBackSmall;
         private static Sprite _backdrop;
         private static Sprite _greenButton;
         private static Sprite _pill;
@@ -27,6 +28,12 @@ namespace Bbong.Client
 
         /// <summary>카드 뒷면: 남색 그라데이션 + 다이아 격자 + 금색 안쪽 테두리.</summary>
         public static Sprite CardBack => _cardBack ??= CreateCardBack(90, 126, 14);
+
+        /// <summary>
+        /// 좌석 손패 수 표시용 소형 뒷면. 1px대 금테는 서브픽셀 위치에 따라 좌석마다 다르게 뭉개져
+        /// (중앙 좌석만 또렷, 측면 좌석은 회색) 도톰한 단일 테두리로 단순화 — 어느 위치서든 균일.
+        /// </summary>
+        public static Sprite CardBackSmall => _cardBackSmall ??= CreateCardBackSmall(36, 54, 6);
 
         /// <summary>메뉴 화면 배경: 진한 네이비 세로 그라데이션 + 별 점.</summary>
         public static Sprite Backdrop => _backdrop ??= CreateBackdrop(512);
@@ -61,6 +68,45 @@ namespace Bbong.Client
             }
         }
 
+        private static Sprite CreateCardBackSmall(int w, int h, int radius)
+        {
+            var top = new Color(0.27f, 0.35f, 0.63f);
+            var bottom = new Color(0.10f, 0.14f, 0.32f);
+            var lattice = new Color(0.44f, 0.52f, 0.80f);
+            var border = new Color(0.87f, 0.82f, 0.68f); // 웜 라이트 — 금테 대신 넓은 단일 테두리
+
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color[w * h];
+            for (var y = 0; y < h; y++)
+            {
+                for (var x = 0; x < w; x++)
+                {
+                    var cx = Mathf.Clamp(x, radius, w - 1 - radius);
+                    var cy = Mathf.Clamp(y, radius, h - 1 - radius);
+                    var dist = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                    var edge = radius - dist;
+                    var alpha = Mathf.Clamp01(edge + 0.5f);
+
+                    var fill = Color.Lerp(bottom, top, y / (float)h);
+                    if (edge >= 4f && ((x + y) % 8 < 1 || (x - y + 4096) % 8 < 1))
+                    {
+                        fill = Color.Lerp(fill, lattice, 0.55f); // 촘촘한 다이아 격자
+                    }
+
+                    if (edge < 2.5f)
+                    {
+                        fill = border; // 리샘플링에도 살아남는 두께
+                    }
+
+                    pixels[y * w + x] = new Color(fill.r, fill.g, fill.b, alpha);
+                }
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+        }
+
         private static Sprite CreateCardBack(int w, int h, int radius)
         {
             var top = new Color(0.27f, 0.35f, 0.63f);
@@ -81,16 +127,17 @@ namespace Bbong.Client
                     var alpha = Mathf.Clamp01(edge + 0.5f);
 
                     var fill = Color.Lerp(bottom, top, y / (float)h);
-                    if (edge >= 9f && ((x + y) % 16 < 2 || (x - y + 4096) % 16 < 2))
+                    // 테두리 밴드는 radius 비례 — 소형 스프라이트도 같은 비율로 그려짐(r14 기준 9/5~8/3)
+                    if (edge >= radius * 0.643f && ((x + y) % 16 < 2 || (x - y + 4096) % 16 < 2))
                     {
                         fill = Color.Lerp(fill, lattice, 0.55f); // 다이아 격자
                     }
 
-                    if (edge >= 5f && edge < 8f)
+                    if (edge >= radius * 0.357f && edge < radius * 0.571f)
                     {
                         fill = gold; // 안쪽 금테
                     }
-                    else if (edge < 3f)
+                    else if (edge < radius * 0.214f)
                     {
                         fill = Color.Lerp(fill, Color.white, 0.85f); // 바깥 흰 테두리
                     }
