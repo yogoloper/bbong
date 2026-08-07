@@ -589,17 +589,18 @@ namespace Bbong.Client
                 var rt = panel.rectTransform;
                 rt.anchorMin = rt.anchorMax = anchor;
                 rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.sizeDelta = new Vector2(250f, mine ? 80f : 150f);
+                rt.sizeDelta = new Vector2(260f, mine ? 84f : 160f);
 
-                var label = UiKit.CreateText(panel.transform, $"{seatView.nickname}\n빚: {seatView.cumulativeDebt}", 24,
+                var label = UiKit.CreateText(panel.transform, $"{seatView.nickname}\n빚: {seatView.cumulativeDebt}", 28,
                     TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
-                FitText(label, 16, 24);
+                FitText(label, 18, 28);
+                label.verticalOverflow = VerticalWrapMode.Truncate; // 뒷면 카드 영역 침범 금지
                 if (mine)
                 {
                     continue;
                 }
 
-                UiKit.Anchor(label.rectTransform, new Vector2(0f, 0.55f), new Vector2(1f, 1f));
+                UiKit.Anchor(label.rectTransform, new Vector2(0f, 0.58f), new Vector2(1f, 1f));
 
                 if (seatView.seat == _meldLaidSeat)
                 {
@@ -615,7 +616,7 @@ namespace Bbong.Client
                     back.sprite = UiArt.CardBack;
                     back.type = Image.Type.Simple;
                     var brt = back.rectTransform;
-                    brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.31f);
+                    brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.28f);
                     brt.pivot = new Vector2(0.5f, 0.5f);
                     brt.sizeDelta = new Vector2(bw, bh);
                     brt.anchoredPosition = new Vector2(-total / 2f + bw / 2f + j * step, 0f);
