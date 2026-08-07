@@ -109,6 +109,7 @@ namespace Bbong.Client
             _lobbyBtn = _table.AddBarButton("로비로", OnLobby);
 
             _table.CardClicked += OnCardClicked;
+            _table.ScorePopupShown += Refresh; // 지연 노출된 점수판과 함께 종료 버튼 표시
             _table.StopClicked += OnStop;
             _table.MeldClicked += OnMeldDeclare;
             _table.NaturalPongClicked += OnNaturalPong;
@@ -876,9 +877,11 @@ namespace Bbong.Client
         private void Refresh()
         {
             _table.Render(BuildRoundView(), _pendingLaid, _state == UiState.NaturalPongSelect);
-            _nextBtn.gameObject.SetActive(_state == UiState.RoundOver || _state == UiState.SetOver);
+            // 종료 버튼은 점수판이 뜬 다음에만 — 카드 착지 연출 동안 미리 나타나지 않게
+            var over = _state == UiState.RoundOver || _state == UiState.SetOver;
+            _nextBtn.gameObject.SetActive(over && _table.ScorePopupVisible);
             GameTableView.SetButtonLabel(_nextBtn, _state == UiState.SetOver ? "새 게임" : "다음 라운드");
-            _lobbyBtn.gameObject.SetActive(_state == UiState.SetOver);
+            _lobbyBtn.gameObject.SetActive(_state == UiState.SetOver && _table.ScorePopupVisible);
         }
 
         /// <summary>로컬 코어 상태 → 공용 뷰 입력(RoundView) 합성. 서버 GameSession.ToView와 같은 의미.</summary>

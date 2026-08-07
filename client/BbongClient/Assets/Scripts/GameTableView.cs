@@ -67,6 +67,12 @@ namespace Bbong.Client
         private Text _prompt;
         private Text _endReason;
         private GameObject _scorePopup;
+
+        /// <summary>점수판이 화면에 떠 있는지 — 종료 버튼(다음 라운드 등)은 이때부터 노출.</summary>
+        public bool ScorePopupVisible => _scorePopup != null && _scorePopup.activeSelf;
+
+        /// <summary>지연 노출된 점수판이 실제로 표시된 순간(드라이버가 버튼 갱신에 사용).</summary>
+        public event Action ScorePopupShown;
         private Text _scoreTitle;
         private Text _scoreSubtitle; // 판 종료 사유(타이틀 아래)
         private Transform _scoreGrid;
@@ -1212,6 +1218,7 @@ namespace Bbong.Client
             }
 
             _scorePopup.SetActive(true);
+            ScorePopupShown?.Invoke();
             _scorePopup.transform.SetAsLastSibling();
             _scorePopupGroup.alpha = 1f;
             _endReason.gameObject.SetActive(false); // 사유는 팝업 안에 표시 — 뒤에 비치는 중복 텍스트 숨김
