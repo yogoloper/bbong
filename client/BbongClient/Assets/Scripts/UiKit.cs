@@ -98,6 +98,18 @@ namespace Bbong.Client
                 new Vector2(0.82f, 0.9f), new Vector2(0.98f, 1f));
             pts.color = Accent;
             pts.fontStyle = FontStyle.Bold;
+            BalanceLabel = pts; // 서버 재조회(RefreshMe) 후 갱신용 — 최신 화면의 상단바
+        }
+
+        /// <summary>현재 화면 상단바의 잔액 라벨(게임 정산 후 재조회 반영용).</summary>
+        public static Text BalanceLabel { get; private set; }
+
+        public static void SyncBalanceLabel()
+        {
+            if (BalanceLabel != null)
+            {
+                BalanceLabel.text = $"{Session.Balance:N0}";
+            }
         }
 
         /// <summary>화면 하단 중앙 고정 주요 CTA(게임 시작/매칭 시작 등 전 화면 통일).</summary>

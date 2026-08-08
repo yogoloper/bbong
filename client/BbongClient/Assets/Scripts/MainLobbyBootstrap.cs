@@ -12,6 +12,11 @@ namespace Bbong.Client
         {
             UiKit.EnsureEventSystem();
             Build();
+            if (Session.IsLoggedIn)
+            {
+                // 게임 정산(상금/입장료) 반영 — 로비로 돌아올 때마다 서버 기준으로 갱신
+                StartCoroutine(ServerApi.RefreshMe(UiKit.SyncBalanceLabel, _ => { }));
+            }
         }
 
         private void Build()
