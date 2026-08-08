@@ -185,6 +185,39 @@ public class QuickMatchTests
         Assert.That(records, Does.Contain((member.UserId, 4000L))); // 위장 봇 몫은 하우스 부담 — 총상금 그대로
     }
 
+    [Test]
+    public void Room_filled_by_fill_bots_is_not_matched()
+    {
+        var (_, first) = NewMember("첫째");
+        var room = _registry.QuickMatch(first, 1000, 3, _bank, runLoop: false);
+        room.Execute(new FillBotCmd(room.FillTokenForTest));
+        room.Execute(new FillBotCmd(room.FillTokenForTest)); // 사람1+봇2 = 3/3(카운트다운 중)
+
+        var (_, late) = NewMember("늦은이");
+        var other = _registry.QuickMatch(late, 1000, 3, _bank, runLoop: false);
+
+        Assert.That(other, Is.Not.SameAs(room)); // 점유 기준으로 만석 — 새 방
+    }
+
+    [Test]
+    public void Racing_human_displaces_a_fill_bot()
+    {
+        var (sink, first) = NewMember("첫째");
+        var room = _registry.QuickMatch(first, 1000, 3, _bank, runLoop: false);
+        room.Execute(new FillBotCmd(room.FillTokenForTest));
+        room.Execute(new FillBotCmd(room.FillTokenForTest)); // 3/3 — 카운트다운 진입
+
+        var (lateSink, late) = NewMember("늦은이");
+        room.Execute(new JoinCmd(late)); // 매칭 레이스로 늦게 도착한 사람
+
+        var update = lateSink.Last<RoomUpdateMsg>();
+        Assert.That(update.members, Has.Length.EqualTo(3));                       // 여전히 3/3
+        Assert.That(update.members.Count(m => m.userId != ""), Is.EqualTo(2));    // 사람 2(봇 하나 방출)
+        Assert.That(update.members.Any(m => m.nickname == "늦은이"), Is.True);
+        Assert.That(room.Phase, Is.EqualTo(RoomPhase.Waiting));
+        Assert.That(sink.Last<MatchStartingMsg>().seconds, Is.EqualTo(5));        // 카운트다운 재고지
+    }
+
     private sealed class RecordingBank : IStakeBank
     {
         private readonly List<(Guid, long)> _payouts;

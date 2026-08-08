@@ -59,7 +59,7 @@ public sealed class RoomRegistry
     {
         var candidates = _rooms.Values
             .Where(r => r.Phase == RoomPhase.Waiting && r.Stake == stake && r.TargetPlayers == players
-                        && r.Members.Count < players)
+                        && r.OccupiedCount < players) // 위장 봇 포함 점유 기준 — 카운트다운 중 방에 안 밀어넣음
             .ToList();
         if (candidates.Count > 0)
         {

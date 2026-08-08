@@ -209,6 +209,18 @@ public sealed class Room
             return;
         }
 
+        if (TargetPlayers > 0 && IsFull && _fillBots.Count > 0)
+        {
+            _fillBots.RemoveAt(_fillBots.Count - 1); // 매칭 레이스로 늦게 도착한 사람 — 위장 봇을 방출하고 자리를 내준다
+        }
+
+        if (TargetPlayers > 0 && IsFull)
+        {
+            Send(member.Sink, new ErrorMsg { code = "room_full", message = "방 정원이 가득 찼습니다." });
+            RefundStake(member.UserId);
+            return;
+        }
+
         _members.Add(member);
         _registry.Index(member.UserId, this);
         BroadcastRoomUpdate();
@@ -221,6 +233,9 @@ public sealed class Room
     }
 
     private int Occupied => _members.Count + _fillBots.Count + _botNames.Count;
+
+    /// <summary>사람+봇(위장/수동) 포함 점유 좌석 수 — 매칭 후보 판정용.</summary>
+    public int OccupiedCount => Occupied;
 
     private bool IsFull => TargetPlayers > 0 && Occupied >= TargetPlayers;
 

@@ -27,6 +27,8 @@ namespace Bbong.Client
 
         private RoomUpdateMsg _room;
         private Coroutine _searchPulse;
+        private bool _matching;   // 시작하기 이후 대기 상태 — 레이스 에러 시 자동 재매칭
+        private int _retries;
         private Text _searchLabel;
 
         private void Start()
@@ -113,8 +115,12 @@ namespace Bbong.Client
             _prize.text = $"총상금 {(_stake * (long)_players):N0}";
         }
 
-        private void OnMatch() =>
+        private void OnMatch()
+        {
+            _matching = true;
+            _retries = 0;
             EnsureConnected(() => WsClient.Instance.Send(new QuickMatchMsg { stake = _stake, players = _players }));
+        }
 
         private void EnsureConnected(Action then)
         {
@@ -171,6 +177,7 @@ namespace Bbong.Client
                 {
                     WsClient.Instance.Send(new LeaveRoomMsg());
                     _room = null;
+                    _matching = false;
                     Rebuild();
                 }, 32);
 
@@ -212,8 +219,15 @@ namespace Bbong.Client
             }
         }
 
+        private System.Collections.IEnumerator RetryMatch()
+        {
+            yield return new WaitForSeconds(0.5f);
+            WsClient.Instance.Send(new QuickMatchMsg { stake = _stake, players = _players });
+        }
+
         private void Rebuild()
         {
+            _matching = false;
             Destroy(_canvas);
             _playerChoices.Clear();
             _stakeChoices.Clear();
@@ -227,6 +241,7 @@ namespace Bbong.Client
             {
                 case ServerMessageType.RoomUpdate:
                     _room = JsonUtility.FromJson<RoomUpdateMsg>(json);
+                    _retries = 0;
                     BuildMatching();
                     break;
 
@@ -262,6 +277,15 @@ namespace Bbong.Client
 
                 case ServerMessageType.Error:
                     var error = JsonUtility.FromJson<ErrorMsg>(json);
+                    // 매칭 레이스(방이 그 사이 차거나 시작됨) — 자동으로 다른 방을 다시 찾는다
+                    if (_matching && _retries < 3
+                        && error.code is "room_full" or "room_playing" or "room_not_found")
+                    {
+                        _retries++;
+                        StartCoroutine(RetryMatch());
+                        break;
+                    }
+
                     if (_status != null)
                     {
                         _status.text = error.message;
