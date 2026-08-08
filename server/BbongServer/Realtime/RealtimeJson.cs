@@ -35,6 +35,7 @@ public static class RealtimeJson
             ClientMessageType.JoinRoom => Deserialize<JoinRoomMsg>(json),
             ClientMessageType.LeaveRoom => Deserialize<LeaveRoomMsg>(json),
             ClientMessageType.StartGame => Deserialize<StartGameMsg>(json),
+            ClientMessageType.QuickMatch => Deserialize<QuickMatchMsg>(json),
             ClientMessageType.AddBot => Deserialize<AddBotMsg>(json),
             ClientMessageType.RemoveBot => Deserialize<RemoveBotMsg>(json),
             ClientMessageType.StopDeclare => Deserialize<StopDeclareMsg>(json),

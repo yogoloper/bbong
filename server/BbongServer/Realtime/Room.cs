@@ -34,19 +34,24 @@ public sealed class Room
     private bool _loopRunning;
     private GameSession? _session;
 
-    internal Room(string code, RoomRegistry registry, Guid hostUserId, int stake = 0, IStakeBank? bank = null)
+    internal Room(string code, RoomRegistry registry, Guid hostUserId, int stake = 0, IStakeBank? bank = null,
+        int targetPlayers = 0)
     {
         Code = code;
         _registry = registry;
         HostUserId = hostUserId;
         Stake = stake;
         _bank = bank;
+        TargetPlayers = targetPlayers;
     }
 
     public string Code { get; }
 
     /// <summary>입장료(0 = 무료 친구방). 에스크로는 입장 전에 WsEndpoint가 수행.</summary>
     public int Stake { get; }
+
+    /// <summary>빠른매칭 목표 인원(0 = 수동 시작 친구방). 도달하면 자동 시작.</summary>
+    public int TargetPlayers { get; }
 
     public Guid HostUserId { get; private set; }
 
@@ -187,6 +192,11 @@ public sealed class Room
         _members.Add(member);
         _registry.Index(member.UserId, this);
         BroadcastRoomUpdate();
+
+        if (TargetPlayers > 0 && _members.Count >= TargetPlayers)
+        {
+            StartGame(); // 빠른매칭: 정원 도달 → 방장 개입 없이 자동 시작
+        }
     }
 
     /// <summary>재접속: 새 소켓으로 좌석 멤버 교체 + 게임 시작 정보/현재 판 상태 재전송 + 봇 자리 회수.</summary>
@@ -334,6 +344,11 @@ public sealed class Room
             return;
         }
 
+        StartGame();
+    }
+
+    private void StartGame()
+    {
         Phase = RoomPhase.Playing;
         var nicknames = _members.Select(m => m.Nickname).Concat(_botNames).ToArray();
         _seatUsers = _members.Select(m => (Guid?)m.UserId)
@@ -490,6 +505,7 @@ public sealed class Room
             code = Code,
             hostUserId = HostUserId.ToString(),
             stake = Stake,
+            targetPlayers = TargetPlayers,
             members = _members
                 .Select(m => new RoomMemberDto { userId = m.UserId.ToString(), nickname = m.Nickname })
                 .Concat(_botNames.Select(n => new RoomMemberDto { nickname = n, isBot = true }))

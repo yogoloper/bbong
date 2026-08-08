@@ -99,7 +99,23 @@ public static class WsEndpoint
         {
             case CreateRoomMsg when room is not null:
             case JoinRoomMsg when room is not null:
+            case QuickMatchMsg when room is not null:
                 _ = sink.SendAsync(new ErrorMsg { code = "already_in_room", message = "이미 방에 있습니다." });
+                break;
+            case QuickMatchMsg quick:
+                if (!BbongCore.Config.GameConfig.IsValidStake(quick.stake) || !BbongCore.Config.GameConfig.IsValidPlayerCount(quick.players))
+                {
+                    _ = sink.SendAsync(new ErrorMsg { code = "invalid_match", message = "허용되지 않는 매칭 조건입니다." });
+                    break;
+                }
+
+                if (!await bank.TryEscrowAsync(member.UserId, quick.stake))
+                {
+                    _ = sink.SendAsync(new ErrorMsg { code = "insufficient_balance", message = "포인트가 부족합니다." });
+                    break;
+                }
+
+                registry.QuickMatch(member, quick.stake, quick.players, bank);
                 break;
             case CreateRoomMsg create:
                 if (create.stake != 0 && !BbongCore.Config.GameConfig.IsValidStake(create.stake))

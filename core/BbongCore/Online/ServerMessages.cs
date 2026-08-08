@@ -56,6 +56,7 @@ public sealed class RoomUpdateMsg
     public string code = "";
     public string hostUserId = "";
     public int stake; // 0 = 무료방
+    public int targetPlayers; // 빠른매칭 목표 인원(0 = 수동 시작 친구방)
     public RoomMemberDto[] members = Array.Empty<RoomMemberDto>();
 }
 

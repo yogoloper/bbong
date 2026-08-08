@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 
 namespace BbongServer.Realtime;
 
@@ -49,6 +50,41 @@ public sealed class RoomRegistry
 
     /// <summary>초대코드로 방 조회(입장 전 판돈 에스크로 판단용).</summary>
     public Room? FindByCode(string code) => _rooms.TryGetValue(code, out var room) ? room : null;
+
+    /// <summary>
+    /// 빠른매칭: 같은 조건(입장료·목표 인원)의 대기방 중 하나에 랜덤 배정, 없으면 새 방 생성(§9-1).
+    /// 정원 도달 시 방이 자동 시작한다.
+    /// </summary>
+    public Room QuickMatch(RoomMember member, int stake, int players, IStakeBank? bank, bool runLoop = true)
+    {
+        var candidates = _rooms.Values
+            .Where(r => r.Phase == RoomPhase.Waiting && r.Stake == stake && r.TargetPlayers == players
+                        && r.Members.Count < players)
+            .ToList();
+        if (candidates.Count > 0)
+        {
+            var room = candidates[Random.Shared.Next(candidates.Count)];
+            room.Dispatch(new JoinCmd(member));
+            return room;
+        }
+
+        string code;
+        Room created;
+        do
+        {
+            code = Random.Shared.Next(0, 1_000_000).ToString("D6");
+            created = new Room(code, this, member.UserId, stake, bank, targetPlayers: players);
+        }
+        while (!_rooms.TryAdd(code, created));
+
+        if (runLoop)
+        {
+            created.StartLoop();
+        }
+
+        created.Dispatch(new JoinCmd(member));
+        return created;
+    }
 
     internal void Index(Guid userId, Room room) => _byUser[userId] = room;
 
