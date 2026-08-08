@@ -18,6 +18,7 @@ public static class ClientMessageType
     public const string JoinRoom = "joinRoom";
     public const string LeaveRoom = "leaveRoom";
     public const string StartGame = "startGame";
+    public const string QuickMatch = "quickMatch";
     public const string AddBot = "addBot";
     public const string RemoveBot = "removeBot";
     public const string StopDeclare = "stopDeclare";
@@ -30,10 +31,20 @@ public static class ClientMessageType
     public const string PongDiscard = "pongDiscard";
 }
 
+/// <summary>맞춤게임 빠른매칭: 조건 맞는 대기방 자동 배정, 없으면 생성. 정원 차면 자동 시작.</summary>
+[Serializable]
+public sealed class QuickMatchMsg
+{
+    public string type = ClientMessageType.QuickMatch;
+    public int stake;
+    public int players; // 목표 인원(2~6)
+}
+
 [Serializable]
 public sealed class CreateRoomMsg
 {
     public string type = ClientMessageType.CreateRoom;
+    public int stake; // 0 = 무료(친구방), >0 = 맞춤게임 입장료(§9-1)
 }
 
 [Serializable]

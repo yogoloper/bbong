@@ -36,14 +36,18 @@ public sealed class MatchService
             throw new ArgumentException($"인원은 {GameConfig.MinPlayers}~{GameConfig.MaxPlayers}명이어야 합니다: {playerCount}", nameof(playerCount));
         }
 
-        var wallet = await _ledger.LoadWalletAsync(userId);
-        var entry = wallet.Debit(stake, LedgerReason.StakeEscrow); // 잔액 부족 시 예외, 변동 없음
-        await _ledger.AppendAsync(new[] { entry });
+        var (matchId, balance) = await _ledger.WithWalletLockAsync(userId, async () =>
+        {
+            var wallet = await _ledger.LoadWalletAsync(userId);
+            var entry = wallet.Debit(stake, LedgerReason.StakeEscrow); // 잔액 부족 시 예외, 변동 없음
+            await _ledger.AppendAsync(new[] { entry });
 
-        var match = Match.Start(Guid.NewGuid(), userId, stake, playerCount, _clock.UtcNow);
-        await _matches.SaveAsync(match);
+            var match = Match.Start(Guid.NewGuid(), userId, stake, playerCount, _clock.UtcNow);
+            await _matches.SaveAsync(match);
+            return (match.Id, wallet.Balance);
+        });
 
-        return (match.Id, wallet.Balance);
+        return (matchId, balance);
     }
 
     /// <summary>매치 정산: 승리 시 몫 적립(절사), 1회만. 남의 매치/없는 매치는 KeyNotFoundException.</summary>
@@ -57,15 +61,20 @@ public sealed class MatchService
 
         var payout = match.Settle(won, winnersCount, _clock.UtcNow);
 
-        var wallet = await _ledger.LoadWalletAsync(userId);
-        if (payout > 0)
+        var balance = await _ledger.WithWalletLockAsync(userId, async () =>
         {
-            var entry = wallet.Credit(payout, LedgerReason.StakePayout);
-            await _ledger.AppendAsync(new[] { entry });
-        }
+            var wallet = await _ledger.LoadWalletAsync(userId);
+            if (payout > 0)
+            {
+                var entry = wallet.Credit(payout, LedgerReason.StakePayout);
+                await _ledger.AppendAsync(new[] { entry });
+            }
+
+            return wallet.Balance;
+        });
 
         await _matches.UpdateAsync(match);
 
-        return (payout, wallet.Balance);
+        return (payout, balance);
     }
 }

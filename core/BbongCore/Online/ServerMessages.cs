@@ -23,6 +23,7 @@ public static class ServerMessageType
     public const string BotTookOver = "botTookOver";
     public const string RoundEnded = "roundEnded";
     public const string SetEnded = "setEnded";
+    public const string MatchStarting = "matchStarting"; // 맞춤게임 정원 충족 → 시작 카운트다운
     public const string RoomClosed = "roomClosed";
     public const string Error = "error";
 }
@@ -55,6 +56,8 @@ public sealed class RoomUpdateMsg
     public string type = ServerMessageType.RoomUpdate;
     public string code = "";
     public string hostUserId = "";
+    public int stake; // 0 = 무료방
+    public int targetPlayers; // 빠른매칭 목표 인원(0 = 수동 시작 친구방)
     public RoomMemberDto[] members = Array.Empty<RoomMemberDto>();
 }
 
@@ -63,6 +66,7 @@ public sealed class GameStartedMsg
 {
     public string type = ServerMessageType.GameStarted;
     public int yourSeat;
+    public int stake; // 0 = 무료방
     public int playerCount;
     public string[] nicknames = Array.Empty<string>();
     public int setRounds;
@@ -191,6 +195,14 @@ public sealed class SetEndedMsg
     public int[] scores = Array.Empty<int>();
     public int[] cumulativeDebts = Array.Empty<int>();
     public int[] winnerSeats = Array.Empty<int>();
+}
+
+/// <summary>맞춤게임 정원 충족 — seconds 뒤 자동 시작(이탈 시 취소되고 roomUpdate가 다시 온다).</summary>
+[Serializable]
+public sealed class MatchStartingMsg
+{
+    public string type = ServerMessageType.MatchStarting;
+    public int seconds;
 }
 
 [Serializable]

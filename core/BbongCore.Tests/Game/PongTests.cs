@@ -266,4 +266,30 @@ public class PongTests
         Assert.That(after.Players[1].PongCount, Is.EqualTo(2));  // 뽕과 자연뽕 각각 기록
         Assert.That(after.DiscardPile, Is.Empty);                // 뽕한 2는 나간 패, 5들도 나간 패
     }
+
+    // ── 자연뽕 2단계 분리(내려놓기 → 버림): 원자 처리와 동일 결과 ──
+
+    [Test]
+    public void NaturalPongLay_then_discard_equals_atomic_natural_pong()
+    {
+        Player[] Players() => new[]
+        {
+            new Player(0, HandOf(C(4, CardColor.Red), C(4, CardColor.Green), C(4, CardColor.Blue),
+                C(7, CardColor.Red), C(8, CardColor.Red), C(9, CardColor.Red))),
+            new Player(1, HandOf(C(1, CardColor.Red), C(2, CardColor.Red)))
+        };
+        var atomic = new RoundState(Players(), Array.Empty<Card>(), Array.Empty<Card>(), 0, new SeededRandom(1))
+            .NaturalPong(4, C(9, CardColor.Red));
+
+        var split = new RoundState(Players(), Array.Empty<Card>(), Array.Empty<Card>(), 0, new SeededRandom(1))
+            .NaturalPongLay(4);
+        Assert.That(split.CurrentSeat, Is.EqualTo(0)); // 내려놓기 후에도 내 턴(버림이 남음)
+        Assert.That(split.CurrentPlayer.Hand.Count, Is.EqualTo(3));
+        split = split.Discard(C(9, CardColor.Red));
+
+        Assert.That(split.Players[0].Hand.Cards, Is.EquivalentTo(atomic.Players[0].Hand.Cards));
+        Assert.That(split.Players[0].PongCount, Is.EqualTo(atomic.Players[0].PongCount));
+        Assert.That(split.DiscardPile, Is.EqualTo(atomic.DiscardPile));
+        Assert.That(split.CurrentSeat, Is.EqualTo(atomic.CurrentSeat));
+    }
 }

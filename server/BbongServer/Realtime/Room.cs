@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using BbongCore.Ai;
 using BbongCore.Cards;
 using BbongCore.Config;
 using BbongCore.Online;
@@ -27,19 +28,40 @@ public sealed class Room
 
     // 대기실에서 방장이 채운 봇 자리(닉네임만 보관 — 시작 시 뒷좌석에 배치)
     private readonly List<string> _botNames = new();
+
+    // 맞춤게임 위장 봇: 유저처럼 보이는 충원 인원(닉네임에 봇 표기 없음, isBot=false로 노출).
+    // 게임에선 어려움 봇이 플레이하고, 상금 몫은 하우스가 부담한다.
+    private readonly List<string> _fillBots = new();
+    private int _fillToken;      // 충원 타이머 stale 방지(사람 입장 시 10초 대기 재시작)
+    private int _countdownToken; // 시작 카운트다운 stale 방지(이탈 시 취소)
+    private const int FillIdleMs = 10_000;      // 무입장 대기
+    private const int CountdownSeconds = 5;     // 정원 충족 → 시작까지
     private readonly HashSet<Guid> _absent = new(); // 게임 중 이탈(끊김/종료) — 좌석 유지, 판 종료 시 봇 대체(§9-4)
     private readonly RoomRegistry _registry;
+    private readonly IStakeBank? _bank;
+    private Guid?[] _seatUsers = Array.Empty<Guid?>(); // 게임 시작 시점 좌석→유저(봇/이후 이탈과 무관한 정산 기준)
+    private int _fillBotCount; // 시작 시점 위장 봇 수 — 상금 하우스 부담분
     private bool _loopRunning;
     private GameSession? _session;
 
-    internal Room(string code, RoomRegistry registry, Guid hostUserId)
+    internal Room(string code, RoomRegistry registry, Guid hostUserId, int stake = 0, IStakeBank? bank = null,
+        int targetPlayers = 0)
     {
         Code = code;
         _registry = registry;
         HostUserId = hostUserId;
+        Stake = stake;
+        _bank = bank;
+        TargetPlayers = targetPlayers;
     }
 
     public string Code { get; }
+
+    /// <summary>입장료(0 = 무료 친구방). 에스크로는 입장 전에 WsEndpoint가 수행.</summary>
+    public int Stake { get; }
+
+    /// <summary>빠른매칭 목표 인원(0 = 수동 시작 친구방). 도달하면 자동 시작.</summary>
+    public int TargetPlayers { get; }
 
     public Guid HostUserId { get; private set; }
 
@@ -108,6 +130,16 @@ public sealed class Room
             case AddBotCmd addBot:
                 HandleAddBot(addBot.RequesterUserId);
                 break;
+            case FillBotCmd fill:
+                HandleFillBot(fill.Token);
+                break;
+            case StartCountdownCmd countdown:
+                if (Phase == RoomPhase.Waiting && countdown.Token == _countdownToken && IsFull)
+                {
+                    StartGame();
+                }
+
+                break;
             case RemoveBotCmd removeBot:
                 HandleRemoveBot(removeBot.RequesterUserId);
                 break;
@@ -158,20 +190,101 @@ public sealed class Room
     {
         if (Phase == RoomPhase.Playing)
         {
+            var seat = _members.FindIndex(m => m.UserId == member.UserId);
+            if (seat >= 0 && _session is not null)
+            {
+                Reconnect(seat, member); // 이탈했던 참가자 — 자리 복귀(§9-4 후속)
+                return;
+            }
+
             Send(member.Sink, new ErrorMsg { code = "room_playing", message = "이미 게임이 시작된 방입니다." });
+            RefundStake(member.UserId); // 입장 전 선차감된 에스크로 반환
             return;
         }
 
         if (_members.Count + _botNames.Count >= GameConfig.MaxPlayers)
         {
             Send(member.Sink, new ErrorMsg { code = "room_full", message = "방 정원이 가득 찼습니다." });
+            RefundStake(member.UserId);
             return;
         }
 
         _members.Add(member);
         _registry.Index(member.UserId, this);
         BroadcastRoomUpdate();
+
+        if (TargetPlayers > 0)
+        {
+            _fillToken++; // 사람이 들어옴 — 위장 봇 10초 대기 재시작
+            CheckFullOrArmFill(FillIdleMs);
+        }
     }
+
+    private int Occupied => _members.Count + _fillBots.Count + _botNames.Count;
+
+    private bool IsFull => TargetPlayers > 0 && Occupied >= TargetPlayers;
+
+    /// <summary>정원이 찼으면 5초 카운트다운 예약, 아니면 위장 봇 충원 타이머 무장.</summary>
+    private void CheckFullOrArmFill(int fillDelayMs)
+    {
+        if (IsFull)
+        {
+            _countdownToken++;
+            Broadcast(new MatchStartingMsg { seconds = CountdownSeconds });
+            ScheduleTimer(new PendingTimer(new StartCountdownCmd(_countdownToken), CountdownSeconds * 1000));
+            return;
+        }
+
+        ScheduleTimer(new PendingTimer(new FillBotCmd(_fillToken), fillDelayMs));
+    }
+
+    /// <summary>위장 봇 한 명 입장: 유저형 닉네임(봇 표기 없음), 다음 충원은 1~10초 랜덤 뒤.</summary>
+    private void HandleFillBot(int token)
+    {
+        if (Phase != RoomPhase.Waiting || token != _fillToken || IsFull)
+        {
+            return;
+        }
+
+        string name;
+        do
+        {
+            name = NicknamePool.Pick(Random.Shared);
+        } while (_fillBots.Contains(name) || _members.Any(m => m.Nickname == name));
+
+        _fillBots.Add(name);
+        BroadcastRoomUpdate();
+        CheckFullOrArmFill(Random.Shared.Next(1, 11) * 1000);
+    }
+
+    /// <summary>재접속: 새 소켓으로 좌석 멤버 교체 + 게임 시작 정보/현재 판 상태 재전송 + 봇 자리 회수.</summary>
+    private void Reconnect(int seat, RoomMember member)
+    {
+        _members[seat] = member;
+        _absent.Remove(member.UserId);
+        _registry.Index(member.UserId, this);
+
+        var nicknames = _session!.Nicknames.ToArray();
+        Send(member.Sink, new GameStartedMsg
+        {
+            yourSeat = seat,
+            stake = Stake,
+            playerCount = nicknames.Length,
+            nicknames = nicknames,
+            setRounds = new GameConfig().SetRounds
+        });
+        Apply(_session.HandleReconnect(seat));
+    }
+
+    /// <summary>이 유저가 게임 중 좌석 보유자인지(재접속 — 입장료 재청구 금지 판단용).</summary>
+    public bool HasSeatFor(Guid userId) => Phase == RoomPhase.Playing && _members.Any(m => m.UserId == userId);
+
+    /// <summary>테스트 전용.</summary>
+    internal GameSession? SessionForTest => _session;
+
+    internal int FillTokenForTest => _fillToken;
+
+    internal int CountdownTokenForTest => _countdownToken;
 
     private void HandleLeaveOrDisconnect(Guid userId, bool voluntary)
     {
@@ -202,6 +315,7 @@ public sealed class Room
         }
 
         _members.Remove(member);
+        RefundStake(member.UserId); // 대기실 이탈 — 게임 전이므로 입장료 반환
         _registry.Detach(userId);
 
         if (_members.Count == 0)
@@ -216,6 +330,13 @@ public sealed class Room
         }
 
         BroadcastRoomUpdate();
+
+        if (TargetPlayers > 0)
+        {
+            _countdownToken++; // 카운트다운 중이었다면 취소 — 다음 플레이어 대기로 복귀
+            _fillToken++;
+            CheckFullOrArmFill(FillIdleMs);
+        }
     }
 
     /// <summary>대기실 봇 추가(방장 전용). 사람+봇 합계가 정원(rules.md §9-4 봇과 동일 로직 재사용).</summary>
@@ -292,21 +413,33 @@ public sealed class Room
             return;
         }
 
+        StartGame();
+    }
+
+    private void StartGame()
+    {
         Phase = RoomPhase.Playing;
-        var nicknames = _members.Select(m => m.Nickname).Concat(_botNames).ToArray();
+        var nicknames = _members.Select(m => m.Nickname).Concat(_fillBots).Concat(_botNames).ToArray();
+        _seatUsers = _members.Select(m => (Guid?)m.UserId)
+            .Concat(_fillBots.Select(_ => (Guid?)null))
+            .Concat(_botNames.Select(_ => (Guid?)null))
+            .ToArray(); // 정산은 시작 시점 기준 — 이탈해도 판돈은 팟에 남는다(§9-4 몰수)
+        _fillBotCount = _fillBots.Count;
         for (var seat = 0; seat < _members.Count; seat++)
         {
             Send(_members[seat].Sink, new GameStartedMsg
             {
                 yourSeat = seat,
+                stake = Stake,
                 playerCount = nicknames.Length,
                 nicknames = nicknames,
                 setRounds = new GameConfig().SetRounds
             });
         }
 
-        var botSeats = Enumerable.Range(_members.Count, _botNames.Count);
-        _session = new GameSession(nicknames, () => new SeededRandom(Random.Shared.Next()), botSeats: botSeats);
+        var botSeats = Enumerable.Range(_members.Count, _fillBots.Count + _botNames.Count);
+        _session = new GameSession(nicknames, () => new SeededRandom(Random.Shared.Next()), botSeats: botSeats,
+            botDifficulty: TargetPlayers > 0 ? BotDifficulty.Hard : BotDifficulty.Normal); // 맞춤게임 봇은 어려움
         Apply(_session.StartMatch());
     }
 
@@ -349,9 +482,48 @@ public sealed class Room
             ScheduleTimer(timer);
         }
 
-        if (output.Messages.Any(o => o.Message is SetEndedMsg))
+        if (output.Messages.Select(o => o.Message).OfType<SetEndedMsg>().FirstOrDefault() is { } setEnded)
         {
-            ReturnToWaiting(); // 세트 종료 → 대기실 복귀(재대결 가능)
+            HandleSetEnded(setEnded.winnerSeats);
+        }
+    }
+
+    /// <summary>세트 종료: 판돈 방은 우승자 배당 후 폭파(§9-2), 무료방은 대기실 복귀(재대결).</summary>
+    private void HandleSetEnded(int[] winnerSeats)
+    {
+        if (Stake <= 0 || _bank is null)
+        {
+            ReturnToWaiting();
+            return;
+        }
+
+        var winners = winnerSeats
+            .Where(seat => seat < _seatUsers.Length && _seatUsers[seat] is not null)
+            .Select(seat => _seatUsers[seat]!.Value)
+            .ToList();
+
+        if (winners.Count > 0)
+        {
+            // 사람 판돈(이탈자 몰수 포함) + 위장 봇 몫(하우스 부담) — 화면의 "총상금 = 입장료 × 인원" 유지
+            var pot = (long)Stake * (_seatUsers.Count(u => u is not null) + _fillBotCount);
+            var share = pot / winners.Count; // 공동 1등 균등 분배, 나머지 절사(§9-3)
+            foreach (var userId in winners)
+            {
+                _ = _bank.PayoutAsync(userId, share);
+            }
+        }
+
+        CloseRoom("게임 종료 — 정산 완료");
+    }
+
+    /// <summary>테스트 전용: 게임 결과를 주입해 정산/복귀 경로를 구동.</summary>
+    internal void ForceSetEndForTest(int[] winnerSeats) => HandleSetEnded(winnerSeats);
+
+    private void RefundStake(Guid userId)
+    {
+        if (Stake > 0 && _bank is not null)
+        {
+            _ = _bank.RefundAsync(userId, Stake);
         }
     }
 
@@ -405,8 +577,11 @@ public sealed class Room
         {
             code = Code,
             hostUserId = HostUserId.ToString(),
+            stake = Stake,
+            targetPlayers = TargetPlayers,
             members = _members
                 .Select(m => new RoomMemberDto { userId = m.UserId.ToString(), nickname = m.Nickname })
+                .Concat(_fillBots.Select(n => new RoomMemberDto { nickname = n })) // 위장 봇 — 유저처럼 노출
                 .Concat(_botNames.Select(n => new RoomMemberDto { nickname = n, isBot = true }))
                 .ToArray()
         };

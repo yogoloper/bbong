@@ -18,6 +18,12 @@ public sealed record AddBotCmd(Guid RequesterUserId) : RoomCommand;
 
 public sealed record RemoveBotCmd(Guid RequesterUserId) : RoomCommand;
 
+/// <summary>맞춤게임 위장 봇 충원 시각 도래(10초 무입장 + 봇 간 1~10초 랜덤). Token으로 stale 방지.</summary>
+public sealed record FillBotCmd(int Token) : RoomCommand;
+
+/// <summary>맞춤게임 시작 카운트다운(5초) 만료. Token으로 stale 방지(카운트다운 중 이탈 시 무효).</summary>
+public sealed record StartCountdownCmd(int Token) : RoomCommand;
+
 /// <summary>게임 중 클라 액션(파싱된 BbongCore.Online 메시지 객체).</summary>
 public sealed record ActionCmd(Guid UserId, object Message) : RoomCommand;
 

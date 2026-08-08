@@ -96,6 +96,13 @@ namespace Bbong.Client
             code.fontStyle = FontStyle.Bold;
             code.color = UiKit.Accent;
 
+            if (_room.stake > 0)
+            {
+                var humans = _room.members.Count(m => !m.isBot); // 봇은 입장료가 없어 상금에서 제외
+                UiKit.CreateText(root, $"입장료 {_room.stake:N0} · 현재 총상금 {(long)_room.stake * humans:N0}", 30,
+                    TextAnchor.MiddleCenter, new Vector2(0.1f, 0.63f), new Vector2(0.9f, 0.68f)).color = UiKit.Accent;
+            }
+
             var lines = "";
             foreach (var member in _room.members)
             {
@@ -207,6 +214,7 @@ namespace Bbong.Client
                     table.MySeat = started.yourSeat;
                     table.PlayerCount = started.playerCount;
                     table.Nicknames = started.nicknames;
+                    table.Stake = started.stake;
                     Destroy(_canvas);
                     Destroy(gameObject);
                     break;

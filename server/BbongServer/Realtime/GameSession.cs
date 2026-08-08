@@ -57,9 +57,15 @@ public sealed class GameSession
     private readonly Bot?[] _bots;
     private int _botToken;
 
+    private readonly BotDifficulty _botDifficulty;
+
+    /// <summary>테스트 전용.</summary>
+    internal BotDifficulty BotDifficultyForTest => _botDifficulty;
+
     public GameSession(string[] nicknames, Func<IRandom> rngFactory, int setRounds = 5,
-        IEnumerable<int>? botSeats = null)
+        IEnumerable<int>? botSeats = null, BotDifficulty botDifficulty = BotDifficulty.Normal)
     {
+        _botDifficulty = botDifficulty;
         _nicknames = nicknames;
         _rngFactory = rngFactory;
         _playerCount = nicknames.Length;
@@ -72,7 +78,7 @@ public sealed class GameSession
         foreach (var seat in botSeats ?? Array.Empty<int>())
         {
             _botSeats.Add(seat);
-            _bots[seat] = new Bot(BotDifficulty.Normal);
+            _bots[seat] = new Bot(_botDifficulty);
         }
     }
 
@@ -286,13 +292,16 @@ public sealed class GameSession
             return;
         }
 
-        var toss = bot.ChoosePongDiscard(new Hand(rest));
-        _round = _round.NaturalPong(number, toss);
+        // 내려놓기만 먼저 — 버림은 봇 페이싱(1초) 뒤 다음 BotAct에서(연습 모드와 동일 리듬)
+        _round = _round.NaturalPongLay(number);
+        _canNaturalPong = false;
+        _naturalPongNumber = 0;
+        _meld = MeldResult.None;
         EmitEach(output, s => new NaturalPongedMsg
         {
             seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
         });
-        AfterDiscard(output, seat, toss);
+        ArmBotAct(output);
     }
 
     public SessionOutput HandleTurnGap(int token)
@@ -820,9 +829,40 @@ public sealed class GameSession
     private void BotifySeat(SessionOutput output, int seat)
     {
         _botSeats.Add(seat);
-        _bots[seat] = new Bot(BotDifficulty.Normal); // 이어받는 봇은 중간 난이도
+        _bots[seat] = new Bot(_botDifficulty); // 이어받는 봇 난이도 = 방 정책(친구방 중간, 맞춤게임 어려움)
         // 닉네임은 게임 끝까지 원래 게이머 것 유지 — 남은 사람들이 헷갈리지 않게
         output.ToAll(new BotTookOverMsg { seat = seat, nickname = _nicknames[seat] });
+    }
+
+    /// <summary>해당 좌석이 현재 봇 플레이 중인지(재접속 복귀 판단용).</summary>
+    public bool IsBotSeat(int seat) => _botSeats.Contains(seat);
+
+    /// <summary>좌석 순 닉네임(재접속 시 GameStarted 재전송용).</summary>
+    public IReadOnlyList<string> Nicknames => _nicknames;
+
+    /// <summary>
+    /// 재접속: 봇이 대신 플레이 중이면 자리를 되돌려주고, 현재 판 상태를 본인에게 재동기화한다.
+    /// 닉네임은 이탈 중에도 원본 유지라 되돌릴 것이 없다.
+    /// </summary>
+    public SessionOutput HandleReconnect(int seat)
+    {
+        var output = new SessionOutput();
+        if (_botSeats.Remove(seat))
+        {
+            _bots[seat] = null;
+            _acted[seat] = false;
+            _timedOut[seat] = false; // 복귀자는 AFK 카운트 초기화 — 판 종료 시 재강퇴 방지
+
+            var actor = _phase == RoundPhase.WaitingPongDiscard ? _pongDeclarerSeat : _round.CurrentSeat;
+            if (actor == seat && _phase is RoundPhase.WaitingDiscard or RoundPhase.WaitingStop or RoundPhase.WaitingPongDiscard)
+            {
+                _botToken++; // 예약된 봇 행동 무효화 → 사람 턴 타이머로 교체
+                ArmActorTimer(output);
+            }
+        }
+
+        output.ToSeat(seat, new TurnBeganMsg { seat = _round.CurrentSeat, view = BuildView(seat) }); // 상태 재동기화
+        return output;
     }
 
     /// <summary>
@@ -904,7 +944,10 @@ public sealed class GameSession
             {
                 seat = p.Seat,
                 nickname = _nicknames[p.Seat],
-                handCount = p.Hand.Count,
+                // 뽕 선언~추가 버림 사이: 코어는 아직 미반영이라 내려놓은 2장을 빼서 표시(§4-1 연출 정합)
+                handCount = _phase == RoundPhase.WaitingPongDiscard && p.Seat == _pongDeclarerSeat
+                    ? p.Hand.Count - _pongLaid.Count
+                    : p.Hand.Count,
                 pongCount = p.PongCount,
                 hasPonged = p.HasPonged,
                 cumulativeDebt = _game.CumulativeDebts[p.Seat]

@@ -789,6 +789,43 @@ public class GameSessionTests
     }
 
     [Test]
+    public void Pong_declarer_hand_count_drops_immediately_in_views()
+    {
+        var (session, _) = PongClearScenario(); // seat0이 2 버림, seat1 = 2,2,5,5,5
+        var ponged = session.HandleAction(1, new PongDeclareMsg());
+
+        // 코어 반영 전(추가 버림 대기)이라도 내려놓은 2장을 뺀 3장으로 보여야 한다
+        Assert.That(For<PongedMsg>(ponged, 0).view.seats[1].handCount, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Bot_natural_pong_lays_first_and_discards_on_next_beat()
+    {
+        // 봇 seat0: 드로우 후 4,4,4,7,8,9 — 자연뽕 가능
+        var session = new GameSession(new[] { "봇닉", "P1" }, () => new SeededRandom(1), botSeats: new[] { 0 });
+        var round = new RoundState(
+            new[]
+            {
+                P(0, C(4, CardColor.Red), C(4, CardColor.Green), C(7, CardColor.Red), C(8, CardColor.Red), C(9, CardColor.Red)),
+                P(1, C(1, CardColor.Red), C(2, CardColor.Red))
+            },
+            new[] { C(4, CardColor.Blue), C(6, CardColor.Red) },
+            Array.Empty<Card>(),
+            currentSeat: 0,
+            new SeededRandom(1));
+        var rig = session.RigRoundForTest(round); // 자동 드로우로 4B 획득 → 트리플
+
+        var laid = session.HandleBotAct(BotActToken(rig));
+
+        Assert.That(HasMsg<NaturalPongedMsg>(laid), Is.True);
+        Assert.That(HasMsg<DiscardedMsg>(laid), Is.False); // 내려놓기와 버림이 한 번에 나가면 안 됨
+        Assert.That(laid.Timers.Any(t => t.Command is BotActCmd), Is.True);
+
+        var tossed = session.HandleBotAct(BotActToken(laid));
+        Assert.That(HasMsg<DiscardedMsg>(tossed), Is.True); // 한 박자 뒤 버림
+    }
+
+    [Test]
     public void Bot_waits_while_human_pong_window_is_open()
     {
         // seat0 버림 9 → 사람(1)과 봇(2) 모두 뽕 가능. 봇은 사람의 5초 창을 가로채면 안 됨.

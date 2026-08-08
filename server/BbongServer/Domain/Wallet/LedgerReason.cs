@@ -9,5 +9,6 @@ public enum LedgerReason
     BankruptcyAid, // 파산 보너스(잔액 0 구제)
     StakeEscrow,   // 맞춤게임 입장료 차감
     StakePayout,   // 게임 1등 배당
+    StakeRefund,   // 대기실 퇴장/입장 거절 환불
     Purchase       // IAP/PG 구매 적립(후속)
 }
