@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """맞춤게임(판돈 방) UI 플로우 검증 (Playwright).
 
-로비 → 맞춤게임 → 설정(기본 1000) → 방 만들기 → 대기실(입장료/상금 표시) → 봇 추가 → 시작.
-판정: 게임 시작 로그 + 페이지 에러 0. 화면은 스크린샷으로 남긴다(/tmp/bbong-stake-*.png).
-돈 흐름 자체는 서버 WS E2E에서 검증됨 — 여기는 클라 플로우가 뚫리는지 확인.
+로비 → 맞춤게임 → 설정(기본 4인/1000) → 시작하기 → 매칭 대기(점 애니메이션) →
+위장 봇 충원(10초+랜덤) → 5초 카운트다운 → 자동 시작까지 클라 플로우 검증.
+판정: 게임 시작 로그 + 페이지 에러 0. 스크린샷 /tmp/bbong-stake-*.png.
 """
 
 import argparse
@@ -56,23 +56,18 @@ def main() -> int:
         canvas_click(page, box, ANCHORS["lobby_match"])
         page.wait_for_timeout(2_000)
         page.screenshot(path="/tmp/bbong-stake-setup.png")
-        canvas_click(page, box, ANCHORS["match_cta"])
-        page.wait_for_timeout(2_000)
-        page.screenshot(path="/tmp/bbong-stake-entry.png")
-        canvas_click(page, box, ANCHORS["friend_create"])
-        page.wait_for_timeout(2_500)
-        page.screenshot(path="/tmp/bbong-stake-room.png")
-        for _ in range(2):
-            canvas_click(page, box, ANCHORS["room_add_bot"])
-            page.wait_for_timeout(400)
-        page.screenshot(path="/tmp/bbong-stake-room-bots.png")
-        canvas_click(page, box, ANCHORS["room_start"])
-        page.wait_for_timeout(6_000)
+        canvas_click(page, box, ANCHORS["match_cta"])  # "시작하기" — 빠른매칭 진입
+        page.wait_for_timeout(3_000)
+        page.screenshot(path="/tmp/bbong-stake-waiting.png")
+        # 위장 봇 충원(10초 + 봇당 1~10초 랜덤 × 3) + 카운트다운 5초 → 최대 55초 대기
+        page.wait_for_timeout(20_000)
+        page.screenshot(path="/tmp/bbong-stake-filling.png")
+        page.wait_for_timeout(30_000)
         page.screenshot(path="/tmp/bbong-stake-game.png")
         browser.close()
 
     game_logs = [line for line in logs if "BBONG" in line]
-    started = any("라운드 시작" in line or "턴 시작" in line for line in game_logs)
+    started = any("게임 테이블 진입" in line or "라운드 시작" in line or "턴 시작" in line for line in game_logs)
 
     print(f"결과: 게임 로그 {len(game_logs)}건 / 게임 진입 {'O' if started else 'X'} / 에러 {len(errors)}건")
     for line in game_logs[-5:]:

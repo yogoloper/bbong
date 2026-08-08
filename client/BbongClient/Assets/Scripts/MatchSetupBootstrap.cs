@@ -26,6 +26,8 @@ namespace Bbong.Client
         private readonly List<(int value, Button button)> _stakeChoices = new();
 
         private RoomUpdateMsg _room;
+        private Coroutine _searchPulse;
+        private Text _searchLabel;
 
         private void Start()
         {
@@ -139,16 +141,23 @@ namespace Bbong.Client
             var (canvas, root) = UiKit.CreateScreen("MatchWaitCanvas", topBar: true);
             _canvas = canvas;
 
-            UiKit.CreateText(root, "상대를 찾는 중...", 52, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.72f), new Vector2(0.9f, 0.84f)).fontStyle = FontStyle.Bold;
+            _searchLabel = UiKit.CreateText(root, "", 52, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.72f), new Vector2(0.9f, 0.84f));
+            _searchLabel.fontStyle = FontStyle.Bold;
+            if (_searchPulse != null)
+            {
+                StopCoroutine(_searchPulse);
+            }
 
-            var humans = _room.members.Count(m => !m.isBot);
-            var count = UiKit.CreateText(root, $"{_room.members.Length} / {_room.targetPlayers}명", 68, TextAnchor.MiddleCenter,
+            _searchPulse = StartCoroutine(SearchPulse(_searchLabel));
+
+            var count = UiKit.CreateText(root, $"{_room.members.Length} / {_room.targetPlayers}", 68, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.58f), new Vector2(0.9f, 0.70f));
             count.fontStyle = FontStyle.Bold;
             count.color = UiKit.Accent;
 
-            UiKit.CreateText(root, $"입장료 {_room.stake:N0} · 현재 총상금 {(long)_room.stake * humans:N0}", 30,
+            // 총상금 = 입장료 × 목표 인원 — 다 차면 받을 확정 금액을 바로 보여준다
+            UiKit.CreateText(root, $"입장료 {_room.stake:N0} · 총상금 {(long)_room.stake * _room.targetPlayers:N0}", 30,
                 TextAnchor.MiddleCenter, new Vector2(0.1f, 0.51f), new Vector2(0.9f, 0.57f)).color = UiKit.Accent;
 
             var lines = string.Join("\n", _room.members.Select(m =>
@@ -170,6 +179,39 @@ namespace Bbong.Client
             _status.color = new Color(1f, 0.8f, 0.5f);
         }
 
+        /// <summary>
+        /// "상대를 찾는 중" 뒤의 점 3개가 파도처럼 밝아졌다 어두워진다.
+        /// 점을 지우지 않고 투명도만 바꿔 글자 폭이 고정 — 가운데 정렬이어도 텍스트가 흔들리지 않는다.
+        /// </summary>
+        private System.Collections.IEnumerator SearchPulse(Text label)
+        {
+            const string bright = "FFF5E0FF";
+            const string dim = "FFF5E033";
+            var step = 0;
+            while (label != null)
+            {
+                var dots = "";
+                for (var i = 0; i < 3; i++)
+                {
+                    dots += $"<color=#{(i == step % 3 ? bright : dim)}>.</color>";
+                }
+
+                label.text = $"상대를 찾는 중 {dots}";
+                step++;
+                yield return new WaitForSeconds(0.4f);
+            }
+        }
+
+        /// <summary>정원 충족: "잠시 후 시작합니다 (5)" 카운트다운. 이탈자가 생기면 roomUpdate가 대기 화면으로 되돌린다.</summary>
+        private System.Collections.IEnumerator StartCountdown(int seconds)
+        {
+            for (var remain = seconds; remain > 0 && _searchLabel != null; remain--)
+            {
+                _searchLabel.text = $"잠시 후 시작합니다 ({remain})";
+                yield return new WaitForSeconds(1f);
+            }
+        }
+
         private void Rebuild()
         {
             Destroy(_canvas);
@@ -186,6 +228,17 @@ namespace Bbong.Client
                 case ServerMessageType.RoomUpdate:
                     _room = JsonUtility.FromJson<RoomUpdateMsg>(json);
                     BuildMatching();
+                    break;
+
+                case ServerMessageType.MatchStarting:
+                    var starting = JsonUtility.FromJson<MatchStartingMsg>(json);
+                    if (_searchPulse != null)
+                    {
+                        StopCoroutine(_searchPulse);
+                        _searchPulse = null;
+                    }
+
+                    StartCoroutine(StartCountdown(starting.seconds));
                     break;
 
                 case ServerMessageType.GameStarted:

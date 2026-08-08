@@ -57,9 +57,15 @@ public sealed class GameSession
     private readonly Bot?[] _bots;
     private int _botToken;
 
+    private readonly BotDifficulty _botDifficulty;
+
+    /// <summary>테스트 전용.</summary>
+    internal BotDifficulty BotDifficultyForTest => _botDifficulty;
+
     public GameSession(string[] nicknames, Func<IRandom> rngFactory, int setRounds = 5,
-        IEnumerable<int>? botSeats = null)
+        IEnumerable<int>? botSeats = null, BotDifficulty botDifficulty = BotDifficulty.Normal)
     {
+        _botDifficulty = botDifficulty;
         _nicknames = nicknames;
         _rngFactory = rngFactory;
         _playerCount = nicknames.Length;
@@ -72,7 +78,7 @@ public sealed class GameSession
         foreach (var seat in botSeats ?? Array.Empty<int>())
         {
             _botSeats.Add(seat);
-            _bots[seat] = new Bot(BotDifficulty.Normal);
+            _bots[seat] = new Bot(_botDifficulty);
         }
     }
 
@@ -820,7 +826,7 @@ public sealed class GameSession
     private void BotifySeat(SessionOutput output, int seat)
     {
         _botSeats.Add(seat);
-        _bots[seat] = new Bot(BotDifficulty.Normal); // 이어받는 봇은 중간 난이도
+        _bots[seat] = new Bot(_botDifficulty); // 이어받는 봇 난이도 = 방 정책(친구방 중간, 맞춤게임 어려움)
         // 닉네임은 게임 끝까지 원래 게이머 것 유지 — 남은 사람들이 헷갈리지 않게
         output.ToAll(new BotTookOverMsg { seat = seat, nickname = _nicknames[seat] });
     }

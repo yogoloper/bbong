@@ -49,6 +49,7 @@ namespace Bbong.Client
 
             WsClient.Instance.OnMessage += HandleMessage;
             WsClient.Instance.OnClosed += HandleClosed;
+            SetLog($"게임 테이블 진입 (좌석 {MySeat}, {PlayerCount}인)"); // 자동 테스트 진입 판정용
             WsClient.Instance.Paused = false; // 전환 중 보존된 메시지(roundStarted...) 수신 재개
         }
 
