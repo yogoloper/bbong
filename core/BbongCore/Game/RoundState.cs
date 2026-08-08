@@ -203,6 +203,20 @@ public sealed class RoundState
         CurrentPlayer.Hand.Cards.GroupBy(c => c.Number).Any(g => g.Count() >= 3);
 
     /// <summary>
+    /// 자연뽕 1단계: 같은 숫자 3장만 나간 패로 내려놓는다(턴 유지 — 버림은 Discard로 이어서).
+    /// 서버 봇이 내려놓기와 버림 사이에 연출 간격을 둘 때 사용. Lay 후 Discard = NaturalPong과 동일.
+    /// </summary>
+    public RoundState NaturalPongLay(int number)
+    {
+        var player = CurrentPlayer;
+        var keep = RemoveCount(player.Hand.Cards, number, 3);
+        var afterRemove = player.WithHand(new Hand(keep)).RecordPong();
+        var exhaust = _exhaustPile.Concat(player.Hand.Cards.Where(c => c.Number == number).Take(3));
+
+        return new RoundState(ReplaceAt(CurrentSeat, afterRemove), _drawPile, _discardPile, CurrentSeat, _random, _reshuffles, exhaust);
+    }
+
+    /// <summary>
     /// 자연뽕: 같은 숫자 3장을 나간 패로 내려놓고, 1장 더 버린 뒤 다음 좌석으로.
     /// 단 3장이 손패 전부면(제거 후 0장) 손 소진으로 추가 버림 없이 판 종료.
     /// </summary>

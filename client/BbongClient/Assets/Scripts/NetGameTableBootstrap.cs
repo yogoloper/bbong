@@ -20,14 +20,19 @@ namespace Bbong.Client
 
         public string[] Nicknames { get; set; }
 
+        /// <summary>입장료(0 = 무료). 판돈 방은 세트 종료 시 서버가 방을 폭파하므로 종료 화면 유지에 필요.</summary>
+        public int Stake { get; set; }
+
         private GameTableView _table;
         private RoundView _view;
         private readonly List<Card> _pendingLaid = new(); // 내 뽕/자연뽕 내려놓기(서버 반영 전 손패 숨김)
         private bool _naturalSelecting;                    // 자연뽕 추가 버림 선택 중
         private bool _naturalLaidLocally;                  // 자연뽕 선언 즉시 내려놓기 연출(서버 확정 전)
-        private RoomUpdateMsg _pendingRoom;                // 세트 종료 후 대기실 복귀 대기
+        private RoomUpdateMsg _pendingRoom;                // 세트 종료 후 대기실 복귀 대기(무료방)
+        private bool _gameOver;                            // 세트 종료 — 방 폭파/소켓 종료에도 점수판 유지
         private readonly List<int[]> _roundHistory = new(); // 게임(세트) 내 판별 점수
         private Button _roomBtn;
+        private Button _lobbyBtn;
 
         private void Start()
         {
@@ -37,6 +42,8 @@ namespace Bbong.Client
             _table.Nicknames = Nicknames;
             _table.Build();
             _roomBtn = _table.AddBarButton("대기실로", ReturnToRoom);
+            _lobbyBtn = _table.AddBarButton("로비로", () => LeaveToLobby("게임 종료"));
+            _table.ScorePopupShown += Render; // 종료 점수판이 뜬 뒤에 이동 버튼 노출
 
             _table.CardClicked += OnCardClicked;
             _table.StopClicked += () => WsClient.Instance.Send(new StopDeclareMsg());
@@ -183,11 +190,18 @@ namespace Bbong.Client
 
                 case ServerMessageType.SetEnded:
                     var set = JsonUtility.FromJson<SetEndedMsg>(json);
+                    _gameOver = true;
                     _pendingLaid.Clear();
                     _table.SetEndReason(set.reason);
                     _roundHistory.Add(set.scores);
                     var winners = string.Join(", ", set.winnerSeats.Select(s => Nicknames[s]));
-                    _table.ShowScorePopup($"게임 종료 — 1등 {winners}", set.cumulativeDebts, _roundHistory, fadeOut: false);
+                    var title = $"게임 종료 — 1등 {winners}";
+                    if (Stake > 0 && set.winnerSeats.Length > 0)
+                    {
+                        title += $" · 상금 {(long)Stake * PlayerCount / set.winnerSeats.Length:N0}";
+                    }
+
+                    _table.ShowScorePopup(title, set.cumulativeDebts, _roundHistory, fadeOut: false);
                     if (_view != null)
                     {
                         _view.phase = RoundPhase.SetOver;
@@ -203,6 +217,11 @@ namespace Bbong.Client
                     break;
 
                 case ServerMessageType.RoomClosed:
+                    if (_gameOver)
+                    {
+                        break; // 판돈 방 정산 후 폭파 — 점수판을 보고 "로비로"로 나간다
+                    }
+
                     var closed = JsonUtility.FromJson<RoomClosedMsg>(json);
                     LeaveToLobby(closed.reason);
                     break;
@@ -224,7 +243,13 @@ namespace Bbong.Client
             }
         }
 
-        private void HandleClosed(string reason) => LeaveToLobby(reason);
+        private void HandleClosed(string reason)
+        {
+            if (!_gameOver)
+            {
+                LeaveToLobby(reason);
+            }
+        }
 
         private void ApplyView(RoundView view)
         {
@@ -236,6 +261,8 @@ namespace Bbong.Client
         {
             _table.Render(_view, _pendingLaid, _naturalSelecting);
             _roomBtn.gameObject.SetActive(_pendingRoom != null);
+            // 판돈 방(방 폭파형): 종료 점수판이 뜬 뒤 로비 이동 버튼만 노출
+            _lobbyBtn.gameObject.SetActive(_gameOver && _pendingRoom == null && _table.ScorePopupVisible);
         }
 
         private void OnLaid(int seat, int number, CardDto[] laid, string suffix)

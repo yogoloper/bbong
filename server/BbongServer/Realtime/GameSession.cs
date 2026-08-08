@@ -292,13 +292,16 @@ public sealed class GameSession
             return;
         }
 
-        var toss = bot.ChoosePongDiscard(new Hand(rest));
-        _round = _round.NaturalPong(number, toss);
+        // 내려놓기만 먼저 — 버림은 봇 페이싱(1초) 뒤 다음 BotAct에서(연습 모드와 동일 리듬)
+        _round = _round.NaturalPongLay(number);
+        _canNaturalPong = false;
+        _naturalPongNumber = 0;
+        _meld = MeldResult.None;
         EmitEach(output, s => new NaturalPongedMsg
         {
             seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
         });
-        AfterDiscard(output, seat, toss);
+        ArmBotAct(output);
     }
 
     public SessionOutput HandleTurnGap(int token)
@@ -941,7 +944,10 @@ public sealed class GameSession
             {
                 seat = p.Seat,
                 nickname = _nicknames[p.Seat],
-                handCount = p.Hand.Count,
+                // 뽕 선언~추가 버림 사이: 코어는 아직 미반영이라 내려놓은 2장을 빼서 표시(§4-1 연출 정합)
+                handCount = _phase == RoundPhase.WaitingPongDiscard && p.Seat == _pongDeclarerSeat
+                    ? p.Hand.Count - _pongLaid.Count
+                    : p.Hand.Count,
                 pongCount = p.PongCount,
                 hasPonged = p.HasPonged,
                 cumulativeDebt = _game.CumulativeDebts[p.Seat]

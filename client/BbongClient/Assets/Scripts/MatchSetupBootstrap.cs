@@ -248,6 +248,7 @@ namespace Bbong.Client
                     table.MySeat = started.yourSeat;
                     table.PlayerCount = started.playerCount;
                     table.Nicknames = started.nicknames;
+                    table.Stake = started.stake;
                     Destroy(_canvas);
                     Destroy(gameObject);
                     break;
