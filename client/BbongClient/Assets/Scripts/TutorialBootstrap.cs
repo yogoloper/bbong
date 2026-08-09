@@ -65,18 +65,18 @@ namespace Bbong.Client
 
         private void BuildGuidePanel()
         {
-            var panel = UiKit.CreatePanel(_table.CanvasGo.transform, new Color(0.09f, 0.12f, 0.21f, 0.96f));
+            var panel = UiKit.CreatePanel(_table.CanvasGo.transform, new Color(0.09f, 0.12f, 0.21f, 1f));
             if (UiArt.Panel9 != null)
             {
                 panel.sprite = UiArt.Panel9;
                 panel.type = Image.Type.Sliced;
-                panel.color = new Color(0.10f, 0.14f, 0.26f, 0.96f); // 네이비 틴트 — 상단바와 재질 통일
+                panel.color = new Color(0.10f, 0.14f, 0.26f, 1f); // 네이비 틴트 — 불투명(뒤 텍스트 비침 방지)
             }
 
             UiKit.Anchor(panel.rectTransform, new Vector2(0.16f, 0.775f), new Vector2(0.84f, 0.99f));
             var shadow = panel.gameObject.AddComponent<Shadow>();
             shadow.effectColor = new Color(0f, 0f, 0f, 0.5f);
-            shadow.effectDistance = new Vector2(6f, -6f);
+            shadow.effectDistance = new Vector2(8f, -8f);
 
             _guideText = UiKit.CreateText(panel.transform, "", 28, TextAnchor.MiddleLeft,
                 new Vector2(0.03f, 0.08f), new Vector2(0.72f, 0.92f));

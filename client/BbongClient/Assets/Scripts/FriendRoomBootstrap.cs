@@ -91,12 +91,12 @@ namespace Bbong.Client
         {
             Rebuild(out var root);
             var title = UiKit.CreateText(root, "대기실", 48, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.84f), new Vector2(0.9f, 0.94f));
+                new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.87f)); // 다른 화면과 동일 높이 — 상단바에 안 물림
             title.fontStyle = FontStyle.Bold;
 
             // 초대코드 크게 — 친구에게 알려줄 값
             var code = UiKit.CreateText(root, $"초대코드  {_room.code}", 72, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.68f), new Vector2(0.9f, 0.82f));
+                new Vector2(0.1f, 0.62f), new Vector2(0.9f, 0.76f));
             code.fontStyle = FontStyle.Bold;
             code.color = UiKit.Accent;
 
@@ -104,7 +104,7 @@ namespace Bbong.Client
             {
                 var humans = _room.members.Count(m => !m.isBot); // 봇은 입장료가 없어 상금에서 제외
                 UiKit.CreateText(root, $"입장료 {_room.stake:N0} · 현재 총상금 {(long)_room.stake * humans:N0}", 30,
-                    TextAnchor.MiddleCenter, new Vector2(0.1f, 0.63f), new Vector2(0.9f, 0.68f)).color = UiKit.Accent;
+                    TextAnchor.MiddleCenter, new Vector2(0.1f, 0.56f), new Vector2(0.9f, 0.61f)).color = UiKit.Accent;
             }
 
             var lines = "";
@@ -115,24 +115,34 @@ namespace Bbong.Client
                 lines += $"{member.nickname}{host}{me}\n";
             }
 
+            for (var i = _room.members.Length; i < GameConfig.MaxPlayers; i++)
+            {
+                lines += "<color=#FFFFFF40>- 빈 자리 -</color>\n"; // 정원까지 줄 유지 — 진행률이 목록만 봐도 읽힘
+            }
+
             UiKit.CreateText(root, lines.TrimEnd(), 34, TextAnchor.UpperCenter,
-                new Vector2(0.25f, 0.30f), new Vector2(0.75f, 0.64f));
+                new Vector2(0.25f, 0.30f), new Vector2(0.75f, 0.55f));
 
             if (Session.UserId == _room.hostUserId)
             {
                 // 방장 전용 봇 관리 — 둘이서만 하면 루즈하니 봇으로 자리를 채운다(사람+봇 최대 정원)
                 var botCount = _room.members.Count(m => m.isBot);
                 var addBot = UiKit.CreateButton(root, "봇 추가",
-                    new Vector2(0.30f, 0.19f), new Vector2(0.48f, 0.27f),
+                    new Vector2(0.30f, 0.22f), new Vector2(0.48f, 0.342f),
                     () => WsClient.Instance.Send(new AddBotMsg()), 30);
                 addBot.interactable = _room.members.Length < GameConfig.MaxPlayers;
                 var removeBot = UiKit.CreateButton(root, "봇 빼기",
-                    new Vector2(0.52f, 0.19f), new Vector2(0.70f, 0.27f),
+                    new Vector2(0.52f, 0.22f), new Vector2(0.70f, 0.342f),
                     () => WsClient.Instance.Send(new RemoveBotMsg()), 30);
                 removeBot.interactable = botCount > 0;
 
                 var start = UiKit.PrimaryCta(root, "게임 시작", () => WsClient.Instance.Send(new StartGameMsg()));
                 start.interactable = _room.members.Length >= 2; // 봇 포함 2명 이상
+                if (!start.interactable)
+                {
+                    UiKit.CreateText(root, "2명 이상이어야 시작할 수 있어요", 26, TextAnchor.MiddleCenter,
+                        new Vector2(0.1f, 0.165f), new Vector2(0.9f, 0.215f)).color = new Color(1f, 1f, 1f, 0.6f);
+                }
             }
             else
             {

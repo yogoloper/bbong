@@ -58,24 +58,29 @@ namespace Bbong.Client
             UiKit.CreateText(root, "맞춤게임", 56, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.87f)).fontStyle = FontStyle.Bold;
 
+            var subtitle = UiKit.CreateText(root, "실유저와 포인트 대결 — 우승자가 총상금 독식", 26, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.735f), new Vector2(0.9f, 0.775f));
+            subtitle.color = new Color(1f, 1f, 1f, 0.8f);
+
+            // 라벨-칩 간격 < 그룹 간 간격(약 1:2) — 라벨이 아래 칩 무리로 묶여 읽히게 한다
             UiKit.CreateText(root, "인원", 36, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.69f), new Vector2(0.9f, 0.74f));
+                new Vector2(0.1f, 0.66f), new Vector2(0.9f, 0.71f));
             var playerCount = GameConfig.MaxPlayers - GameConfig.MinPlayers + 1;
-            PlaceChoices(root, 0.58f, 0.67f, 0.09f, playerCount,
+            PlaceChoices(root, 0.515f, 0.637f, 0.09f, playerCount,
                 i => GameConfig.MinPlayers + i, n => $"{n}명", _playerChoices, v => _players = v);
 
             UiKit.CreateText(root, "입장료", 36, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.5f), new Vector2(0.9f, 0.55f));
-            PlaceChoices(root, 0.39f, 0.48f, 0.1f, GameConfig.StakeOptions.Count,
+                new Vector2(0.1f, 0.425f), new Vector2(0.9f, 0.475f));
+            PlaceChoices(root, 0.28f, 0.402f, 0.09f, GameConfig.StakeOptions.Count,
                 i => GameConfig.StakeOptions[i], s => $"{s:N0}", _stakeChoices, v => _stake = v);
 
             _prize = UiKit.CreateText(root, "", 38, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.3f), new Vector2(0.9f, 0.37f));
+                new Vector2(0.1f, 0.22f), new Vector2(0.9f, 0.268f));
             _prize.color = UiKit.Accent;
             _prize.fontStyle = FontStyle.Bold;
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.2f), new Vector2(0.9f, 0.28f));
+                new Vector2(0.1f, 0.168f), new Vector2(0.9f, 0.212f));
             _status.color = new Color(1f, 0.8f, 0.5f);
 
             UiKit.PrimaryCta(root, "시작하기", OnMatch);
@@ -176,6 +181,11 @@ namespace Bbong.Client
 
             var lines = string.Join("\n", _room.members.Select(m =>
                 m.userId == Session.UserId ? $"{m.nickname} (나)" : m.nickname));
+            for (var i = _room.members.Length; i < _room.targetPlayers; i++)
+            {
+                lines += "\n<color=#FFFFFF40>- 빈 자리 -</color>"; // 목표 인원만큼 줄 유지 — 진행률이 목록으로 읽힘
+            }
+
             UiKit.CreateText(root, lines, 34, TextAnchor.UpperCenter,
                 new Vector2(0.25f, 0.24f), new Vector2(0.75f, 0.49f));
 

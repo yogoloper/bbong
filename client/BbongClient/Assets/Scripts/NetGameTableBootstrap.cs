@@ -347,7 +347,7 @@ namespace Bbong.Client
 
             _naturalSelecting = true;
             Render();
-            _table.SetPrompt("버릴 카드를 클릭하세요.");
+            _table.SetPrompt("버릴 카드를 클릭하세요");
         }
 
         private System.Collections.IEnumerator ApplyDrawAfterShuffle(DrewCardMsg drew)

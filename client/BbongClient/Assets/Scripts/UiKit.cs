@@ -13,7 +13,7 @@ namespace Bbong.Client
     internal static class UiKit
     {
         public static readonly Color Accent = new(0.94f, 0.83f, 0.55f); // 전 화면 공용 소프트 골드(노란 텍스트 단일 출처)
-        public static readonly Color ButtonColor = new(0.95f, 0.95f, 0.95f);
+        public static readonly Color ButtonColor = new(0.20f, 0.28f, 0.48f); // 네이비 계열 — 부차 버튼이 CTA보다 밝지 않게
 
         private static Font _font;
 
@@ -92,15 +92,33 @@ namespace Bbong.Client
             CreateText(root, Session.Nickname, 34, TextAnchor.MiddleLeft,
                 new Vector2(0.06f, 0.9f), new Vector2(0.5f, 1f));
 
+            // 코인+숫자를 우측 정렬 레이아웃으로 묶어 자릿수와 무관하게 우측 여백 고정
+            var wallet = new GameObject("Wallet", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            wallet.transform.SetParent(root, false);
+            Anchor(wallet.GetComponent<RectTransform>(), new Vector2(0.70f, 0.9f), new Vector2(0.988f, 1f));
+            var lay = wallet.GetComponent<HorizontalLayoutGroup>();
+            lay.childAlignment = TextAnchor.MiddleRight;
+            lay.spacing = 10f;
+            lay.childControlWidth = true;
+            lay.childControlHeight = false;
+            lay.childForceExpandWidth = false;
+            lay.childForceExpandHeight = false;
+
             if (UiArt.Coin != null)
             {
-                CreateIcon(root, UiArt.Coin, new Vector2(0.78f, 0.915f), new Vector2(0.815f, 0.985f));
+                var coin = CreateIcon(wallet.transform, UiArt.Coin, Vector2.zero, Vector2.one);
+                var coinLe = coin.gameObject.AddComponent<LayoutElement>();
+                coinLe.preferredWidth = 52f;
+                var coinRt = coin.rectTransform;
+                coinRt.sizeDelta = new Vector2(52f, 52f);
             }
 
-            var pts = CreateText(root, $"{Session.Balance:N0}", 38, TextAnchor.MiddleLeft,
-                new Vector2(0.82f, 0.9f), new Vector2(0.98f, 1f));
+            var pts = CreateText(wallet.transform, $"{Session.Balance:N0}", 38, TextAnchor.MiddleRight,
+                Vector2.zero, Vector2.one);
             pts.color = Accent;
             pts.fontStyle = FontStyle.Bold;
+            var ptsRt = pts.rectTransform;
+            ptsRt.sizeDelta = new Vector2(ptsRt.sizeDelta.x, 108f);
             BalanceLabel = pts; // 서버 재조회(RefreshMe) 후 갱신용 — 최신 화면의 상단바
         }
 
@@ -136,8 +154,10 @@ namespace Bbong.Client
             text.color = Color.white;
             text.fontStyle = FontStyle.Bold;
 
-            go.GetComponent<Button>().onClick.AddListener(onClick);
-            return go.GetComponent<Button>();
+            var btn = go.GetComponent<Button>();
+            btn.onClick.AddListener(onClick);
+            ApplyButtonStates(btn);
+            return btn;
         }
 
         public static Image CreatePanel(Transform parent, Color color)
@@ -183,6 +203,17 @@ namespace Bbong.Client
             return (new Vector2(min.x, lo), new Vector2(max.x, lo + MinTapHeight));
         }
 
+        /// <summary>hover/pressed/disabled 상태색 — 기본값(0.96 하이라이트)은 화면에서 무변화라 명시한다.</summary>
+        private static void ApplyButtonStates(Button btn)
+        {
+            var colors = btn.colors;
+            colors.highlightedColor = new Color(1.12f, 1.12f, 1.12f);
+            colors.pressedColor = new Color(0.82f, 0.82f, 0.82f);
+            colors.disabledColor = new Color(0.45f, 0.45f, 0.45f, 0.6f);
+            colors.fadeDuration = 0.08f;
+            btn.colors = colors;
+        }
+
         public static Button CreateButton(Transform parent, string label, Vector2 min, Vector2 max,
             UnityEngine.Events.UnityAction onClick, int fontSize = 40)
         {
@@ -196,10 +227,12 @@ namespace Bbong.Client
             Anchor(go.GetComponent<RectTransform>(), min, max);
 
             var text = CreateText(go.transform, label, fontSize, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
-            text.color = Color.black;
+            text.color = Color.white;
 
-            go.GetComponent<Button>().onClick.AddListener(onClick);
-            return go.GetComponent<Button>();
+            var btn = go.GetComponent<Button>();
+            btn.onClick.AddListener(onClick);
+            ApplyButtonStates(btn);
+            return btn;
         }
 
         public static InputField CreateInputField(Transform parent, string initial, int charLimit,

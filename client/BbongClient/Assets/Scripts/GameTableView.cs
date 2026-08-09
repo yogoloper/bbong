@@ -169,7 +169,7 @@ namespace Bbong.Client
 
             var deckShadow = _deckGroup.AddComponent<Shadow>();
             deckShadow.effectColor = new Color(0f, 0f, 0f, 0.45f);
-            deckShadow.effectDistance = new Vector2(6f, -6f);
+            deckShadow.effectDistance = new Vector2(4f, -4f);
 
             var deckLabel = UiKit.CreateText(_deckGroup.transform, "남은 카드", 18, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
             deckLabel.color = new Color(1f, 1f, 1f, 0.6f);
@@ -205,7 +205,7 @@ namespace Bbong.Client
             lbRt.anchorMin = lbRt.anchorMax = new Vector2(0f, 1f); // 좌상단 고정
             lbRt.pivot = new Vector2(0f, 1f);
             lbRt.anchoredPosition = new Vector2(10f, -10f);
-            lbRt.sizeDelta = new Vector2(312f, 0f); // 높이는 인원수에 맞춰 자동. 닉네임 12자 한 줄 폭 + 6인 좌석과 간섭 없는 높이
+            lbRt.sizeDelta = new Vector2(328f, 0f); // 높이는 인원수에 맞춰 자동. 닉네임 12자 한 줄 폭 + 6인 좌석과 간섭 없는 높이
             var lbLayout = lbPanel.gameObject.AddComponent<VerticalLayoutGroup>();
             lbLayout.padding = new RectOffset(8, 8, 6, 6);
             lbLayout.spacing = 2;
@@ -275,7 +275,7 @@ namespace Bbong.Client
             popupBg.raycastTarget = false;
             var popupShadow = _scorePopup.AddComponent<Shadow>();
             popupShadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
-            popupShadow.effectDistance = new Vector2(10f, -10f);
+            popupShadow.effectDistance = new Vector2(8f, -8f);
             _scorePopupGroup = _scorePopup.AddComponent<CanvasGroup>();
             _scorePopupGroup.blocksRaycasts = false;
             _scorePopupGroup.interactable = false;
@@ -361,7 +361,7 @@ namespace Bbong.Client
         {
             // 나가기: 터치 가능 크기(≈48dp) + 중성 회색 — 붉은색은 확인 모달의 파괴적 동작에만
             var exitBtn = UiKit.CreateButton(root, "나가기",
-                new Vector2(0.90f, 0.90f), new Vector2(0.99f, 0.98f), ShowExitConfirm, 26);
+                new Vector2(0.90f, 0.868f), new Vector2(0.99f, 0.99f), ShowExitConfirm, 26); // 상하 여백 명시(터치 하한 확장이 상단에 붙는 것 방지)
             exitBtn.GetComponent<Image>().color = new Color(0.32f, 0.36f, 0.44f, 0.92f);
             var exitLabel = exitBtn.GetComponentInChildren<Text>();
             exitLabel.color = Color.white;
@@ -504,18 +504,20 @@ namespace Bbong.Client
                 row.childControlWidth = true;
                 row.childControlHeight = true;
                 row.childForceExpandWidth = false;
-                row.gameObject.AddComponent<LayoutElement>().preferredHeight = 28f;
+                row.gameObject.AddComponent<LayoutElement>().preferredHeight = 32f;
 
-                LeaderboardCell(row.transform, $"{rank}위", 44f, color, mine);
-                LeaderboardCell(row.transform, seat.nickname, 190f, color, mine, fit: true); // 12자 × 최소 15px가 한 줄에 들어가는 폭
-                LeaderboardCell(row.transform, seat.cumulativeDebt.ToString(), 54f, color, mine);
+                // 순위·점수는 우측, 닉네임은 좌측 정렬 — 세로 정렬선이 생겨 표로 읽힌다
+                LeaderboardCell(row.transform, $"{rank}위", 48f, color, mine, TextAnchor.MiddleRight);
+                LeaderboardCell(row.transform, seat.nickname, 196f, color, mine, TextAnchor.MiddleLeft, fit: true); // 12자 × 최소 15px가 한 줄에 들어가는 폭
+                LeaderboardCell(row.transform, seat.cumulativeDebt.ToString(), 56f, color, mine, TextAnchor.MiddleRight);
             }
         }
 
-        /// <summary>리더보드 셀: 고정 폭 + 가운데 정렬(선 없는 표).</summary>
-        private void LeaderboardCell(Transform row, string text, float width, Color color, bool bold, bool fit = false)
+        /// <summary>리더보드 셀: 고정 폭(선 없는 표).</summary>
+        private void LeaderboardCell(Transform row, string text, float width, Color color, bool bold,
+            TextAnchor align, bool fit = false)
         {
-            var cell = UiKit.CreateText(row, text, 22, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            var cell = UiKit.CreateText(row, text, 24, align, Vector2.zero, Vector2.one);
             cell.color = color;
             if (bold)
             {
@@ -528,7 +530,7 @@ namespace Bbong.Client
             le.flexibleWidth = 0f;
             if (fit)
             {
-                FitText(cell, 15, 22);
+                FitText(cell, 15, 24);
             }
         }
 
@@ -645,6 +647,12 @@ namespace Bbong.Client
 
                     // 좌석 패널이 반투명이라 골드가 전체에 비쳐 보임 — 불투명 속판으로 가려 테두리만 남긴다
                     var inner = UiKit.CreatePanel(_seatsArea, new Color(0.07f, 0.11f, 0.22f, 1f));
+                    if (UiArt.Panel9 != null)
+                    {
+                        inner.sprite = UiArt.Panel9;
+                        inner.type = Image.Type.Sliced;
+                    }
+
                     inner.raycastTarget = false;
                     var innerRt = inner.rectTransform;
                     innerRt.anchorMin = innerRt.anchorMax = anchor;
@@ -652,7 +660,15 @@ namespace Bbong.Client
                     innerRt.sizeDelta = new Vector2(260f, 84f);
                 }
 
-                var panel = UiKit.CreatePanel(_seatsArea, highlight ? new Color(0.9f, 0.8f, 0.2f, 0.55f) : new Color(0, 0, 0, 0.35f));
+                // 턴 강조는 Accent 단일 출처(내 좌석 골드 링과 같은 골드), 평시는 리더보드와 동일 톤
+                var panel = UiKit.CreatePanel(_seatsArea, highlight
+                    ? new Color(UiKit.Accent.r, UiKit.Accent.g, UiKit.Accent.b, 0.5f)
+                    : new Color(0.10f, 0.13f, 0.22f, 0.85f));
+                if (UiArt.Panel9 != null)
+                {
+                    panel.sprite = UiArt.Panel9;
+                    panel.type = Image.Type.Sliced; // 리더보드·모달과 같은 9-slice 라운드 — 유일한 직각 패널 제거
+                }
                 var rt = panel.rectTransform;
                 rt.anchorMin = rt.anchorMax = anchor;
                 rt.pivot = new Vector2(0.5f, 0.5f);
@@ -862,8 +878,8 @@ namespace Bbong.Client
                     $"족보 완성! [{MeldKorean(view.meldType)} {view.meldScore}점] — 선언 또는 버리고 계속",
                 RoundPhase.WaitingDiscard when view.currentSeat == MySeat && view.canNaturalPong =>
                     "버릴 카드를 클릭하세요 (또는 자연뽕)",
-                RoundPhase.WaitingDiscard when view.currentSeat == MySeat => "버릴 카드를 클릭하세요.",
-                RoundPhase.WaitingPongDiscard when view.actorSeat == MySeat => "버릴 카드를 클릭하세요.",
+                RoundPhase.WaitingDiscard when view.currentSeat == MySeat => "버릴 카드를 클릭하세요",
+                RoundPhase.WaitingPongDiscard when view.actorSeat == MySeat => "버릴 카드를 클릭하세요",
                 RoundPhase.PongWindow when view.canPong => $"{view.pongNumber} 뽕 기회!",
                 _ => ""
             });

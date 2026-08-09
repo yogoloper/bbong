@@ -27,10 +27,11 @@ namespace Bbong.Client
                 new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.87f)).fontStyle = FontStyle.Bold;
 
             UiKit.CreateText(root, "닉네임", 32, TextAnchor.MiddleLeft,
-                new Vector2(0.2f, 0.7f), new Vector2(0.8f, 0.76f));
+                new Vector2(0.2f, 0.715f), new Vector2(0.8f, 0.775f));
+            // 입력창·버튼 같은 높이(터치 하한 이상 명시) — 폼 한 줄의 위아래 선을 맞춘다
             _nickInput = UiKit.CreateInputField(root, Session.Nickname, GameConfig.MaxNicknameLength,
-                new Vector2(0.2f, 0.6f), new Vector2(0.65f, 0.69f));
-            _saveBtn = UiKit.CreateButton(root, "저장", new Vector2(0.67f, 0.6f), new Vector2(0.8f, 0.69f), OnSave, 32);
+                new Vector2(0.2f, 0.584f), new Vector2(0.65f, 0.706f));
+            _saveBtn = UiKit.CreateButton(root, "저장", new Vector2(0.67f, 0.584f), new Vector2(0.8f, 0.706f), OnSave, 32);
 
             // 통계 placeholder
             var statsPanel = UiKit.CreatePanel(root, new Color(0, 0, 0, 0.3f));

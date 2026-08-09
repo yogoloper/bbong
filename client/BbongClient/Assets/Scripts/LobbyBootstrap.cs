@@ -206,10 +206,10 @@ namespace Bbong.Client
             img.type = Image.Type.Sliced;
             img.color = UnselectedColor;
             var le = go.GetComponent<LayoutElement>();
-            le.preferredWidth = 160;
-            le.preferredHeight = 90;
-            var text = CreateText(go.transform, label, 34, TextAnchor.MiddleCenter);
-            text.color = Color.black;
+            le.preferredWidth = 172;  // 맞춤게임 칩 폭(0.09)과 동일 그리드
+            le.preferredHeight = 132; // 터치 하한(UiKit.MinTapHeight ≒ 132유닛)과 통일
+            var text = CreateText(go.transform, label, 28, TextAnchor.MiddleCenter);
+            text.color = Color.white;
             Stretch(text.rectTransform);
             go.GetComponent<Button>().onClick.AddListener(onClick);
             return go.GetComponent<Button>();

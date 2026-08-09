@@ -644,7 +644,7 @@ namespace Bbong.Client
             }
 
             _state = UiState.NeedDiscard;
-            SetLog(_round.CanNaturalPong() ? "버릴 카드 클릭 (또는 자연뽕)" : "버릴 카드를 클릭하세요.");
+            SetLog(_round.CanNaturalPong() ? "버릴 카드 클릭 (또는 자연뽕)" : "버릴 카드를 클릭하세요");
             Refresh();
             StartTurnTimer();
         }
@@ -793,7 +793,7 @@ namespace Bbong.Client
             _state = UiState.NaturalPongSelect;
             SetLog($"자연뽕! {_naturalPongNumber} 외 버릴 카드 클릭");
             Refresh();
-            _table.SetPrompt("버릴 카드를 클릭하세요.");
+            _table.SetPrompt("버릴 카드를 클릭하세요");
             StartTurnTimer();
         }
 

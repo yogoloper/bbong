@@ -80,7 +80,7 @@ namespace Bbong.Client
             shadow.effectDistance = new Vector2(8f, -8f);
             var nearShadow = go.AddComponent<Shadow>();
             nearShadow.effectColor = new Color(0f, 0f, 0f, 0.25f);
-            nearShadow.effectDistance = new Vector2(3f, -3f);
+            nearShadow.effectDistance = new Vector2(4f, -4f);
 
             var le = go.GetComponent<LayoutElement>();
             le.preferredWidth = width;
@@ -97,11 +97,9 @@ namespace Bbong.Client
             rt.anchorMax = Vector2.one;
             rt.offsetMin = rt.offsetMax = Vector2.zero;
 
-            // 네 모서리: 숫자/이니셜 (대각 대칭)
-            Pip(go.transform, num, pip, TextAnchor.UpperLeft, new Vector2(0.10f, 0.78f), new Vector2(0.5f, 0.97f), font);
-            Pip(go.transform, letter, pip, TextAnchor.UpperRight, new Vector2(0.5f, 0.78f), new Vector2(0.90f, 0.97f), font);
-            Pip(go.transform, letter, pip, TextAnchor.LowerLeft, new Vector2(0.10f, 0.03f), new Vector2(0.5f, 0.22f), font);
-            Pip(go.transform, num, pip, TextAnchor.LowerRight, new Vector2(0.5f, 0.03f), new Vector2(0.90f, 0.22f), font);
+            // 좌상·우하 두 모서리만 숫자+이니셜 결합("4B") — 토큰을 줄여 중앙 숫자를 살린다(색약 대응 유지)
+            Pip(go.transform, num + letter, pip, TextAnchor.UpperLeft, new Vector2(0.10f, 0.78f), new Vector2(0.90f, 0.97f), font);
+            Pip(go.transform, num + letter, pip, TextAnchor.LowerRight, new Vector2(0.10f, 0.03f), new Vector2(0.90f, 0.22f), font);
 
             return go;
         }

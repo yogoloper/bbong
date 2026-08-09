@@ -30,7 +30,7 @@ namespace Bbong.Client
             title.color = UiKit.Accent; // 첫 화면부터 테마 골드
             var titleShadow = title.gameObject.AddComponent<UnityEngine.UI.Shadow>();
             titleShadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
-            titleShadow.effectDistance = new Vector2(0f, -6f);
+            titleShadow.effectDistance = new Vector2(0f, -8f);
 
             // 카드게임 첫인상 — 카드 뒷면 3장 부채꼴
             for (var i = -1; i <= 1; i++)
