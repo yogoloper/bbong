@@ -28,9 +28,15 @@ public static class RoundSettlement
     /// <summary>
     /// 두 번 뽕 종료: 승자(빈 손)=0, 마지막 버린 자=손패 합+20(박), 나머지=손패 합(rules.md §4-3, §7).
     /// </summary>
+    /// <summary>
+    /// 뽕 바가지 종료(§7): 라운드를 끝나게 만든(마지막 버린) 사람만 손합+20 벌점, 나머지는 전원 0.
+    /// 스톱 바가지(선언자만 +30, 나머지 0)와 대칭 구조.
+    /// </summary>
     public static int[] SettleByTwoPong(RoundState round, int winnerSeat, int lastDiscarderSeat) =>
         round.Players
-            .Select(p => Scoring.Score(new PlayerOutcome(p.Hand, PongBak: p.Seat == lastDiscarderSeat)))
+            .Select(p => p.Seat == lastDiscarderSeat
+                ? Scoring.Score(new PlayerOutcome(p.Hand, PongBak: true))
+                : 0)
             .ToArray();
 
     /// <summary>

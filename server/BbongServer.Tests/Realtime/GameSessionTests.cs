@@ -310,9 +310,10 @@ public class GameSessionTests
         var result = session.HandleAction(1, new PongDeclareMsg());
 
         var ended = For<RoundEndedMsg>(result, 0);
-        Assert.That(ended.enderSeat, Is.EqualTo(1));
+        Assert.That(ended.enderSeat, Is.EqualTo(0));           // 다음 선 = 뽕 바가지 당한(버린) 사람
         Assert.That(ended.scores[1], Is.EqualTo(0));           // 손 턴 승자
         Assert.That(ended.scores[0], Is.GreaterThanOrEqualTo(20)); // 박 +20 포함
+        Assert.That(ended.scores[2], Is.EqualTo(0));           // 구경꾼도 0 — 벌점은 버린 사람만
         Assert.That(ended.nextRoundInMs, Is.EqualTo(RealtimeConfig.NextRoundDelayMs));
         Assert.That(result.Timers.Any(t => t.Command is NextRoundCmd), Is.True);
     }
@@ -336,7 +337,7 @@ public class GameSessionTests
 
         var result = session.HandleAction(1, new PongDiscardMsg { card = CardDto.From(C(7, CardColor.Red)) });
 
-        Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(1));
+        Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(0)); // 다음 선 = 버린 사람
     }
 
     // ── 스톱 / 계속 ──
@@ -390,7 +391,7 @@ public class GameSessionTests
         Assert.That(declared.bagaji, Is.True);
         Assert.That(declared.laidSeat, Is.EqualTo(1)); // 바가지 → 박 먹인 승자 손패 공개
         Assert.That(declared.laid.Select(c => c.ToCard()), Is.EqualTo(new[] { C(3, CardColor.Blue) }));
-        Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(1));
+        Assert.That(For<RoundEndedMsg>(result, 0).enderSeat, Is.EqualTo(0)); // 다음 선 = 바가지 당한 선언자
     }
 
     [Test]
@@ -542,8 +543,8 @@ public class GameSessionTests
         var next = session.HandleNextRound(token);
         var started = For<RoundStartedMsg>(next, 0);
         Assert.That(started.roundIndex, Is.EqualTo(1));
-        Assert.That(started.dealerSeat, Is.EqualTo(1)); // 판 끝낸 사람이 선
-        Assert.That(For<DrewCardMsg>(next, 1).seat, Is.EqualTo(1));
+        Assert.That(started.dealerSeat, Is.EqualTo(0)); // 뽕 바가지 당한(버린) 사람이 선
+        Assert.That(For<DrewCardMsg>(next, 0).seat, Is.EqualTo(0)); // 새 선이 자동 드로우
     }
 
     // ── 턴 타이머 (rules.md §3: 5초 미행동 → 자동 진행) ──
@@ -823,6 +824,42 @@ public class GameSessionTests
 
         var tossed = session.HandleBotAct(BotActToken(laid));
         Assert.That(HasMsg<DiscardedMsg>(tossed), Is.True); // 한 박자 뒤 버림
+    }
+
+    [Test]
+    public void Pong_bagaji_victim_deals_next_round()
+    {
+        var (session, _) = PongClearScenario(); // seat0이 2를 버려 seat1이 뽕+자연뽕 손 소진
+        session.HandleAction(1, new PongDeclareMsg());
+        var cleared = session.HandleAction(1, new NaturalPongMsg());
+
+        var token = ((NextRoundCmd)cleared.Timers.Single(t => t.Command is NextRoundCmd).Command).Token;
+        var next = session.HandleNextRound(token);
+
+        Assert.That(For<RoundStartedMsg>(next, 0).dealerSeat, Is.EqualTo(0)); // 바가지 당한(버린) 사람이 선
+    }
+
+    [Test]
+    public void Stop_bagaji_victim_deals_next_round()
+    {
+        // seat0 스톱(합 8) vs seat1 뽕 유저(합 5) → 바가지. 다음 선 = 당한 선언자 seat0
+        var (session, _) = Rigged(
+            new[]
+            {
+                new Player(0, new Hand(new[] { C(3, CardColor.Red), C(5, CardColor.Red) }), PongCount: 1),
+                new Player(1, new Hand(new[] { C(2, CardColor.Red), C(3, CardColor.Blue) }), PongCount: 1)
+            },
+            drawPile: new[] { C(9, CardColor.Red), C(10, CardColor.Red) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+
+        var ended = session.HandleAction(0, new StopDeclareMsg());
+        Assert.That(For<RoundEndedMsg>(ended, 0).reason, Does.Contain("스톱 바가지"));
+
+        var token = ((NextRoundCmd)ended.Timers.Single(t => t.Command is NextRoundCmd).Command).Token;
+        var next = session.HandleNextRound(token);
+
+        Assert.That(For<RoundStartedMsg>(next, 0).dealerSeat, Is.EqualTo(0)); // 당한 선언자가 선
     }
 
     [Test]

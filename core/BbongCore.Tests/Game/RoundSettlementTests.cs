@@ -48,16 +48,17 @@ public class RoundSettlementTests
     // ── 두 번 뽕 종료 (rules.md §4-3, §7) ──
 
     [Test]
-    public void SettleByTwoPong_winner_zero_last_discarder_plus_20()
+    public void SettleByTwoPong_only_discarder_pays_hand_plus_20()
     {
+        // 뽕 바가지: 라운드를 끝나게 한(버린) 사람만 손합+20, 나머지는 전원 0(스톱 바가지와 대칭)
         var round = Round(
             new Player(0, HandOf(3, 7, 9)),  // 마지막 버린 자 → 19 + 20(박)
             new Player(1, HandOf()),         // 두 번 뽕 승자(빈 손) → 0
-            new Player(2, HandOf(2, 4)));    // 6
+            new Player(2, HandOf(2, 4)));    // 구경꾼 → 0
 
         var scores = RoundSettlement.SettleByTwoPong(round, winnerSeat: 1, lastDiscarderSeat: 0);
 
-        Assert.That(scores, Is.EqualTo(new[] { 39, 0, 6 }));
+        Assert.That(scores, Is.EqualTo(new[] { 39, 0, 0 }));
     }
 
     // ── 강제 종료(바닥 소진): 전원 손패 합 ──

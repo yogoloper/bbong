@@ -244,7 +244,7 @@ namespace Bbong.Client
                 {
                     yield return new WaitForSeconds(BotDelay); // 직전 카드 착지 후 한 박자 고민하고 선언
                     AnnounceStop(seat);
-                    EndRound(RoundSettlement.SettleByStop(_round, seat), StopReason(seat), StopEnderSeat(seat));
+                    EndRound(RoundSettlement.SettleByStop(_round, seat), StopReason(seat), seat); // 다음 선 = 선언자(바가지면 당한 사람)
                     yield break;
                 }
 
@@ -425,7 +425,7 @@ namespace Bbong.Client
                 _round = _round.Pong(seat, null);
                 _table.PongFx($"{SeatName(seat)}\n{number}뽕!");
                 _table.GroupFx(seat, laid);
-                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(discarderSeat)} - 뽕 바가지", seat);
+                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(discarderSeat)} - 뽕 바가지", discarderSeat); // 다음 선 = 당한 사람
                 return;
             }
 
@@ -465,7 +465,7 @@ namespace Bbong.Client
             yield return new WaitForSeconds(TossDelay);
             _pendingTossSeat = -1;
             _table.DiscardFx(seat, toss);
-            EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(discarderSeat)} - 뽕 바가지", seat);
+            EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat), $"{SeatName(discarderSeat)} - 뽕 바가지", discarderSeat); // 다음 선 = 당한 사람
         }
 
         /// <summary>봇 뽕의 추가 버림을 한 박자 뒤에 표시(내려놓기 → 버림 단계 연출).</summary>
@@ -682,7 +682,7 @@ namespace Bbong.Client
             {
                 CancelTurnTimer();
                 AnnounceStop(MySeat);
-                EndRound(RoundSettlement.SettleByStop(_round, MySeat), StopReason(MySeat), StopEnderSeat(MySeat));
+                EndRound(RoundSettlement.SettleByStop(_round, MySeat), StopReason(MySeat), MySeat); // 다음 선 = 선언자
             }
         }
 
@@ -711,7 +711,7 @@ namespace Bbong.Client
                 _round = _round.Pong(MySeat, null);
                 _table.PongFx($"{SeatName(MySeat)}\n{_pongNumber}뽕!");
                 _table.GroupFx(MySeat, pongLaid);
-                EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(_pongDiscarderSeat)} - 뽕 바가지", MySeat);
+                EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(_pongDiscarderSeat)} - 뽕 바가지", _pongDiscarderSeat); // 다음 선 = 당한 사람
                 return;
             }
 
@@ -885,7 +885,7 @@ namespace Bbong.Client
                     if (_round.Players[MySeat].Hand.Count == 0)
                     {
                         // 추가 버림까지 내고 손이 비면 손 털기 종료
-                        EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(_pongDiscarderSeat)} - 뽕 바가지", MySeat);
+                        EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat), $"{SeatName(_pongDiscarderSeat)} - 뽕 바가지", _pongDiscarderSeat); // 다음 선 = 당한 사람
                         break;
                     }
 

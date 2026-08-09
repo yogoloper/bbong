@@ -201,14 +201,14 @@ public sealed class GameSession
                 if (StopResolver.CanStop(_round, seat) && _bots[seat]!.ShouldStop(_round, seat, _game))
                 {
                     var bagaji = StopResolver.IsBagaji(_round, seat);
-                    var ender = StopEnderSeat(seat, bagaji);
+                    var laidSeat = StopEnderSeat(seat, bagaji); // 공개 손패: 바가지면 박 먹인 승자
                     output.ToAll(new StopDeclaredMsg
                     {
                         seat = seat, bagaji = bagaji,
-                        laidSeat = ender, laid = CardDto.FromAll(_round.Players[ender].Hand.Cards)
+                        laidSeat = laidSeat, laid = CardDto.FromAll(_round.Players[laidSeat].Hand.Cards)
                     });
                     var reason = bagaji ? $"{_nicknames[seat]} - 스톱 바가지" : $"{_nicknames[seat]} - 스톱";
-                    EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, ender);
+                    EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, seat); // 다음 선 = 선언자(바가지면 당한 사람)
                 }
                 else
                 {
@@ -497,7 +497,7 @@ public sealed class GameSession
                 seat = seat, number = _pongNumber, laid = CardDto.FromAll(laid), view = BuildView(s)
             });
             EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat),
-                $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", seat);
+                $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", _pongDiscarderSeat); // 다음 선 = 당한 사람
             return;
         }
 
@@ -568,7 +568,7 @@ public sealed class GameSession
             seat = seat, number = number, laid = CardDto.FromAll(rest), view = BuildView(s)
         });
         EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat),
-            $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", seat);
+            $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", _pongDiscarderSeat); // 다음 선 = 당한 사람
     }
 
     private void HandlePongDiscard(SessionOutput output, int seat, PongDiscardMsg msg)
@@ -599,7 +599,7 @@ public sealed class GameSession
         {
             EmitEach(output, s => new DiscardedMsg { seat = seat, card = CardDto.From(card), view = BuildView(s) });
             EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat),
-                $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", seat);
+                $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", _pongDiscarderSeat); // 다음 선 = 당한 사람
             return;
         }
 
@@ -617,14 +617,14 @@ public sealed class GameSession
         }
 
         var bagaji = StopResolver.IsBagaji(_round, seat);
-        var ender = StopEnderSeat(seat, bagaji); // 정상 스톱=선언자, 바가지=박 먹인 승자
+        var ender = StopEnderSeat(seat, bagaji); // 공개 손패용: 정상=선언자, 바가지=박 먹인 승자
         output.ToAll(new StopDeclaredMsg
         {
             seat = seat, bagaji = bagaji,
             laidSeat = ender, laid = CardDto.FromAll(_round.Players[ender].Hand.Cards)
         });
         var reason = bagaji ? $"{_nicknames[seat]} - 스톱 바가지" : $"{_nicknames[seat]} - 스톱";
-        EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, ender);
+        EndRound(output, RoundSettlement.SettleByStop(_round, seat), reason, seat); // 다음 선 = 선언자
     }
 
     private void HandleContinueTurn(SessionOutput output, int seat)
