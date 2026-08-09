@@ -14,14 +14,15 @@ public sealed class RoomRegistry
     private readonly ConcurrentDictionary<Guid, Room> _byUser = new();
 
     /// <summary>방 생성 + 생성자 입장. runLoop=false는 테스트 전용(Execute 직접 구동). stake>0이면 맞춤게임.</summary>
-    public Room Create(RoomMember creator, bool runLoop = true, int stake = 0, IStakeBank? bank = null)
+    public Room Create(RoomMember creator, bool runLoop = true, int stake = 0, IStakeBank? bank = null,
+        IGameHistoryStore? history = null)
     {
         string code;
         Room room;
         do
         {
             code = Random.Shared.Next(0, 1_000_000).ToString("D6");
-            room = new Room(code, this, creator.UserId, stake, bank);
+            room = new Room(code, this, creator.UserId, stake, bank, history: history);
         }
         while (!_rooms.TryAdd(code, room));
 
@@ -55,7 +56,8 @@ public sealed class RoomRegistry
     /// 빠른매칭: 같은 조건(입장료·목표 인원)의 대기방 중 하나에 랜덤 배정, 없으면 새 방 생성(§9-1).
     /// 정원 도달 시 방이 자동 시작한다.
     /// </summary>
-    public Room QuickMatch(RoomMember member, int stake, int players, IStakeBank? bank, bool runLoop = true)
+    public Room QuickMatch(RoomMember member, int stake, int players, IStakeBank? bank, bool runLoop = true,
+        IGameHistoryStore? history = null)
     {
         var candidates = _rooms.Values
             .Where(r => r.Phase == RoomPhase.Waiting && r.Stake == stake && r.TargetPlayers == players
@@ -73,7 +75,7 @@ public sealed class RoomRegistry
         do
         {
             code = Random.Shared.Next(0, 1_000_000).ToString("D6");
-            created = new Room(code, this, member.UserId, stake, bank, targetPlayers: players);
+            created = new Room(code, this, member.UserId, stake, bank, targetPlayers: players, history: history);
         }
         while (!_rooms.TryAdd(code, created));
 

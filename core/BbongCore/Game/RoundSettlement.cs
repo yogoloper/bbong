@@ -29,36 +29,55 @@ public static class RoundSettlement
     /// 두 번 뽕 종료: 승자(빈 손)=0, 마지막 버린 자=손패 합+20(박), 나머지=손패 합(rules.md §4-3, §7).
     /// </summary>
     /// <summary>
-    /// 뽕 바가지 종료(§7): 라운드를 끝나게 만든(마지막 버린) 사람만 손합+20 벌점, 나머지는 전원 0.
-    /// 스톱 바가지(선언자만 +30, 나머지 0)와 대칭 구조.
+    /// 뽕 바가지 종료(§7): 바가지 먹인 승자는 빈손이라 0, 당한(버린) 사람은 손합+20,
+    /// 나머지는 자기 남은 손패 합을 빚으로 진다.
     /// </summary>
     public static int[] SettleByTwoPong(RoundState round, int winnerSeat, int lastDiscarderSeat) =>
         round.Players
-            .Select(p => p.Seat == lastDiscarderSeat
-                ? Scoring.Score(new PlayerOutcome(p.Hand, PongBak: true))
-                : 0)
+            .Select(p => Scoring.Score(new PlayerOutcome(p.Hand, PongBak: p.Seat == lastDiscarderSeat)))
             .ToArray();
 
     /// <summary>
     /// 스톱 종료(rules.md §6, §8).
     /// 바가지면 선언자=손패 합+30, 나머지 전원 0. 아니면 전원 남은 손패 합.
     /// </summary>
+    /// <summary>
+    /// 스톱 종료(§6, §8). 정상 스톱: 전원 남은 손패 합.
+    /// 스톱 바가지: 바가지 먹인 승자(최저 손합 뽕 게이머)만 0, 당한 선언자는 손합+30,
+    /// 나머지는 자기 남은 손패 합.
+    /// </summary>
     public static int[] SettleByStop(RoundState round, int stopSeat, int stopLimit = 10)
     {
         var bagaji = StopResolver.IsBagaji(round, stopSeat);
+        var winner = bagaji ? BagajiWinner(round, stopSeat) : -1;
 
         return round.Players
             .Select(p =>
             {
-                if (!bagaji)
+                if (bagaji && p.Seat == winner)
                 {
-                    return Scoring.Score(new PlayerOutcome(p.Hand));
+                    return 0; // 바가지 먹인 사람
                 }
 
-                return p.Seat == stopSeat
-                    ? Scoring.Score(new PlayerOutcome(p.Hand, StopBagaji: true))
-                    : 0;
+                return Scoring.Score(new PlayerOutcome(p.Hand, StopBagaji: bagaji && p.Seat == stopSeat));
             })
             .ToArray();
+    }
+
+    /// <summary>스톱 바가지 승자: 선언자보다 손합이 낮은 뽕 게이머 중 최저(동률이면 앞 좌석).</summary>
+    public static int BagajiWinner(RoundState round, int stopSeat)
+    {
+        var winner = stopSeat;
+        var min = round.Players[stopSeat].Hand.Sum();
+        foreach (var p in round.Players)
+        {
+            if (p.Seat != stopSeat && p.HasPonged && p.Hand.Sum() < min)
+            {
+                winner = p.Seat;
+                min = p.Hand.Sum();
+            }
+        }
+
+        return winner;
     }
 }

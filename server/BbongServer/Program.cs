@@ -44,6 +44,8 @@ builder.Services.AddScoped<ShopService>();
 builder.Services.AddScoped<MatchService>();
 builder.Services.AddSingleton<BbongServer.Realtime.RoomRegistry>(); // 친구방(인메모리, 단일 프로세스)
 builder.Services.AddSingleton<BbongServer.Realtime.IStakeBank, ScopedStakeBank>(); // 판돈 방 자금 흐름(§9)
+builder.Services.AddSingleton<BbongServer.Realtime.IGameHistoryStore,
+    BbongServer.Infrastructure.Persistence.ScopedGameHistoryStore>(); // 게임 히스토리(CS/디버깅)
 
 // 소셜 검증기: 개발은 bypass(앱 등록 전), 운영은 실제 provider 검증기로 교체 예정.
 var socialBypass = string.Equals(
@@ -92,6 +94,65 @@ app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseWebSockets();
+// ── 게임 히스토리 조회(CS/디버깅) ──
+app.MapGet("/me/games", async (ClaimsPrincipal user, HttpContext ctx) =>
+{
+    var db = ctx.RequestServices.GetService<BbongServer.Infrastructure.Persistence.BbongDbContext>();
+    if (db is null)
+    {
+        return Results.Ok(Array.Empty<object>()); // 인메모리 구성(테스트)에선 히스토리 비활성
+    }
+
+    var userId = Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? user.FindFirstValue(Microsoft.IdentityModel.JsonWebTokens.JwtRegisteredClaimNames.Sub)!);
+    var games = await (
+        from p in db.GamePlayers
+        join g in db.Games on p.GameId equals g.Id
+        where p.UserId == userId
+        orderby g.StartedAtUtc descending
+        select new
+        {
+            gameId = g.Id,
+            g.RoomCode,
+            g.Stake,
+            g.TargetPlayers,
+            g.StartedAtUtc,
+            g.EndedAtUtc,
+            g.WinnerSeats,
+            mySeat = p.Seat,
+            myFinalDebt = p.FinalDebt,
+            myPayout = p.Payout
+        }).Take(50).ToListAsync();
+    return Results.Ok(games);
+}).RequireAuthorization();
+
+app.MapGet("/games/{gameId:guid}/events", async (Guid gameId, ClaimsPrincipal user, HttpContext ctx) =>
+{
+    var db = ctx.RequestServices.GetService<BbongServer.Infrastructure.Persistence.BbongDbContext>();
+    if (db is null)
+    {
+        return Results.NotFound();
+    }
+
+    var userId = Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? user.FindFirstValue(Microsoft.IdentityModel.JsonWebTokens.JwtRegisteredClaimNames.Sub)!);
+    var participated = await db.GamePlayers.AnyAsync(p => p.GameId == gameId && p.UserId == userId);
+    if (!participated)
+    {
+        return Results.NotFound(); // 본인이 참여한 게임만 조회 가능
+    }
+
+    var players = await db.GamePlayers.Where(p => p.GameId == gameId)
+        .OrderBy(p => p.Seat)
+        .Select(p => new { p.Seat, p.Nickname, p.IsBot, p.FinalDebt, p.Payout })
+        .ToListAsync();
+    var events = await db.GameEvents.Where(e => e.GameId == gameId)
+        .OrderBy(e => e.Id)
+        .Select(e => new { e.RoundIndex, e.Seat, e.Type, e.DataJson, e.AtUtc })
+        .ToListAsync();
+    return Results.Ok(new { players, events });
+}).RequireAuthorization();
+
 BbongServer.Realtime.WsEndpoint.Map(app); // /ws — 친구방 실시간(JWT 재사용)
 
 // 게스트 등록 → 계정 생성 + 초기 지급 + 액세스 토큰 발급

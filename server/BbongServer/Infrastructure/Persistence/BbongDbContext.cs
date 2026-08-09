@@ -19,6 +19,12 @@ public sealed class BbongDbContext : DbContext
 
     public DbSet<Match> Matches => Set<Match>();
 
+    public DbSet<GameRow> Games => Set<GameRow>();
+
+    public DbSet<GamePlayerRow> GamePlayers => Set<GamePlayerRow>();
+
+    public DbSet<GameEventRow> GameEvents => Set<GameEventRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<UserAccount>(account =>

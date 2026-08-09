@@ -19,9 +19,24 @@ public sealed class SessionOutput
 
     public List<PendingTimer> Timers { get; } = new();
 
+    /// <summary>게임 히스토리 이벤트(CS/디버깅용 영구 기록) — Room이 저장소로 흘려보낸다.</summary>
+    public List<HistoryEvent> History { get; } = new();
+
     internal void ToSeat(int seat, object message) => Messages.Add(new Outbound(seat, message));
 
     internal void ToAll(object message) => Messages.Add(new Outbound(null, message));
 
     internal void After(RoomCommand command, int delayMs) => Timers.Add(new PendingTimer(command, delayMs));
+
+    private static readonly System.Text.Json.JsonSerializerOptions HistoryJson = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // 한글 원문 저장(CS 가독성)
+    };
+
+    internal void Log(int roundIndex, int? seat, string type, object data) =>
+        History.Add(new HistoryEvent(roundIndex, seat, type,
+            System.Text.Json.JsonSerializer.Serialize(data, HistoryJson)));
 }
+
+/// <summary>라운드 진행 1건의 영구 기록. DataJson은 이벤트별 자유 구조(JSONB 저장).</summary>
+public sealed record HistoryEvent(int RoundIndex, int? Seat, string Type, string DataJson);

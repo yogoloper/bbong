@@ -39,13 +39,17 @@ public sealed class Room
     private readonly HashSet<Guid> _absent = new(); // 게임 중 이탈(끊김/종료) — 좌석 유지, 판 종료 시 봇 대체(§9-4)
     private readonly RoomRegistry _registry;
     private readonly IStakeBank? _bank;
+    private readonly IGameHistoryStore? _history;
+    private Guid _gameId;
+    private Task _historyChain = Task.CompletedTask; // 기록 순서 보장용 직렬 체인(실패는 무시)
+    private int[] _lastCumulative = Array.Empty<int>(); // 세트 종료 시 최종 빚 기록용
     private Guid?[] _seatUsers = Array.Empty<Guid?>(); // 게임 시작 시점 좌석→유저(봇/이후 이탈과 무관한 정산 기준)
     private int _fillBotCount; // 시작 시점 위장 봇 수 — 상금 하우스 부담분
     private bool _loopRunning;
     private GameSession? _session;
 
     internal Room(string code, RoomRegistry registry, Guid hostUserId, int stake = 0, IStakeBank? bank = null,
-        int targetPlayers = 0)
+        int targetPlayers = 0, IGameHistoryStore? history = null)
     {
         Code = code;
         _registry = registry;
@@ -53,6 +57,7 @@ public sealed class Room
         Stake = stake;
         _bank = bank;
         TargetPlayers = targetPlayers;
+        _history = history;
     }
 
     public string Code { get; }
@@ -452,6 +457,17 @@ public sealed class Room
             });
         }
 
+        if (_history is not null)
+        {
+            _gameId = Guid.NewGuid();
+            var players = _members.Select((m, i) => new GamePlayerRecord(i, m.UserId, m.Nickname, false))
+                .Concat(_fillBots.Select((n, i) => new GamePlayerRecord(_members.Count + i, null, n, true)))
+                .Concat(_botNames.Select((n, i) => new GamePlayerRecord(_members.Count + _fillBots.Count + i, null, n, true)))
+                .ToList();
+            var record = new GameRecord(_gameId, Code, Stake, TargetPlayers, DateTimeOffset.UtcNow, players);
+            Chain(h => h.CreateGameAsync(record));
+        }
+
         var botSeats = Enumerable.Range(_members.Count, _fillBots.Count + _botNames.Count);
         _session = new GameSession(nicknames, () => new SeededRandom(Random.Shared.Next()), botSeats: botSeats,
             botDifficulty: TargetPlayers > 0 ? BotDifficulty.Hard : BotDifficulty.Normal); // 맞춤게임 봇은 어려움
@@ -477,6 +493,17 @@ public sealed class Room
     /// <summary>세션 결과 반영: 좌석별 송신 + 타이머 예약(만료 시 커맨드 재주입).</summary>
     private void Apply(SessionOutput output)
     {
+        if (_history is not null && output.History.Count > 0)
+        {
+            var batch = output.History.ToArray();
+            Chain(h => h.AppendEventsAsync(_gameId, batch));
+        }
+
+        if (output.Messages.Select(o => o.Message).OfType<RoundEndedMsg>().LastOrDefault() is { } re)
+        {
+            _lastCumulative = re.cumulativeDebts;
+        }
+
         foreach (var outbound in output.Messages)
         {
             if (outbound.Seat is { } seat)
@@ -506,6 +533,7 @@ public sealed class Room
     /// <summary>세트 종료: 판돈 방은 우승자 배당 후 폭파(§9-2), 무료방은 대기실 복귀(재대결).</summary>
     private void HandleSetEnded(int[] winnerSeats)
     {
+        RecordCompletion(winnerSeats);
         if (Stake <= 0 || _bank is null)
         {
             ReturnToWaiting();
@@ -529,6 +557,59 @@ public sealed class Room
         }
 
         CloseRoom("게임 종료 — 정산 완료");
+    }
+
+    private void RecordCompletion(int[] winnerSeats)
+    {
+        if (_history is null)
+        {
+            return;
+        }
+
+        var payouts = new Dictionary<int, long>();
+        if (Stake > 0)
+        {
+            var humans = _seatUsers.Count(u => u is not null);
+            var winners = winnerSeats.Where(seatIdx => seatIdx < _seatUsers.Length && _seatUsers[seatIdx] is not null).ToList();
+            if (winners.Count > 0)
+            {
+                var share = (long)Stake * (humans + _fillBotCount) / winners.Count;
+                foreach (var w in winners)
+                {
+                    payouts[w] = share;
+                }
+            }
+        }
+
+        var completion = new GameCompletion(_gameId, DateTimeOffset.UtcNow, winnerSeats, _lastCumulative, payouts);
+        Chain(h => h.CompleteGameAsync(completion));
+    }
+
+    /// <summary>기록 저장 직렬 체인 — 순서 보장, 실패는 게임 진행과 무관하게 무시.</summary>
+    private void Chain(Func<IGameHistoryStore, Task> write)
+    {
+        _historyChain = RunChainedAsync(_historyChain, _history!, write);
+    }
+
+    private static async Task RunChainedAsync(Task previous, IGameHistoryStore store, Func<IGameHistoryStore, Task> write)
+    {
+        try
+        {
+            await previous;
+        }
+        catch
+        {
+            // 앞선 기록 실패는 무시
+        }
+
+        try
+        {
+            await write(store); // 완료형 저장소(테스트)는 동기 실행됨
+        }
+        catch
+        {
+            // 기록 실패는 게임 진행과 무관 — 무시
+        }
     }
 
     /// <summary>테스트 전용: 게임 결과를 주입해 정산/복귀 경로를 구동.</summary>

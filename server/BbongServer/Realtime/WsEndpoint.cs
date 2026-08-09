@@ -22,7 +22,7 @@ public static class WsEndpoint
     public static void Map(WebApplication app) =>
         app.Map("/ws", Handle).RequireAuthorization();
 
-    private static async Task Handle(HttpContext context, RoomRegistry registry, IAccountStore accounts, IStakeBank bank)
+    private static async Task Handle(HttpContext context, RoomRegistry registry, IAccountStore accounts, IStakeBank bank, IGameHistoryStore history)
     {
         if (!context.WebSockets.IsWebSocketRequest)
         {
@@ -52,7 +52,7 @@ public static class WsEndpoint
 
         try
         {
-            await ReceiveLoopAsync(socket, registry, bank, sink, member);
+            await ReceiveLoopAsync(socket, registry, bank, history, sink, member);
         }
         finally
         {
@@ -60,7 +60,7 @@ public static class WsEndpoint
         }
     }
 
-    private static async Task ReceiveLoopAsync(WebSocket socket, RoomRegistry registry, IStakeBank bank, WebSocketSessionSink sink, RoomMember member)
+    private static async Task ReceiveLoopAsync(WebSocket socket, RoomRegistry registry, IStakeBank bank, IGameHistoryStore history, WebSocketSessionSink sink, RoomMember member)
     {
         var buffer = new byte[8 * 1024];
         while (socket.State == WebSocketState.Open)
@@ -88,11 +88,11 @@ public static class WsEndpoint
                 continue;
             }
 
-            await RouteAsync(registry, bank, sink, member, message);
+            await RouteAsync(registry, bank, history, sink, member, message);
         }
     }
 
-    private static async Task RouteAsync(RoomRegistry registry, IStakeBank bank, WebSocketSessionSink sink, RoomMember member, object message)
+    private static async Task RouteAsync(RoomRegistry registry, IStakeBank bank, IGameHistoryStore history, WebSocketSessionSink sink, RoomMember member, object message)
     {
         var room = registry.FindByUser(member.UserId);
         switch (message)
@@ -115,7 +115,7 @@ public static class WsEndpoint
                     break;
                 }
 
-                registry.QuickMatch(member, quick.stake, quick.players, bank);
+                registry.QuickMatch(member, quick.stake, quick.players, bank, history: history);
                 break;
             case CreateRoomMsg create:
                 if (create.stake != 0 && !BbongCore.Config.GameConfig.IsValidStake(create.stake))
@@ -130,7 +130,7 @@ public static class WsEndpoint
                     break;
                 }
 
-                registry.Create(member, stake: create.stake, bank: bank);
+                registry.Create(member, stake: create.stake, bank: bank, history: history);
                 break;
             case JoinRoomMsg join:
                 var target = registry.FindByCode(join.code);

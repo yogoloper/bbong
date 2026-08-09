@@ -284,7 +284,8 @@ public sealed class GameSession
         if (rest.Count == 0)
         {
             _round = _round.NaturalPong(number, null);
-            EmitEach(output, s => new NaturalPongedMsg
+            output.Log(RoundIdx, seat, "naturalPong", new { number, laid = L(laid) });
+        EmitEach(output, s => new NaturalPongedMsg
             {
                 seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
             });
@@ -297,6 +298,7 @@ public sealed class GameSession
         _canNaturalPong = false;
         _naturalPongNumber = 0;
         _meld = MeldResult.None;
+        output.Log(RoundIdx, seat, "naturalPong", new { number, laid = L(laid) });
         EmitEach(output, s => new NaturalPongedMsg
         {
             seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
@@ -343,6 +345,11 @@ public sealed class GameSession
         Array.Fill(_timedOut, false);
         _round = RoundState.Deal(Deck.CreateStandard(), _playerCount, _rngFactory(), _dealerSeat);
         _phase = RoundPhase.WaitingDiscard;
+        output.Log(RoundIdx, null, "deal", new
+        {
+            dealer = _dealerSeat,
+            hands = _round.Players.Select(p => L(p.Hand.Cards)).ToArray()
+        });
         EmitEach(output, seat => new RoundStartedMsg
         {
             roundIndex = _roundIndex,
@@ -392,6 +399,7 @@ public sealed class GameSession
         _naturalPongNumber = _canNaturalPong ? TripleNumber(hand) : 0;
         _phase = RoundPhase.WaitingDiscard;
 
+        output.Log(RoundIdx, current, "draw", new { card = L(_drawnCard), reshuffled });
         EmitEach(output, seat => new DrewCardMsg { seat = current, reshuffled = reshuffled, view = BuildView(seat) });
         _timerExtraMs = reshuffled ? RealtimeConfig.ReshuffleFxMs : 0; // 셔플 연출이 끝난 뒤부터 행동 시간
         ArmActorTimer(output);
@@ -428,6 +436,7 @@ public sealed class GameSession
     /// <summary>버림(일반/뽕 추가버림) 공통 후처리: 뽕 창 오픈 또는 다음 턴.</summary>
     private void AfterDiscard(SessionOutput output, int discarderSeat, Card card)
     {
+        output.Log(RoundIdx, discarderSeat, "discard", new { card = L(card) });
         _turnToken++; // 대기 상태 이탈 — 진행 중 턴 타이머 무효화
         var eligible = Enumerable.Range(0, _playerCount).Where(s => _round.CanPong(s)).ToList();
         if (eligible.Count == 0)
@@ -483,6 +492,7 @@ public sealed class GameSession
     /// <summary>뽕 선언 반영(플레이어/봇 공용). 검증은 호출부 책임.</summary>
     private void DeclarePong(SessionOutput output, int seat)
     {
+        output.Log(RoundIdx, seat, "pong", new { number = _round.DiscardPile[^1].Number });
         _pongToken++; // 진행 중 타이머 무효화
 
         var hand = _round.Players[seat].Hand;
@@ -560,6 +570,7 @@ public sealed class GameSession
     private void PongClear(SessionOutput output, int seat)
     {
         var rest = _round.Players[seat].Hand.Cards.Where(c => c.Number != _pongNumber).ToList();
+        output.Log(RoundIdx, seat, "pongClear", new { number = rest[0].Number, laid = L(rest) });
         var number = rest[0].Number;
         _round = _round.PongThenNaturalPong(seat);
         _turnToken++;
@@ -678,7 +689,8 @@ public sealed class GameSession
         {
             // 손패 전부 같은 숫자 → 손 소진 종료
             _round = _round.NaturalPong(number, null);
-            EmitEach(output, s => new NaturalPongedMsg
+            output.Log(RoundIdx, seat, "naturalPong", new { number, laid = L(laid) });
+        EmitEach(output, s => new NaturalPongedMsg
             {
                 seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
             });
@@ -700,6 +712,7 @@ public sealed class GameSession
         }
 
         _round = _round.NaturalPong(number, card);
+        output.Log(RoundIdx, seat, "naturalPong", new { number, laid = L(laid) });
         EmitEach(output, s => new NaturalPongedMsg
         {
             seat = seat, number = number, laid = CardDto.FromAll(laid), view = BuildView(s)
@@ -774,6 +787,7 @@ public sealed class GameSession
 
     private void EndRound(SessionOutput output, int[] scores, string reason, int enderSeat)
     {
+        output.Log(RoundIdx, enderSeat, "roundEnd", new { reason, scores, ender = enderSeat });
         _turnToken++; // 진행 중 턴 타이머 무효화
         ReplaceLeaversWithBots(output);
         _game = _game.ApplyRoundScores(scores);
@@ -833,6 +847,12 @@ public sealed class GameSession
         // 닉네임은 게임 끝까지 원래 게이머 것 유지 — 남은 사람들이 헷갈리지 않게
         output.ToAll(new BotTookOverMsg { seat = seat, nickname = _nicknames[seat] });
     }
+
+    private int RoundIdx => _game.RoundsPlayed;
+
+    private static string L(Card c) => $"{c.Number}{"RBGY"[(int)c.Color]}"; // 히스토리용 축약 표기 "3R"
+
+    private static string[] L(IEnumerable<Card> cards) => cards.Select(L).ToArray();
 
     /// <summary>해당 좌석이 현재 봇 플레이 중인지(재접속 복귀 판단용).</summary>
     public bool IsBotSeat(int seat) => _botSeats.Contains(seat);

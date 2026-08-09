@@ -313,7 +313,7 @@ public class GameSessionTests
         Assert.That(ended.enderSeat, Is.EqualTo(0));           // 다음 선 = 뽕 바가지 당한(버린) 사람
         Assert.That(ended.scores[1], Is.EqualTo(0));           // 손 턴 승자
         Assert.That(ended.scores[0], Is.GreaterThanOrEqualTo(20)); // 박 +20 포함
-        Assert.That(ended.scores[2], Is.EqualTo(0));           // 구경꾼도 0 — 벌점은 버린 사람만
+        Assert.That(ended.scores[2], Is.EqualTo(9));           // 구경꾼은 자기 손합(4+5)
         Assert.That(ended.nextRoundInMs, Is.EqualTo(RealtimeConfig.NextRoundDelayMs));
         Assert.That(result.Timers.Any(t => t.Command is NextRoundCmd), Is.True);
     }
@@ -604,6 +604,48 @@ public class GameSessionTests
         var discarded = For<DiscardedMsg>(result, 1);
         Assert.That(discarded.seat, Is.EqualTo(1)); // 내려놓은 뽕 카드 제외 자동 버림
         Assert.That(discarded.card.ToCard().Number, Is.Not.EqualTo(9));
+    }
+
+    // ── 게임 히스토리 이벤트 (CS/디버깅용 전체 기록) ──
+
+    [Test]
+    public void Session_emits_history_events_for_full_round_flow()
+    {
+        var (session, rig) = Rigged(
+            new[]
+            {
+                P(0, C(2, CardColor.Red), C(9, CardColor.Red), C(10, CardColor.Red)),
+                P(1, C(2, CardColor.Green), C(2, CardColor.Yellow), C(5, CardColor.Red), C(5, CardColor.Green), C(5, CardColor.Blue))
+            },
+            drawPile: new[] { C(7, CardColor.Red), C(8, CardColor.Red) },
+            discard: Array.Empty<Card>(),
+            currentSeat: 0);
+
+        Assert.That(rig.History.Any(h => h.Type == "draw" && h.Seat == 0), Is.True); // 자동 드로우 기록
+
+        var discarded = session.HandleAction(0, new DiscardMsg { card = CardDto.From(C(2, CardColor.Red)) });
+        Assert.That(discarded.History.Any(h => h.Type == "discard" && h.Seat == 0 && h.DataJson.Contains("\"2R\"")), Is.True);
+
+        var ponged = session.HandleAction(1, new PongDeclareMsg());
+        Assert.That(ponged.History.Any(h => h.Type == "pong" && h.Seat == 1), Is.True);
+
+        var cleared = session.HandleAction(1, new NaturalPongMsg()); // 뽕+자연뽕 손 소진 → 라운드 종료
+        Assert.That(cleared.History.Any(h => h.Type == "pongClear" && h.Seat == 1), Is.True);
+        Assert.That(cleared.History.Any(h => h.Type == "roundEnd" && h.DataJson.Contains("뽕 바가지")), Is.True);
+    }
+
+    [Test]
+    public void Deal_history_snapshots_every_hand()
+    {
+        var session = NewSession(3);
+        var output = session.StartMatch();
+
+        var deal = output.History.Single(h => h.Type == "deal");
+        Assert.That(deal.RoundIndex, Is.EqualTo(0));
+        // 3인 × 5장 손패 스냅샷이 전부 담겨야 한다
+        var hands = System.Text.Json.JsonDocument.Parse(deal.DataJson).RootElement.GetProperty("hands");
+        Assert.That(hands.GetArrayLength(), Is.EqualTo(3));
+        Assert.That(hands[0].GetArrayLength(), Is.EqualTo(5));
     }
 
     // ── 이탈/AFK 봇 대체 (rules.md §9-4) ──
