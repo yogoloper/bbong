@@ -9,7 +9,15 @@ namespace BbongCore.Ai;
 /// <summary>휴리스틱 AI 봇. 난이도에 따라 버림/뽕/스톱 결정이 달라집니다(README Phase 2).</summary>
 public sealed class Bot
 {
-    public Bot(BotDifficulty difficulty) => Difficulty = difficulty;
+    private static int _seedTail; // 같은 밀리초에 여러 봇을 만들어도 시드가 갈리게
+
+    private readonly IRandom _rng;
+
+    public Bot(BotDifficulty difficulty, IRandom? rng = null)
+    {
+        Difficulty = difficulty;
+        _rng = rng ?? new SeededRandom(unchecked(System.Environment.TickCount * 31 + ++_seedTail));
+    }
 
     public BotDifficulty Difficulty { get; }
 
@@ -60,16 +68,44 @@ public sealed class Bot
 
     /// <summary>
     /// 스톱 가능 시 스톱할지. Easy=안 함.
-    /// Normal=손합이 한도 절반 이하일 때만(성급한 스톱 편중 완화, 상대 패는 안 봄).
-    /// Hard=바가지 회피 + 손패가 쌍이면 두 번 뽕(손 털기·상대 박 +20)을 노리고 보류.
+    /// Normal/Hard=손합이 낮을수록 높은 확률로 스톱(항상 지르던 편중을 확률 밴드로 완화).
+    /// Hard는 추가로 바가지 회피 + 손패가 쌍이면 두 번 뽕(손 털기·상대 박 +20)을 노리고 자주 보류.
     /// </summary>
-    public bool ShouldStop(RoundState round, int seat) => Difficulty switch
+    public bool ShouldStop(RoundState round, int seat)
     {
-        BotDifficulty.Normal => round.Players[seat].Hand.Sum() <= GameConfig.DefaultStopLimit / 2,
-        BotDifficulty.Hard => !StopResolver.IsBagaji(round, seat)
-                              && round.Players[seat].Hand.Sum() <= GameConfig.DefaultStopLimit / 2,
-        _ => false
-    };
+        if (Difficulty == BotDifficulty.Easy)
+        {
+            return false;
+        }
+
+        var hand = round.Players[seat].Hand;
+        var sum = hand.Sum();
+        if (sum > GameConfig.DefaultStopLimit)
+        {
+            return false;
+        }
+
+        if (Difficulty == BotDifficulty.Hard)
+        {
+            if (StopResolver.IsBagaji(round, seat))
+            {
+                return false; // 지면서 +30 무는 스톱은 절대 안 함
+            }
+
+            if (IsPair(hand) && Chance(70))
+            {
+                return false; // 쌍 유지 — 두 번 뽕 한 방을 노린다
+            }
+        }
+
+        var hard = Difficulty == BotDifficulty.Hard;
+        var pct = sum <= 2 ? (hard ? 85 : 80)
+            : sum <= 5 ? (hard ? 40 : 30)
+            : (hard ? 12 : 8);
+        return Chance(pct);
+    }
+
+    private bool Chance(int percent) => _rng.Next(100) < percent;
 
     /// <summary>손패 2장이 같은 숫자(뽕 대기 쌍)인지.</summary>
     private static bool IsPair(Hand hand) =>

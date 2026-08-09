@@ -9,8 +9,28 @@ namespace BbongCore.Tests.Ai;
 [TestFixture]
 public class BotTests
 {
+    /// <summary>Chance 판정을 강제하는 스텁: 0=항상 성공(스톱), max-1=항상 실패(보류).</summary>
+    private sealed class FixedRandom : BbongCore.Cards.IRandom
+    {
+        private readonly int[] _values;
+        private int _i;
+        public FixedRandom(params int[] values) => _values = values;
+        public int Next(int maxExclusive) => _values[Math.Min(_i++, _values.Length - 1)] % maxExclusive;
+    }
+
     private static Card C(int n, CardColor color = CardColor.Red) => new(n, color);
     private static Hand HandOf(params Card[] cards) => new(cards);
+
+    /// <summary>선언자 손패가 같은 숫자 쌍인 스톱 국면.</summary>
+    private static RoundState PairStopRound(int pairNumber, int otherSum)
+    {
+        var players = new[]
+        {
+            new Player(0, HandOf(C(pairNumber, CardColor.Red), C(pairNumber, CardColor.Blue)), PongCount: 1),
+            new Player(1, HandOf(C(otherSum / 2), C(otherSum - otherSum / 2)), PongCount: 1)
+        };
+        return RoundState.Restore(players, Array.Empty<Card>(), Array.Empty<Card>(), 0, new SeededRandom(1));
+    }
 
     private static RoundState StopRound(int declarerSum, int otherSum)
     {
@@ -58,22 +78,19 @@ public class BotTests
     }
 
     [Test]
-    public void Normal_pongs_and_stops_when_sum_is_low()
+    public void Normal_stop_is_probabilistic_by_hand_sum()
     {
-        var bot = new Bot(BotDifficulty.Normal);
-
-        Assert.That(bot.ShouldPong(), Is.True);
-        // 손합 5(한도의 절반) 이하 → 스톱. 바가지 여부는 안 봄(단순)
-        Assert.That(bot.ShouldStop(StopRound(declarerSum: 5, otherSum: 3), seat: 0), Is.True);
-    }
-
-    [Test]
-    public void Normal_continues_when_stop_sum_is_high()
-    {
-        var bot = new Bot(BotDifficulty.Normal);
-
-        // 손합 8 > 5 → 성급한 스톱 안 함(스톱 종료 편중 완화)
-        Assert.That(bot.ShouldStop(StopRound(declarerSum: 8, otherSum: 9), seat: 0), Is.False);
+        Assert.That(new Bot(BotDifficulty.Normal).ShouldPong(), Is.True);
+        // 운이 좋으면(roll 0) 낮은 합에서 스톱, 나쁘면(roll 99) 보류 — 확률 밴드 동작
+        Assert.That(new Bot(BotDifficulty.Normal, new FixedRandom(0))
+            .ShouldStop(StopRound(declarerSum: 5, otherSum: 3), seat: 0), Is.True);
+        Assert.That(new Bot(BotDifficulty.Normal, new FixedRandom(99))
+            .ShouldStop(StopRound(declarerSum: 5, otherSum: 3), seat: 0), Is.False);
+        // 높은 합(8)도 낮은 확률로는 지를 수 있고, 대개는 보류
+        Assert.That(new Bot(BotDifficulty.Normal, new FixedRandom(0))
+            .ShouldStop(StopRound(declarerSum: 8, otherSum: 9), seat: 0), Is.True);
+        Assert.That(new Bot(BotDifficulty.Normal, new FixedRandom(50))
+            .ShouldStop(StopRound(declarerSum: 8, otherSum: 9), seat: 0), Is.False);
     }
 
     // ── Hard ──
@@ -81,28 +98,29 @@ public class BotTests
     [Test]
     public void Hard_avoids_stop_when_it_would_be_bagaji()
     {
-        var bot = new Bot(BotDifficulty.Hard);
-
-        // 선언자 합 8 > 상대 5 → 바가지 → Hard는 스톱 안 함
-        Assert.That(bot.ShouldStop(StopRound(declarerSum: 8, otherSum: 5), seat: 0), Is.False);
+        // 선언자 합 8 > 상대 5 → 바가지 → 운과 무관하게 절대 스톱 안 함
+        Assert.That(new Bot(BotDifficulty.Hard, new FixedRandom(0))
+            .ShouldStop(StopRound(declarerSum: 8, otherSum: 5), seat: 0), Is.False);
     }
 
     [Test]
-    public void Hard_stops_when_safe()
+    public void Hard_stop_is_probabilistic_when_safe()
     {
-        var bot = new Bot(BotDifficulty.Hard);
-
-        // 선언자 합 5 < 상대 9 → 바가지 아님 → 스톱
-        Assert.That(bot.ShouldStop(StopRound(declarerSum: 5, otherSum: 9), seat: 0), Is.True);
+        Assert.That(new Bot(BotDifficulty.Hard, new FixedRandom(0))
+            .ShouldStop(StopRound(declarerSum: 5, otherSum: 9), seat: 0), Is.True);
+        Assert.That(new Bot(BotDifficulty.Hard, new FixedRandom(99))
+            .ShouldStop(StopRound(declarerSum: 5, otherSum: 9), seat: 0), Is.False);
     }
 
     [Test]
-    public void Hard_continues_when_stop_sum_is_high()
+    public void Hard_holds_a_pair_hoping_for_a_second_pong()
     {
-        var bot = new Bot(BotDifficulty.Hard);
-
-        // 바가지 아님(8 < 9)이어도 손합 8 > 5 → 더 낮춰서 스톱(성급한 스톱 편중 완화)
-        Assert.That(bot.ShouldStop(StopRound(declarerSum: 8, otherSum: 9), seat: 0), Is.False);
+        // 손패가 쌍(4·4, 합 8)이면 보류 굴림이 먼저 — 성공 시 두 번 뽕(손 털기·상대 박)을 노린다
+        var round = PairStopRound(pairNumber: 4, otherSum: 12);
+        Assert.That(new Bot(BotDifficulty.Hard, new FixedRandom(0, 0))
+            .ShouldStop(round, seat: 0), Is.False); // 첫 굴림 0 → 쌍 보류 성공
+        Assert.That(new Bot(BotDifficulty.Hard, new FixedRandom(99, 0))
+            .ShouldStop(round, seat: 0), Is.True);  // 보류 실패 → 스톱 굴림 성공
     }
 
     [Test]
