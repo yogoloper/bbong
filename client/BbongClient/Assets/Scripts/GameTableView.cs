@@ -92,6 +92,8 @@ namespace Bbong.Client
         private int _flightsActive;      // 비행 중 카드 수 — 점수판은 전부 착지한 뒤에 노출
         private RoundView _lastView;     // 착지 후 좌석 재렌더용
         private Coroutine _pairRefresh;
+        // 좌석별 쌍 공개(붉은 뒷면) 표시 상태 — 비행이 모두 착지한 순간에만 갱신(중간 플리커 방지)
+        private readonly Dictionary<int, bool> _seatDanger = new();
         private Coroutine _scoreDelay;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop, _sfxShuffle;
         private Image _flash;
@@ -643,12 +645,18 @@ namespace Bbong.Client
                 // 리샘플링돼 크기가 변해 보이는 원인)을 제거한다. 최다 6장: 231 ≤ 패널 안폭 236.
                 const float bw = 36f, bh = 54f, step = bw + 3f;
                 var rowStart = Mathf.Round(-((seatView.handCount - 1) * step + bw) / 2f + bw / 2f);
-                // 쌍 공개(§7): 붉은 뒷면으로 표현. 비행 중엔 전환을 미뤄 착지 후에 바뀐다.
-                var showDanger = seatView.pairExposed && _flightsActive == 0;
-                if (seatView.pairExposed && _flightsActive > 0)
+                // 쌍 공개(§7): 붉은 뒷면. 평가는 "모든 비행 착지 + 표시 손패가 정확히 2장"일 때만 —
+                // 그 사이(뽕 토스 대기·드로우/버림 비행 중)엔 직전 색을 유지해 플리커를 막는다.
+                if (_flightsActive == 0)
                 {
-                    SchedulePairRefresh();
+                    _seatDanger[seatView.seat] = seatView.pairExposed && seatView.handCount == 2;
                 }
+                else
+                {
+                    SchedulePairRefresh(); // 착지 후 좌석만 재평가
+                }
+
+                var showDanger = _seatDanger.TryGetValue(seatView.seat, out var danger) && danger;
 
                 for (var j = 0; j < seatView.handCount; j++)
                 {
