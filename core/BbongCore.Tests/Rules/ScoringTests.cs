@@ -58,12 +58,12 @@ public class ScoringTests
     }
 
     [Test]
-    public void Pong_bak_adds_20_to_base()
+    public void Pong_bak_adds_30_to_base()
     {
-        // 뽕 박: 마지막 버린 자 손패 합 + 20 (rules.md §7)
+        // 일반뽕 바가지: 마지막 버린 자 손패 합 + 30 (rules.md §7)
         var outcome = new PlayerOutcome(HandOf(3, 7, 9), PongBak: true);
 
-        Assert.That(Scoring.Score(outcome), Is.EqualTo(19 + 20));
+        Assert.That(Scoring.Score(outcome), Is.EqualTo(19 + 30));
     }
 
     [Test]

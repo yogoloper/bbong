@@ -118,6 +118,7 @@ namespace Bbong.Client
             _table.ExitConfirmed += () => UiKit.GoTo<MainLobbyBootstrap>(_table.CanvasGo, this);
 
             _game = GameState.Start(PlayerCount);
+            _dealerSeat = Random.Range(0, PlayerCount); // 첫 라운드 선은 랜덤(§2)
             StartRound();
         }
 

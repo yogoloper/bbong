@@ -19,7 +19,7 @@ public class GameConfigTests
     public void Fixed_rule_constants_match_spec()
     {
         Assert.That(GameConfig.HandSize, Is.EqualTo(5));
-        Assert.That(GameConfig.PongBakPenalty, Is.EqualTo(20));
+        Assert.That(GameConfig.PongBakPenalty, Is.EqualTo(30));
         Assert.That(GameConfig.StopBagajiPenalty, Is.EqualTo(30));
         Assert.That(GameConfig.PongTimerSeconds, Is.EqualTo(2));
         Assert.That(GameConfig.TurnTimerSeconds, Is.EqualTo(5));

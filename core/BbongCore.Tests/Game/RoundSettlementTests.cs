@@ -52,13 +52,13 @@ public class RoundSettlementTests
     {
         // 뽕 바가지: 먹인 승자 0(빈손) / 당한(버린) 자 손합+20 / 나머지는 손합
         var round = Round(
-            new Player(0, HandOf(3, 7, 9)),  // 마지막 버린 자 → 19 + 20(박)
+            new Player(0, HandOf(3, 7, 9)),  // 마지막 버린 자 → 19 + 30(박)
             new Player(1, HandOf()),         // 두 번 뽕 승자(빈 손) → 0
             new Player(2, HandOf(2, 4)));    // 구경꾼 → 6
 
         var scores = RoundSettlement.SettleByTwoPong(round, winnerSeat: 1, lastDiscarderSeat: 0);
 
-        Assert.That(scores, Is.EqualTo(new[] { 39, 0, 6 }));
+        Assert.That(scores, Is.EqualTo(new[] { 49, 0, 6 }));
     }
 
     [Test]
@@ -66,7 +66,7 @@ public class RoundSettlementTests
     {
         // 자연뽕 바가지(뽕+자연뽕 콤보 손소진): 쌍 공개 예고 없이 터짐 → 버린 자 손합+50
         var round = Round(
-            new Player(0, HandOf(3, 7, 9)),  // 마지막 버린 자 → 19 + 50
+            new Player(0, HandOf(3, 7, 9)),  // 마지막 버린 자 → 19 + 50(자연뽕 바가지)
             new Player(1, HandOf()),         // 콤보 승자 → 0
             new Player(2, HandOf(2, 4)));    // 구경꾼 → 6
 

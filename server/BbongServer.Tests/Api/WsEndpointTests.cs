@@ -173,12 +173,15 @@ public class WsEndpointTests
         Assert.That((await ReceiveUntilAsync(guest, "gameStarted")).GetProperty("yourSeat").GetInt32(), Is.EqualTo(1));
 
         // 선(seat0)의 자동 드로우 후: 본인 뷰 손패 6장, 상대 뷰는 장수만
+        // 첫 선은 랜덤(§2) — 선만 6장, 상대는 5장 + 선의 장수만 공개
         var hostDrew = await ReceiveUntilAsync(host, "drewCard");
-        Assert.That(hostDrew.GetProperty("view").GetProperty("myHand").GetArrayLength(), Is.EqualTo(6));
+        var dealer = hostDrew.GetProperty("seat").GetInt32();
+        var hostHand = hostDrew.GetProperty("view").GetProperty("myHand").GetArrayLength();
+        Assert.That(hostHand, Is.EqualTo(dealer == 0 ? 6 : 5));
 
         var guestDrew = await ReceiveUntilAsync(guest, "drewCard");
-        Assert.That(guestDrew.GetProperty("view").GetProperty("myHand").GetArrayLength(), Is.EqualTo(5));
-        Assert.That(guestDrew.GetProperty("view").GetProperty("seats")[0].GetProperty("handCount").GetInt32(), Is.EqualTo(6));
+        Assert.That(guestDrew.GetProperty("view").GetProperty("myHand").GetArrayLength(), Is.EqualTo(dealer == 1 ? 6 : 5));
+        Assert.That(guestDrew.GetProperty("view").GetProperty("seats")[dealer].GetProperty("handCount").GetInt32(), Is.EqualTo(6));
     }
 
     [Test]
@@ -186,16 +189,20 @@ public class WsEndpointTests
     {
         var (host, guest) = await StartedGameAsync();
         var drew = await ReceiveUntilAsync(host, "drewCard");
-        var first = drew.GetProperty("view").GetProperty("myHand")[0];
+        var dealer = drew.GetProperty("seat").GetInt32();
+        var actor = dealer == 0 ? host : guest;   // 랜덤 선 소켓이 버린다
+        var observer = dealer == 0 ? guest : host;
+        var actorDrew = dealer == 0 ? drew : await ReceiveUntilAsync(guest, "drewCard");
+        var first = actorDrew.GetProperty("view").GetProperty("myHand")[0];
 
-        await SendAsync(host, new
+        await SendAsync(actor, new
         {
             type = "discard",
             card = new { number = first.GetProperty("number").GetInt32(), color = first.GetProperty("color").GetInt32() }
         });
 
-        var seen = await ReceiveUntilAsync(guest, "discarded");
-        Assert.That(seen.GetProperty("seat").GetInt32(), Is.EqualTo(0));
+        var seen = await ReceiveUntilAsync(observer, "discarded");
+        Assert.That(seen.GetProperty("seat").GetInt32(), Is.EqualTo(dealer));
         Assert.That(seen.GetProperty("card").GetProperty("number").GetInt32(), Is.EqualTo(first.GetProperty("number").GetInt32()));
     }
 
@@ -203,12 +210,15 @@ public class WsEndpointTests
     public async Task Abrupt_close_during_game_keeps_game_running_for_others()
     {
         var (host, guest) = await StartedGameAsync();
-        await ReceiveUntilAsync(guest, "gameStarted");
+        var drew = await ReceiveUntilAsync(guest, "drewCard");
+        var dealer = drew.GetProperty("seat").GetInt32();
+        var leaver = dealer == 0 ? host : guest;   // 선(랜덤)의 소켓을 끊는다
+        var survivor = dealer == 0 ? guest : host;
 
-        host.Abort(); // 강제 종료(게임 중 끊김)
+        leaver.Abort(); // 강제 종료(게임 중 끊김)
 
-        // 방은 유지되고, 끊긴 선(seat0)의 턴은 5초 룰이 자동 버림으로 진행시킨다(§9-4)
-        var discarded = await ReceiveUntilAsync(guest, "discarded", timeoutSeconds: 8);
-        Assert.That(discarded.GetProperty("seat").GetInt32(), Is.EqualTo(0));
+        // 방은 유지되고, 끊긴 선의 턴은 5초 룰이 자동 버림으로 진행시킨다(§9-4)
+        var discarded = await ReceiveUntilAsync(survivor, "discarded", timeoutSeconds: 8);
+        Assert.That(discarded.GetProperty("seat").GetInt32(), Is.EqualTo(dealer));
     }
 }

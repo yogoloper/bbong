@@ -86,6 +86,7 @@ public sealed class GameSession
 
     public SessionOutput StartMatch()
     {
+        _dealerSeat = _rngFactory().Next(_playerCount); // 첫 라운드 선은 랜덤(§2)
         var output = new SessionOutput();
         StartRound(output);
         return output;
