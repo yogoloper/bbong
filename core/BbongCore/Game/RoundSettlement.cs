@@ -29,12 +29,15 @@ public static class RoundSettlement
     /// 두 번 뽕 종료: 승자(빈 손)=0, 마지막 버린 자=손패 합+20(박), 나머지=손패 합(rules.md §4-3, §7).
     /// </summary>
     /// <summary>
-    /// 뽕 바가지 종료(§7): 바가지 먹인 승자는 빈손이라 0, 당한(버린) 사람은 손합+20,
+    /// 뽕 바가지 종료(§7): 바가지 먹인 승자는 빈손이라 0, 당한(버린) 사람은 손합+벌점,
     /// 나머지는 자기 남은 손패 합을 빚으로 진다.
+    /// naturalClear=true(뽕+자연뽕 콤보 — 쌍 공개 예고 불가)면 자연뽕 바가지 +50, 아니면 일반뽕 바가지 +20.
     /// </summary>
-    public static int[] SettleByTwoPong(RoundState round, int winnerSeat, int lastDiscarderSeat) =>
+    public static int[] SettleByTwoPong(RoundState round, int winnerSeat, int lastDiscarderSeat, bool naturalClear = false) =>
         round.Players
-            .Select(p => Scoring.Score(new PlayerOutcome(p.Hand, PongBak: p.Seat == lastDiscarderSeat)))
+            .Select(p => Scoring.Score(new PlayerOutcome(p.Hand,
+                PongBak: !naturalClear && p.Seat == lastDiscarderSeat,
+                NaturalPongBak: naturalClear && p.Seat == lastDiscarderSeat)))
             .ToArray();
 
     /// <summary>

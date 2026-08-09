@@ -62,6 +62,20 @@ public class RoundSettlementTests
     }
 
     [Test]
+    public void Natural_pong_bak_costs_50()
+    {
+        // 자연뽕 바가지(뽕+자연뽕 콤보 손소진): 쌍 공개 예고 없이 터짐 → 버린 자 손합+50
+        var round = Round(
+            new Player(0, HandOf(3, 7, 9)),  // 마지막 버린 자 → 19 + 50
+            new Player(1, HandOf()),         // 콤보 승자 → 0
+            new Player(2, HandOf(2, 4)));    // 구경꾼 → 6
+
+        var scores = RoundSettlement.SettleByTwoPong(round, winnerSeat: 1, lastDiscarderSeat: 0, naturalClear: true);
+
+        Assert.That(scores, Is.EqualTo(new[] { 69, 0, 6 }));
+    }
+
+    [Test]
     public void SettleByStop_bagaji_winner_zero_victim_plus_30_others_hand_sum()
     {
         // seat0 스톱(합 8) vs seat1 뽕 합 3(먹인 승자) vs seat2 구경꾼 합 6

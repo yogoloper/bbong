@@ -21,6 +21,7 @@ public sealed class SeatView
     public int seat;
     public string nickname = "";
     public int handCount;
+    public bool pairExposed; // 손패 2장이 같은 숫자 — 전원 공개(뽕 바가지 예고, §7)
     public int pongCount;
     public bool hasPonged;
     public int cumulativeDebt;

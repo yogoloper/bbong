@@ -813,8 +813,8 @@ public class GameSessionTests
 
         Assert.That(For<NaturalPongedMsg>(cleared, 0).seat, Is.EqualTo(1));
         var ended = For<RoundEndedMsg>(cleared, 0);
-        Assert.That(ended.reason, Is.EqualTo("P0 - 뽕 바가지")); // 2를 버린 seat0이 바가지
-        Assert.That(ended.scores[0], Is.GreaterThan(0));         // 박 벌점
+        Assert.That(ended.reason, Is.EqualTo("P0 - 자연뽕 바가지")); // 예고 불가 콤보 — 벌점 50
+        Assert.That(ended.scores[0], Is.EqualTo(9 + 10 + 7 + 50)); // 손합(드로우 7 포함) + 자연뽕 바가지 50
         Assert.That(ended.scores[1], Is.EqualTo(0));             // 손 소진 승자
     }
 
@@ -828,7 +828,7 @@ public class GameSessionTests
 
         var acted = session.HandleBotAct(BotActToken(ponged)); // 봇 추가 행동 = 자연뽕 손 소진
 
-        Assert.That(For<RoundEndedMsg>(acted, 0).reason, Is.EqualTo("P0 - 뽕 바가지"));
+        Assert.That(For<RoundEndedMsg>(acted, 0).reason, Is.EqualTo("P0 - 자연뽕 바가지"));
     }
 
     [Test]

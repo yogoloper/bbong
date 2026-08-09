@@ -10,4 +10,5 @@ public sealed record PlayerOutcome(
     Hand RemainingHand,
     MeldResult? DeclaredMeld = null,
     bool PongBak = false,
-    bool StopBagaji = false);
+    bool StopBagaji = false,
+    bool NaturalPongBak = false);

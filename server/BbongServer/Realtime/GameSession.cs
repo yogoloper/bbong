@@ -578,8 +578,8 @@ public sealed class GameSession
         {
             seat = seat, number = number, laid = CardDto.FromAll(rest), view = BuildView(s)
         });
-        EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat),
-            $"{_nicknames[_pongDiscarderSeat]} - 뽕 바가지", _pongDiscarderSeat); // 다음 선 = 당한 사람
+        EndRound(output, RoundSettlement.SettleByTwoPong(_round, seat, _pongDiscarderSeat, naturalClear: true),
+            $"{_nicknames[_pongDiscarderSeat]} - 자연뽕 바가지", _pongDiscarderSeat); // 예고 불가 콤보 — 벌점 50
     }
 
     private void HandlePongDiscard(SessionOutput output, int seat, PongDiscardMsg msg)
@@ -950,6 +950,7 @@ public sealed class GameSession
                 handCount = _phase == RoundPhase.WaitingPongDiscard && p.Seat == _pongDeclarerSeat
                     ? p.Hand.Count - _pongLaid.Count
                     : p.Hand.Count,
+                pairExposed = p.Hand.Count == 2 && p.Hand.Cards[0].Number == p.Hand.Cards[1].Number, // 쌍 공개(§7)
                 pongCount = p.PongCount,
                 hasPonged = p.HasPonged,
                 cumulativeDebt = _game.CumulativeDebts[p.Seat]

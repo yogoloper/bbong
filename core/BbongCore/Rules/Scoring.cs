@@ -14,7 +14,8 @@ public static class Scoring
 
         var penalty =
             (outcome.PongBak ? GameConfig.PongBakPenalty : 0) +
-            (outcome.StopBagaji ? GameConfig.StopBagajiPenalty : 0);
+            (outcome.StopBagaji ? GameConfig.StopBagajiPenalty : 0) +
+            (outcome.NaturalPongBak ? GameConfig.NaturalPongBakPenalty : 0);
 
         return baseScore + penalty;
     }

@@ -597,6 +597,16 @@ namespace Bbong.Client
                 rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.sizeDelta = new Vector2(260f, mine ? 84f : 160f);
 
+                if (seatView.pairExposed)
+                {
+                    // 쌍 공개 규칙(§7): 손패 2장이 같은 숫자면 전원에게 알림 — 뽕 바가지 예고
+                    var warn = UiKit.CreateText(panel.transform, "쌍 공개! 뽕 주의", 20, TextAnchor.MiddleCenter,
+                        new Vector2(0f, 0f), new Vector2(1f, mine ? 0.3f : 0.17f));
+                    warn.color = new Color(1f, 0.45f, 0.4f);
+                    warn.fontStyle = FontStyle.Bold;
+                    TableArt.AddOutline(warn);
+                }
+
                 var label = UiKit.CreateText(panel.transform, $"{seatView.nickname}\n빚: {seatView.cumulativeDebt}", 28,
                     TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
                 FitText(label, 18, 28);

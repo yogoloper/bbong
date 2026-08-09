@@ -13,7 +13,8 @@ public sealed record GameConfig(
 {
     // ── 고정 규칙 상수 (rules.md) ──
     public const int HandSize = 5;            // 기본 손패
-    public const int PongBakPenalty = 20;     // 뽕 박 (§7)
+    public const int PongBakPenalty = 20;     // 일반뽕 바가지 — 쌍 공개로 예고된 경우 (§7)
+    public const int NaturalPongBakPenalty = 50; // 자연뽕 바가지 — 뽕+자연뽕 콤보, 예고 불가 (§7)
     public const int StopBagajiPenalty = 30;  // 스톱 바가지 (§6)
     public const int MinPlayers = 2;          // 방 최소 인원 (§9-1)
     public const int MaxPlayers = 6;          // 방 최대 인원 (§9-1)

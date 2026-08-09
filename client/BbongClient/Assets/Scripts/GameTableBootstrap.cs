@@ -437,8 +437,8 @@ namespace Bbong.Client
                 _table.PongFx($"{SeatName(seat)}\n{number}뽕!");
                 _table.GroupFx(seat, laid);
                 _table.GroupFx(seat, clear);
-                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat),
-                    $"{SeatName(discarderSeat)} - 뽕 바가지", seat);
+                EndRound(RoundSettlement.SettleByTwoPong(_round, seat, discarderSeat, naturalClear: true),
+                    $"{SeatName(discarderSeat)} - 자연뽕 바가지", discarderSeat); // 예고 불가 콤보 — 벌점 50
                 return;
             }
 
@@ -757,8 +757,8 @@ namespace Bbong.Client
                 _pendingLaid.AddRange(clear); // 뽕 2장은 이미 내려놓음 — 남은 3장 추가
                 _table.GroupFx(MySeat, clear);
                 _table.PongFx($"{SeatName(MySeat)}\n{clear[0].Number}자연뽕!");
-                EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat),
-                    $"{SeatName(_pongDiscarderSeat)} - 뽕 바가지", MySeat);
+                EndRound(RoundSettlement.SettleByTwoPong(_round, MySeat, _pongDiscarderSeat, naturalClear: true),
+                    $"{SeatName(_pongDiscarderSeat)} - 자연뽕 바가지", _pongDiscarderSeat); // 예고 불가 콤보 — 벌점 50, 다음 선 = 당한 사람
                 return;
             }
 
@@ -947,6 +947,8 @@ namespace Bbong.Client
                     seat = s,
                     nickname = _names[s],
                     handCount = _round.Players[s].Hand.Count + (s == _pendingTossSeat ? 1 : 0),
+                    pairExposed = _round.Players[s].Hand.Count == 2
+                        && _round.Players[s].Hand.Cards[0].Number == _round.Players[s].Hand.Cards[1].Number,
                     pongCount = _round.Players[s].PongCount,
                     hasPonged = _round.Players[s].HasPonged,
                     cumulativeDebt = _game.CumulativeDebts[s]
