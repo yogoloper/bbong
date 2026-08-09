@@ -11,6 +11,7 @@ namespace Bbong.Client
         private static Sprite _button;
         private static Sprite _cardBack;
         private static Sprite _cardBackSmall;
+        private static Sprite _cardBackSmallDanger;
         private static Sprite _backdrop;
         private static Sprite _greenButton;
         private static Sprite _pill;
@@ -33,7 +34,14 @@ namespace Bbong.Client
         /// 좌석 손패 수 표시용 소형 뒷면. 1px대 금테는 서브픽셀 위치에 따라 좌석마다 다르게 뭉개져
         /// (중앙 좌석만 또렷, 측면 좌석은 회색) 도톰한 단일 테두리로 단순화 — 어느 위치서든 균일.
         /// </summary>
-        public static Sprite CardBackSmall => _cardBackSmall ??= CreateCardBackSmall(36, 54, 6);
+        public static Sprite CardBackSmall => _cardBackSmall ??= CreateCardBackSmall(36, 54, 6,
+            top: new Color(0.27f, 0.35f, 0.63f), bottom: new Color(0.10f, 0.14f, 0.32f),
+            lattice: new Color(0.44f, 0.52f, 0.80f), border: new Color(0.87f, 0.82f, 0.68f));
+
+        /// <summary>쌍 공개(§7) 좌석용 붉은 뒷면 — "뽕 바가지 주의"를 색으로 표현.</summary>
+        public static Sprite CardBackSmallDanger => _cardBackSmallDanger ??= CreateCardBackSmall(36, 54, 6,
+            top: new Color(0.72f, 0.26f, 0.28f), bottom: new Color(0.42f, 0.10f, 0.14f),
+            lattice: new Color(0.95f, 0.55f, 0.50f), border: new Color(1f, 0.85f, 0.72f));
 
         /// <summary>메뉴 화면 배경: 진한 네이비 세로 그라데이션 + 별 점.</summary>
         public static Sprite Backdrop => _backdrop ??= CreateBackdrop(512);
@@ -68,12 +76,9 @@ namespace Bbong.Client
             }
         }
 
-        private static Sprite CreateCardBackSmall(int w, int h, int radius)
+        private static Sprite CreateCardBackSmall(int w, int h, int radius,
+            Color top, Color bottom, Color lattice, Color border)
         {
-            var top = new Color(0.27f, 0.35f, 0.63f);
-            var bottom = new Color(0.10f, 0.14f, 0.32f);
-            var lattice = new Color(0.44f, 0.52f, 0.80f);
-            var border = new Color(0.87f, 0.82f, 0.68f); // 웜 라이트 — 금테 대신 넓은 단일 테두리
 
             var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
             var pixels = new Color[w * h];

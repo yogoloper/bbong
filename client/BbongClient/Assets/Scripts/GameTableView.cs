@@ -90,6 +90,8 @@ namespace Bbong.Client
 
         private AudioSource _audio;
         private int _flightsActive;      // 비행 중 카드 수 — 점수판은 전부 착지한 뒤에 노출
+        private RoundView _lastView;     // 착지 후 좌석 재렌더용
+        private Coroutine _pairRefresh;
         private Coroutine _scoreDelay;
         private AudioClip _sfxDraw, _sfxDiscard, _sfxPong, _sfxStop, _sfxShuffle;
         private Image _flash;
@@ -436,6 +438,8 @@ namespace Bbong.Client
         /// </summary>
         public void Render(RoundView view, ICollection<Card> hiddenHandCards = null, bool naturalSelecting = false)
         {
+            _lastView = view; // 착지 후 좌석 재렌더(쌍 공개 전환)용
+
             if (view == null)
             {
                 return;
@@ -573,6 +577,27 @@ namespace Bbong.Client
 
         public void SetEndReason(string text) => _endReason.text = text;
 
+        /// <summary>비행 종료 후 좌석만 다시 그려 쌍 공개(붉은 뒷면)를 착지 시점에 반영.</summary>
+        private void SchedulePairRefresh()
+        {
+            if (_pairRefresh != null)
+            {
+                return;
+            }
+
+            _pairRefresh = StartCoroutine(PairRefreshAfterFlights());
+        }
+
+        private IEnumerator PairRefreshAfterFlights()
+        {
+            yield return new WaitWhile(() => _flightsActive > 0);
+            _pairRefresh = null;
+            if (_lastView != null)
+            {
+                RenderSeats(_lastView);
+            }
+        }
+
         private void RenderSeats(RoundView view)
         {
             foreach (Transform child in _seatsArea)
@@ -597,16 +622,6 @@ namespace Bbong.Client
                 rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.sizeDelta = new Vector2(260f, mine ? 84f : 160f);
 
-                if (seatView.pairExposed)
-                {
-                    // 쌍 공개 규칙(§7): 손패 2장이 같은 숫자면 전원에게 알림 — 뽕 바가지 예고
-                    var warn = UiKit.CreateText(panel.transform, "쌍 공개! 뽕 주의", 20, TextAnchor.MiddleCenter,
-                        new Vector2(0f, 0f), new Vector2(1f, mine ? 0.3f : 0.17f));
-                    warn.color = new Color(1f, 0.45f, 0.4f);
-                    warn.fontStyle = FontStyle.Bold;
-                    TableArt.AddOutline(warn);
-                }
-
                 var label = UiKit.CreateText(panel.transform, $"{seatView.nickname}\n빚: {seatView.cumulativeDebt}", 28,
                     TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
                 FitText(label, 18, 28);
@@ -628,10 +643,17 @@ namespace Bbong.Client
                 // 리샘플링돼 크기가 변해 보이는 원인)을 제거한다. 최다 6장: 231 ≤ 패널 안폭 236.
                 const float bw = 36f, bh = 54f, step = bw + 3f;
                 var rowStart = Mathf.Round(-((seatView.handCount - 1) * step + bw) / 2f + bw / 2f);
+                // 쌍 공개(§7): 붉은 뒷면으로 표현. 비행 중엔 전환을 미뤄 착지 후에 바뀐다.
+                var showDanger = seatView.pairExposed && _flightsActive == 0;
+                if (seatView.pairExposed && _flightsActive > 0)
+                {
+                    SchedulePairRefresh();
+                }
+
                 for (var j = 0; j < seatView.handCount; j++)
                 {
                     var back = UiKit.CreatePanel(panel.transform, Color.white);
-                    back.sprite = UiArt.CardBackSmall; // 표시 크기 전용 — 축소 앨리어싱으로 테두리가 제각각 보이는 문제 방지
+                    back.sprite = showDanger ? UiArt.CardBackSmallDanger : UiArt.CardBackSmall; // 축소 앨리어싱 방지 소형 스프라이트
                     back.type = Image.Type.Simple;
                     var brt = back.rectTransform;
                     brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.28f);
