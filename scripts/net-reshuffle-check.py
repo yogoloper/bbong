@@ -16,9 +16,9 @@ import time
 from playwright.sync_api import sync_playwright
 
 ANCHORS = {
-    "guest_login": (0.500, 0.548),
-    "lobby_friend": (0.582, 0.550),   # 메인 로비 4번째 카드 "친구와 함께"
-    "friend_create": (0.500, 0.490),  # "방 만들기 (호스트)"
+    "guest_login": (0.500, 0.625),
+    "lobby_friend": (0.582, 0.535),   # 메인 로비 4번째 카드 "친구와 함께"
+    "friend_create": (0.500, 0.440),  # "방 만들기 (호스트)"
     "room_add_bot": (0.390, 0.770),   # 대기실 "봇 추가"
     "room_start": (0.500, 0.895),     # "게임 시작" CTA
 }

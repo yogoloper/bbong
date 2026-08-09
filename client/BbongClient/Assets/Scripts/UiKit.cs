@@ -73,10 +73,13 @@ namespace Bbong.Client
             {
                 panel.sprite = UiArt.Panel9;
                 panel.type = Image.Type.Sliced;
-                panel.color = new Color(1f, 1f, 1f, 0.92f);
+                panel.color = new Color(0.10f, 0.16f, 0.32f, 0.95f); // 네이비 틴트 — 배경 테마와 통일
             }
 
             Anchor(panel.rectTransform, new Vector2(0f, 0.9f), new Vector2(1f, 1f));
+
+            var hairline = CreatePanel(root, new Color(Accent.r, Accent.g, Accent.b, 0.30f)); // 골드 헤어라인
+            Anchor(hairline.rectTransform, new Vector2(0f, 0.898f), new Vector2(1f, 0.9f));
 
             var avatar = CreatePanel(root, new Color(0.3f, 0.55f, 0.9f));
             avatar.sprite = UiArt.Pill;
@@ -120,6 +123,7 @@ namespace Bbong.Client
         public static Button CtaButton(Transform parent, string label, Vector2 min, Vector2 max,
             UnityEngine.Events.UnityAction onClick, int fontSize = 48)
         {
+            (min, max) = EnsureTapHeight(min, max);
             var go = new GameObject("Cta", typeof(RectTransform), typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
             var img = go.GetComponent<Image>();
@@ -161,9 +165,28 @@ namespace Bbong.Client
             return text;
         }
 
+        /// <summary>모바일 최소 터치 높이(≈48dp @ 1080유닛 캔버스). 버튼 팩토리가 하한을 강제한다.</summary>
+        public const float MinTapHeight = 0.122f;
+
+        /// <summary>앵커 높이가 터치 하한보다 작으면 중심 기준으로 늘리고 화면 안으로 클램프.</summary>
+        private static (Vector2 min, Vector2 max) EnsureTapHeight(Vector2 min, Vector2 max)
+        {
+            var h = max.y - min.y;
+            if (h >= MinTapHeight || h >= 0.99f) // 레이아웃 그룹용 stretch(0~1)는 그대로
+            {
+                return (min, max);
+            }
+
+            var c = (min.y + max.y) / 2f;
+            var half = MinTapHeight / 2f;
+            var lo = Mathf.Clamp(c - half, 0f, 1f - MinTapHeight);
+            return (new Vector2(min.x, lo), new Vector2(max.x, lo + MinTapHeight));
+        }
+
         public static Button CreateButton(Transform parent, string label, Vector2 min, Vector2 max,
             UnityEngine.Events.UnityAction onClick, int fontSize = 40)
         {
+            (min, max) = EnsureTapHeight(min, max);
             var go = new GameObject("Button", typeof(RectTransform), typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
             var img = go.GetComponent<Image>();

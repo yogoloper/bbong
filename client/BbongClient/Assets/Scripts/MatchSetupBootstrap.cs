@@ -15,7 +15,7 @@ namespace Bbong.Client
     public sealed class MatchSetupBootstrap : MonoBehaviour
     {
         private static readonly Color Selected = UiKit.Accent;
-        private static readonly Color Unselected = new(0.95f, 0.95f, 0.95f);
+        private static readonly Color Unselected = new(0.16f, 0.24f, 0.42f); // 어두운 네이비 — 밝은 것은 선택/CTA뿐
 
         private GameObject _canvas;
         private int _players = 4;
@@ -62,7 +62,7 @@ namespace Bbong.Client
                 new Vector2(0.1f, 0.69f), new Vector2(0.9f, 0.74f));
             var playerCount = GameConfig.MaxPlayers - GameConfig.MinPlayers + 1;
             PlaceChoices(root, 0.58f, 0.67f, 0.09f, playerCount,
-                i => GameConfig.MinPlayers + i, n => $"{n}", _playerChoices, v => _players = v);
+                i => GameConfig.MinPlayers + i, n => $"{n}명", _playerChoices, v => _players = v);
 
             UiKit.CreateText(root, "입장료", 36, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.5f), new Vector2(0.9f, 0.55f));
@@ -99,16 +99,24 @@ namespace Bbong.Client
             }
         }
 
+        private static void Paint(Button button, bool selected)
+        {
+            button.GetComponent<Image>().color = selected ? Selected : Unselected;
+            var text = button.GetComponentInChildren<Text>();
+            text.color = selected ? Color.black : Color.white;
+            text.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
+        }
+
         private void RefreshSelection()
         {
             foreach (var (value, button) in _playerChoices)
             {
-                button.GetComponent<Image>().color = value == _players ? Selected : Unselected;
+                Paint(button, value == _players);
             }
 
             foreach (var (value, button) in _stakeChoices)
             {
-                button.GetComponent<Image>().color = value == _stake ? Selected : Unselected;
+                Paint(button, value == _stake);
             }
 
             // winner-takes-all → 총상금 = 입장료 × 인원

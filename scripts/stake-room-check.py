@@ -13,10 +13,10 @@ import time
 from playwright.sync_api import sync_playwright
 
 ANCHORS = {
-    "guest_login": (0.500, 0.548),
-    "lobby_match": (0.418, 0.550),    # 3번째 카드 "맞춤게임"
+    "guest_login": (0.500, 0.625),
+    "lobby_match": (0.418, 0.535),    # 3번째 카드 "맞춤게임"
     "match_cta": (0.500, 0.895),      # "방 만들기 / 입장"
-    "friend_create": (0.500, 0.490),  # "방 만들기 (호스트)"
+    "friend_create": (0.500, 0.440),  # "방 만들기 (호스트)"
     "room_add_bot": (0.390, 0.770),
     "room_start": (0.500, 0.895),
 }

@@ -42,6 +42,7 @@ namespace Bbong.Client
             _names = new[] { me, "너구리 사범", "수달 조교", "펭귄 문하생" };
 
             _table = gameObject.AddComponent<GameTableView>();
+            _table.SetSeatRadius(new Vector2(0.40f, 0.24f)); // 설명 패널(상단)과 맞은편 좌석 겹침 방지
             _table.MySeat = 0;
             _table.PlayerCount = 4;
             _table.Nicknames = _names;
@@ -69,6 +70,7 @@ namespace Bbong.Client
             {
                 panel.sprite = UiArt.Panel9;
                 panel.type = Image.Type.Sliced;
+                panel.color = new Color(0.10f, 0.14f, 0.26f, 0.96f); // 네이비 틴트 — 상단바와 재질 통일
             }
 
             UiKit.Anchor(panel.rectTransform, new Vector2(0.16f, 0.775f), new Vector2(0.84f, 0.99f));
@@ -77,16 +79,15 @@ namespace Bbong.Client
             shadow.effectDistance = new Vector2(6f, -6f);
 
             _guideText = UiKit.CreateText(panel.transform, "", 28, TextAnchor.MiddleLeft,
-                new Vector2(0.03f, 0.08f), new Vector2(0.77f, 0.92f));
+                new Vector2(0.03f, 0.08f), new Vector2(0.72f, 0.92f));
             _guideText.color = new Color(0.96f, 0.95f, 0.90f);
             _guideText.horizontalOverflow = HorizontalWrapMode.Wrap;
             _guideText.resizeTextForBestFit = true;
             _guideText.resizeTextMinSize = 16;
             _guideText.resizeTextMaxSize = 28;
 
-            var next = UiKit.CreateButton(panel.transform, "다음",
-                new Vector2(0.80f, 0.10f), new Vector2(0.975f, 0.45f), () => _nextPressed = true, 28);
-            next.GetComponent<Image>().color = UiKit.Accent;
+            var next = UiKit.CtaButton(panel.transform, "다음",
+                new Vector2(0.76f, 0.18f), new Vector2(0.97f, 0.62f), () => _nextPressed = true, 28);
             _nextLabel = next.GetComponentInChildren<Text>();
             _nextLabel.fontStyle = FontStyle.Bold;
             _nextBtn = next.gameObject;

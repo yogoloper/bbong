@@ -29,7 +29,7 @@ namespace Bbong.Client
             var descs = new[] { "규칙을 처음부터", "컴퓨터와 연습", "실유저와 포인트 대결", "포인트 없이 친구끼리", "광고 보고 포인트", "닉네임·통계" };
             UnityEngine.Events.UnityAction[] actions = { OnTutorial, OnPractice, OnMatch, OnFriend, OnShop, OnProfile };
 
-            const float pad = 0.012f, top = 0.7f, bottom = 0.2f;
+            const float pad = 0.012f, top = 0.80f, bottom = 0.13f;
             var w = (1f - pad * 7f) / 6f;
             for (var i = 0; i < 6; i++)
             {
@@ -38,23 +38,59 @@ namespace Bbong.Client
             }
         }
 
+        // 모드별 강조색·글리프 — 카드 얼굴이자 하위 화면까지 이어지는 색 체계
+        private static readonly Color[] ModeTint =
+        {
+            new(0.35f, 0.62f, 0.95f), // 튜토리얼 — 하늘
+            new(0.36f, 0.72f, 0.52f), // 연습 — 초록
+            new(0.94f, 0.83f, 0.55f), // 맞춤게임 — 골드
+            new(0.78f, 0.48f, 0.86f), // 친구와 함께 — 보라
+            new(0.95f, 0.66f, 0.32f), // 포인트 얻기 — 주황
+            new(0.60f, 0.66f, 0.80f), // 프로필 — 중성 회청
+        };
+
+        private static readonly string[] ModeGlyph = { "?", "♣", "◆", "♥", "★", "●" };
+
+        private int _modeIndex;
+
         private void Mode(Transform root, string title, string desc, Vector2 min, Vector2 max,
             UnityEngine.Events.UnityAction onClick)
         {
-            // 카드 = 반투명 패널 + 클릭 버튼. 제목은 하단, 위쪽은 색 강조 영역.
+            var i = _modeIndex++;
+
+            // 카드 = 반투명 패널 + 클릭 버튼. 제목은 하단, 위쪽은 모드 색 글리프 영역.
+            if (i == 2)
+            {
+                // 핵심 모드(맞춤게임)엔 골드 테두리로 무게를 싣는다
+                var frame = UiKit.CreatePanel(root, UiKit.Accent);
+                frame.sprite = UiArt.Button;
+                frame.type = Image.Type.Sliced;
+                UiKit.Anchor(frame.rectTransform,
+                    new Vector2(min.x - 0.004f, min.y - 0.008f), new Vector2(max.x + 0.004f, max.y + 0.008f));
+            }
+
             var btn = UiKit.CreateButton(root, "", min, max, onClick);
             btn.GetComponent<Image>().color = new Color(0.12f, 0.22f, 0.42f, 0.95f);
+            var colors = btn.colors;
+            colors.pressedColor = new Color(1.2f, 1.2f, 1.2f); // 눌림 피드백
+            btn.colors = colors;
 
-            var accentTop = UiKit.CreatePanel(btn.transform, new Color(0.2f, 0.4f, 0.75f, 0.5f));
+            var accentTop = UiKit.CreatePanel(btn.transform, ModeTint[i]);
+            accentTop.sprite = UiArt.Pill;
+            accentTop.type = Image.Type.Sliced;
             UiKit.Anchor(accentTop.rectTransform, new Vector2(0.08f, 0.45f), new Vector2(0.92f, 0.9f));
+            var glyph = UiKit.CreateText(accentTop.transform, ModeGlyph[i], 96, TextAnchor.MiddleCenter,
+                Vector2.zero, Vector2.one);
+            glyph.color = new Color(0.10f, 0.16f, 0.30f); // 카드 배경 네이비로 뚫린 느낌
+            glyph.fontStyle = FontStyle.Bold;
 
             var t = UiKit.CreateText(btn.transform, title, 40, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.25f), new Vector2(1f, 0.42f));
             t.color = Color.white;
             t.fontStyle = FontStyle.Bold;
-            var d = UiKit.CreateText(btn.transform, desc, 22, TextAnchor.MiddleCenter,
+            var d = UiKit.CreateText(btn.transform, desc, 26, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.08f), new Vector2(1f, 0.24f));
-            d.color = new Color(1f, 1f, 1f, 0.6f);
+            d.color = new Color(1f, 1f, 1f, 0.8f);
         }
 
         private void OnTutorial() => UiKit.GoTo<TutorialBootstrap>(_canvas, this);

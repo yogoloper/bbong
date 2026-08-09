@@ -55,10 +55,14 @@ namespace Bbong.Client
             UiKit.CreateText(root, "포인트 없이 친구들과 한 판 (입장료 없음)", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.66f), new Vector2(0.9f, 0.73f)).color = new Color(1f, 1f, 1f, 0.7f);
 
-            UiKit.CreateButton(root, "방 만들기 (호스트)",
-                new Vector2(0.34f, 0.46f), new Vector2(0.66f, 0.56f), OnCreateRoom, 38);
+            UiKit.CtaButton(root, "방 만들기 (호스트)",
+                new Vector2(0.34f, 0.50f), new Vector2(0.66f, 0.62f), OnCreateRoom, 38);
             UiKit.CreateButton(root, "초대코드로 입장",
-                new Vector2(0.34f, 0.33f), new Vector2(0.66f, 0.43f), BuildCodeInput, 38);
+                new Vector2(0.34f, 0.36f), new Vector2(0.66f, 0.48f), BuildCodeInput, 38);
+
+            UiKit.CreateText(root, "방을 만들면 6자리 초대코드가 나옵니다.\n친구에게 코드를 알려주고 함께 시작하세요.", 28,
+                TextAnchor.MiddleCenter, new Vector2(0.1f, 0.20f), new Vector2(0.9f, 0.32f))
+                .color = new Color(1f, 1f, 1f, 0.7f);
 
             BuildStatus(root);
             UiKit.BackButton(root, () => UiKit.GoTo<MainLobbyBootstrap>(_canvas, this));

@@ -37,7 +37,7 @@ namespace Bbong.Client
             UiKit.Anchor(statsPanel.rectTransform, new Vector2(0.2f, 0.3f), new Vector2(0.8f, 0.52f));
             UiKit.CreateText(root, "전적\n0전 0승 0패  ·  최고 기록 -", 32, TextAnchor.MiddleCenter,
                 new Vector2(0.2f, 0.3f), new Vector2(0.8f, 0.52f)).color = new Color(1, 1, 1, 0.6f);
-            UiKit.CreateText(root, "(통계·게임 기록은 온라인 플레이 후 집계 — Phase 5)", 24, TextAnchor.MiddleCenter,
+            UiKit.CreateText(root, "온라인 게임을 플레이하면 전적이 쌓입니다", 24, TextAnchor.MiddleCenter,
                 new Vector2(0.2f, 0.24f), new Vector2(0.8f, 0.29f)).color = new Color(1, 1, 1, 0.4f);
 
             UiKit.BackButton(root, Back);

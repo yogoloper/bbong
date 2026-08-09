@@ -27,16 +27,30 @@ namespace Bbong.Client
             var title = UiKit.CreateText(root, "나이롱뽕", 110, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.62f), new Vector2(0.9f, 0.82f));
             title.fontStyle = FontStyle.Bold;
+            title.color = UiKit.Accent; // 첫 화면부터 테마 골드
+            var titleShadow = title.gameObject.AddComponent<UnityEngine.UI.Shadow>();
+            titleShadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
+            titleShadow.effectDistance = new Vector2(0f, -6f);
 
-            _guestBtn = UiKit.CreateButton(root, "게스트로 시작",
-                new Vector2(0.34f, 0.4f), new Vector2(0.66f, 0.5f), OnGuest, 44);
+            // 카드게임 첫인상 — 카드 뒷면 3장 부채꼴
+            for (var i = -1; i <= 1; i++)
+            {
+                var back = UiKit.CreateIcon(root, UiArt.CardBack,
+                    new Vector2(0.465f + i * 0.035f, 0.48f), new Vector2(0.535f + i * 0.035f, 0.60f));
+                back.transform.localRotation = Quaternion.Euler(0f, 0f, -i * 12f);
+            }
+
+            _guestBtn = UiKit.CtaButton(root, "게스트로 시작",
+                new Vector2(0.34f, 0.32f), new Vector2(0.66f, 0.43f), OnGuest, 44);
 
             var social = UiKit.CreateButton(root, "소셜 로그인 (준비중)",
-                new Vector2(0.34f, 0.28f), new Vector2(0.66f, 0.37f), () => { }, 34);
+                new Vector2(0.34f, 0.20f), new Vector2(0.66f, 0.29f), () => { }, 30);
             social.interactable = false;
+            social.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.15f); // 텍스트 버튼 수준으로 강등
+            social.GetComponentInChildren<Text>().color = new Color(1f, 1f, 1f, 0.5f);
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.12f), new Vector2(0.9f, 0.24f));
+                new Vector2(0.1f, 0.08f), new Vector2(0.9f, 0.17f));
             _status.color = new Color(1f, 0.8f, 0.5f);
         }
 

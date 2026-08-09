@@ -16,10 +16,10 @@ from playwright.sync_api import sync_playwright
 
 # 메인 로비 6카드: pad 0.012, w=(1-0.084)/6 — 카드 중심 x
 CARD_X = [0.012 + i * ((1 - 0.084) / 6 + 0.012) + ((1 - 0.084) / 6) / 2 for i in range(6)]
-CARD_Y = 0.55
+CARD_Y = 0.535
 
 ANCHORS = {
-    "guest_login": (0.500, 0.548),
+    "guest_login": (0.500, 0.625),
     "back": (0.067, 0.940),        # 좌하단 "← 뒤로"
     "practice_start": (0.500, 0.895),
 }

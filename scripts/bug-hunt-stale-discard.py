@@ -21,8 +21,8 @@ import sys
 from playwright.sync_api import sync_playwright
 
 ANCHORS = {
-    "guest_login": (0.500, 0.548),
-    "lobby_practice": (0.253, 0.550),
+    "guest_login": (0.500, 0.625),
+    "lobby_practice": (0.253, 0.535),
     "practice_start": (0.500, 0.895),
 }
 

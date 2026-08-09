@@ -53,7 +53,10 @@ namespace Bbong.Client
         private Font _font;
         private GameObject _canvasGo;
         private static readonly Vector2 SeatCenter = new(0.50f, 0.58f); // 좌석 타원 중심/반경(좌석·비행 연출 공용)
-        private static readonly Vector2 SeatRadius = new(0.40f, 0.30f);
+        private Vector2 _seatRadius = new(0.40f, 0.30f);
+
+        /// <summary>좌석 타원 반경 조정(튜토리얼: 설명 패널과 맞은편 좌석 겹침 방지).</summary>
+        public void SetSeatRadius(Vector2 radius) => _seatRadius = radius;
         private static readonly Vector2 DeckAnchor = new(0.40f, 0.555f); // 드로우 덱 — 중앙에서 살짝 왼쪽(버림 더미와 한 세트)
         private static readonly Vector2 HeapScreenAnchor = new(0.578f, 0.555f); // 버림 더미 중심(화면 좌표 — 비행 연출용)
         private const float GroupSpread = 68f; // 그룹(뽕/공개 패) 부채꼴 카드 간격
@@ -167,6 +170,15 @@ namespace Bbong.Client
             var deckShadow = _deckGroup.AddComponent<Shadow>();
             deckShadow.effectColor = new Color(0f, 0f, 0f, 0.45f);
             deckShadow.effectDistance = new Vector2(6f, -6f);
+
+            var deckLabel = UiKit.CreateText(_deckGroup.transform, "남은 카드", 18, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            deckLabel.color = new Color(1f, 1f, 1f, 0.6f);
+            var deckLabelRt = deckLabel.rectTransform;
+            deckLabelRt.anchorMin = new Vector2(0f, 0f);
+            deckLabelRt.anchorMax = new Vector2(1f, 0f);
+            deckLabelRt.pivot = new Vector2(0.5f, 1f);
+            deckLabelRt.offsetMin = new Vector2(0f, -66f);
+            deckLabelRt.offsetMax = new Vector2(0f, -44f);
 
             _deckCount = UiKit.CreateText(_deckGroup.transform, "", 26, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
             _deckCount.fontStyle = FontStyle.Bold;
@@ -347,11 +359,12 @@ namespace Bbong.Client
         /// <summary>나가기 버튼(우상단 코너 — 손패·액션 버튼과 대각선 반대라 오클릭 최소) + 확인 모달.</summary>
         private void BuildExitUi(Transform root)
         {
+            // 나가기: 터치 가능 크기(≈48dp) + 중성 회색 — 붉은색은 확인 모달의 파괴적 동작에만
             var exitBtn = UiKit.CreateButton(root, "나가기",
-                new Vector2(0.928f, 0.945f), new Vector2(0.995f, 0.993f), ShowExitConfirm, 22);
-            exitBtn.GetComponent<Image>().color = new Color(0.45f, 0.18f, 0.20f, 0.92f);
+                new Vector2(0.90f, 0.90f), new Vector2(0.99f, 0.98f), ShowExitConfirm, 26);
+            exitBtn.GetComponent<Image>().color = new Color(0.32f, 0.36f, 0.44f, 0.92f);
             var exitLabel = exitBtn.GetComponentInChildren<Text>();
-            exitLabel.color = new Color(1f, 0.85f, 0.85f);
+            exitLabel.color = Color.white;
             exitLabel.fontStyle = FontStyle.Bold;
             TableArt.AddOutline(exitLabel);
 
@@ -618,6 +631,27 @@ namespace Bbong.Client
 
                 var mine = seatView.seat == MySeat;
                 var highlight = focusSeat == seatView.seat;
+                if (mine)
+                {
+                    // 내 좌석 상시 골드 테두리 — 턴 강조(채움)와 구분되는 정체성 표식
+                    var frame = UiKit.CreatePanel(_seatsArea, new Color(UiKit.Accent.r, UiKit.Accent.g, UiKit.Accent.b, 0.45f));
+                    frame.sprite = UiArt.Button;
+                    frame.type = Image.Type.Sliced;
+                    frame.raycastTarget = false;
+                    var frameRt = frame.rectTransform;
+                    frameRt.anchorMin = frameRt.anchorMax = anchor;
+                    frameRt.pivot = new Vector2(0.5f, 0.5f);
+                    frameRt.sizeDelta = new Vector2(268f, 92f);
+
+                    // 좌석 패널이 반투명이라 골드가 전체에 비쳐 보임 — 불투명 속판으로 가려 테두리만 남긴다
+                    var inner = UiKit.CreatePanel(_seatsArea, new Color(0.07f, 0.11f, 0.22f, 1f));
+                    inner.raycastTarget = false;
+                    var innerRt = inner.rectTransform;
+                    innerRt.anchorMin = innerRt.anchorMax = anchor;
+                    innerRt.pivot = new Vector2(0.5f, 0.5f);
+                    innerRt.sizeDelta = new Vector2(260f, 84f);
+                }
+
                 var panel = UiKit.CreatePanel(_seatsArea, highlight ? new Color(0.9f, 0.8f, 0.2f, 0.55f) : new Color(0, 0, 0, 0.35f));
                 var rt = panel.rectTransform;
                 rt.anchorMin = rt.anchorMax = anchor;
@@ -677,7 +711,7 @@ namespace Bbong.Client
         {
             var displayIndex = (seat - MySeat + PlayerCount) % PlayerCount;
             var angle = (-90f + displayIndex * 360f / PlayerCount) * Mathf.Deg2Rad;
-            return SeatCenter + new Vector2(Mathf.Cos(angle) * SeatRadius.x, Mathf.Sin(angle) * SeatRadius.y);
+            return SeatCenter + new Vector2(Mathf.Cos(angle) * _seatRadius.x, Mathf.Sin(angle) * _seatRadius.y);
         }
 
         private void RenderHand(RoundView view, ICollection<Card> hidden)
@@ -721,6 +755,7 @@ namespace Bbong.Client
             const float w = 120f, h = 180f;
             var heapAnchor = new Vector2(0.63f, 0.45f); // 버림 더미 — 중앙에서 살짝 오른쪽(덱과 한 세트)
             GameObject last = null;
+            var singles = new List<GameObject>();
             foreach (var (cards, group, pos, rot) in _timeline)
             {
                 if (group)
@@ -734,7 +769,17 @@ namespace Bbong.Client
                 else
                 {
                     last = PlaceCard(cards[0], w, h, heapAnchor, pos, rot);
+                    singles.Add(last);
                 }
+            }
+
+            // 맨 위(마지막) 낱장만 원색 — 아래 깔린 낱장은 어둡게+축소해 위계를 만든다
+            for (var i = 0; i < singles.Count - 1; i++)
+            {
+                singles[i].transform.localScale = Vector3.one * 0.92f;
+                var dim = UiKit.CreatePanel(singles[i].transform, new Color(0.03f, 0.05f, 0.12f, 0.45f));
+                dim.raycastTarget = false;
+                UiKit.Stretch(dim.rectTransform);
             }
 
             if (last != null)

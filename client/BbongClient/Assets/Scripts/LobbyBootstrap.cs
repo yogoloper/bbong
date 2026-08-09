@@ -16,7 +16,7 @@ namespace Bbong.Client
     public sealed class LobbyBootstrap : MonoBehaviour
     {
         private static readonly Color SelectedColor = UiKit.Accent;
-        private static readonly Color UnselectedColor = new(0.95f, 0.95f, 0.95f);
+        private static readonly Color UnselectedColor = new(0.16f, 0.24f, 0.42f); // 어두운 네이비 — 밝은 것은 선택/CTA뿐
 
         // 봇 난이도 표시명(쉬움/보통/어려움)
         private static readonly (BotDifficulty value, string label)[] Difficulties =
@@ -127,16 +127,24 @@ namespace Bbong.Client
             registry.Add((value, button));
         }
 
+        private static void Paint(Button button, bool selected)
+        {
+            button.GetComponent<Image>().color = selected ? SelectedColor : UnselectedColor;
+            var text = button.GetComponentInChildren<Text>();
+            text.color = selected ? Color.black : Color.white;
+            text.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
+        }
+
         private void RefreshSelection()
         {
             foreach (var (value, button) in _playerChoices)
             {
-                button.GetComponent<Image>().color = value == _playerCount ? SelectedColor : UnselectedColor;
+                Paint(button, value == _playerCount);
             }
 
             foreach (var (value, button) in _difficultyChoices)
             {
-                button.GetComponent<Image>().color = value == (int)_difficulty ? SelectedColor : UnselectedColor;
+                Paint(button, value == (int)_difficulty);
             }
 
             var label = Difficulties[System.Array.FindIndex(Difficulties, d => d.value == _difficulty)].label;

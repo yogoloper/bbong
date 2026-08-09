@@ -25,8 +25,8 @@ from playwright.sync_api import sync_playwright
 
 # 클릭 지점 (캔버스 기준 정규화 좌표, 좌상단 원점) — 코드 생성 UI 앵커에서 유도
 ANCHORS = {
-    "guest_login": (0.500, 0.548),   # AuthBootstrap "게스트로 시작"
-    "lobby_practice": (0.253, 0.550),  # 메인 로비 2번째 카드 "연습"
+    "guest_login": (0.500, 0.625),   # AuthBootstrap "게스트로 시작"
+    "lobby_practice": (0.253, 0.535),  # 메인 로비 2번째 카드 "연습"
     "practice_start": (0.500, 0.895),  # 연습 설정 "게임 시작" CTA
 }
 
