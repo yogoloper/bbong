@@ -59,16 +59,6 @@ namespace Bbong.Client
             var i = _modeIndex++;
 
             // 카드 = 반투명 패널 + 클릭 버튼. 제목은 하단, 위쪽은 모드 색 글리프 영역.
-            if (i == 2)
-            {
-                // 핵심 모드(맞춤게임)엔 골드 테두리로 무게를 싣는다
-                var frame = UiKit.CreatePanel(root, UiKit.Accent);
-                frame.sprite = UiArt.Button;
-                frame.type = Image.Type.Sliced;
-                UiKit.Anchor(frame.rectTransform,
-                    new Vector2(min.x - 0.004f, min.y - 0.008f), new Vector2(max.x + 0.004f, max.y + 0.008f));
-            }
-
             var btn = UiKit.CreateButton(root, "", min, max, onClick);
             btn.GetComponent<Image>().color = new Color(0.12f, 0.22f, 0.42f, 0.95f);
             var colors = btn.colors;
