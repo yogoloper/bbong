@@ -131,9 +131,9 @@ public sealed class Bot
     {
         var mySum = round.Players[seat].Hand.Sum();
         var rivals = round.Players.Count(p => p.Seat != seat && p.HasPonged && p.Hand.Count == 2);
-        if (rivals == 0 || mySum <= 2)
+        if (rivals == 0)
         {
-            return 0.0; // 최소 조합이 1+1=2 — 합 2 이하는 언더컷 불가
+            return 0.0;
         }
 
         var seen = new List<Card>(round.Players[seat].Hand.Cards);
@@ -152,7 +152,7 @@ public sealed class Bot
             for (var j = i + 1; j < pool.Count; j++)
             {
                 total++;
-                if (pool[i] + pool[j] < mySum)
+                if (pool[i] + pool[j] <= mySum) // 동점도 스톱 실패(§6)
                 {
                     lower++;
                 }

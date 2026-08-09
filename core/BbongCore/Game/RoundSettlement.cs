@@ -42,9 +42,10 @@ public static class RoundSettlement
     /// 바가지면 선언자=손패 합+30, 나머지 전원 0. 아니면 전원 남은 손패 합.
     /// </summary>
     /// <summary>
-    /// 스톱 종료(§6, §8). 정상 스톱: 전원 남은 손패 합.
-    /// 스톱 바가지: 바가지 먹인 승자(최저 손합 뽕 게이머)만 0, 당한 선언자는 손합+30,
+    /// 스톱 종료(§6, §8).
+    /// 성공(자기 손합이 뽕 게이머 중 유일 최저): 선언자는 (한도 − 손합)만큼 빚 청산(음수),
     /// 나머지는 자기 남은 손패 합.
+    /// 실패(박): 먹인 승자 0, 당한 선언자 손합+30, 나머지는 자기 남은 손패 합.
     /// </summary>
     public static int[] SettleByStop(RoundState round, int stopSeat, int stopLimit = 10)
     {
@@ -54,12 +55,19 @@ public static class RoundSettlement
         return round.Players
             .Select(p =>
             {
-                if (bagaji && p.Seat == winner)
+                if (bagaji)
                 {
-                    return 0; // 바가지 먹인 사람
+                    if (p.Seat == winner)
+                    {
+                        return 0; // 바가지 먹인 사람
+                    }
+
+                    return Scoring.Score(new PlayerOutcome(p.Hand, StopBagaji: p.Seat == stopSeat));
                 }
 
-                return Scoring.Score(new PlayerOutcome(p.Hand, StopBagaji: bagaji && p.Seat == stopSeat));
+                return p.Seat == stopSeat
+                    ? -(stopLimit - p.Hand.Sum()) // 성공 보상: 낮게 끊을수록 크게 청산 (예: 합 3 → -7)
+                    : Scoring.Score(new PlayerOutcome(p.Hand));
             })
             .ToArray();
     }
@@ -71,7 +79,8 @@ public static class RoundSettlement
         var min = round.Players[stopSeat].Hand.Sum();
         foreach (var p in round.Players)
         {
-            if (p.Seat != stopSeat && p.HasPonged && p.Hand.Sum() < min)
+            if (p.Seat != stopSeat && p.HasPonged && p.Hand.Sum() <= min && p.Seat != winner
+                && (winner == stopSeat || p.Hand.Sum() < min))
             {
                 winner = p.Seat;
                 min = p.Hand.Sum();

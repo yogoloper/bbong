@@ -21,11 +21,12 @@ public static class StopResolver
     /// <summary>
     /// 스톱 바가지: 스톱 선언자보다 손패 합이 더 작은 '뽕한(2장)' 게이머가 있으면 true(rules.md §6-3).
     /// </summary>
+    /// <summary>스톱 실패(박) 판정: 선언자보다 손합이 "적거나 같은" 뽕 게이머가 있으면 실패(§6 — 동점도 실패).</summary>
     public static bool IsBagaji(RoundState round, int stopSeat)
     {
         var declarerSum = round.Players[stopSeat].Hand.Sum();
 
         return round.Players.Any(p =>
-            p.Seat != stopSeat && p.HasPonged && p.Hand.Sum() < declarerSum);
+            p.Seat != stopSeat && p.HasPonged && p.Hand.Sum() <= declarerSum);
     }
 }

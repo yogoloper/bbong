@@ -188,15 +188,15 @@ public class BotTests
     [Test]
     public void Bagaji_risk_reflects_unseen_card_pool()
     {
-        // 위험 풀: 미공개 9장(저카드 7 + 상대 숨은 2장) → 합<4 쌍 15/36 ≈ 0.417
-        Assert.That(Bot.EstimateBagajiRisk(CountingRound(unseenLow: true), 0), Is.EqualTo(15.0 / 36).Within(1e-9));
+        // 위험 풀: 미공개 9장(저카드 7 + 상대 숨은 2장) → 합≤4 쌍(동점 실패 포함) 21/36 ≈ 0.583
+        Assert.That(Bot.EstimateBagajiRisk(CountingRound(unseenLow: true), 0), Is.EqualTo(21.0 / 36).Within(1e-9));
         Assert.That(Bot.EstimateBagajiRisk(CountingRound(unseenLow: false), 0), Is.EqualTo(0.0));
     }
 
     [Test]
     public void Normal_counts_cards_to_avoid_bagaji_stops()
     {
-        // 합 4(기본 30%). 안전 풀 → 30% 유지(roll 20 → 스톱). 위험 풀 → 30×(1−0.417)=17%로 급감(roll 20 → 보류)
+        // 합 4(기본 30%). 안전 풀 → 30% 유지(roll 20 → 스톱). 위험 풀 → 30×(1−0.583)=12%로 급감(roll 20 → 보류)
         Assert.That(new Bot(BotDifficulty.Normal, new FixedRandom(20))
             .ShouldStop(CountingRound(unseenLow: false), 0), Is.True);
         Assert.That(new Bot(BotDifficulty.Normal, new FixedRandom(20))

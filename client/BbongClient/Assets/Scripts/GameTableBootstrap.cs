@@ -654,27 +654,9 @@ namespace Bbong.Client
 
         private static string MeldName(MeldType type) => MeldNames.Korean(type); // 단일 출처: 코어 MeldNames
 
-        /// <summary>스톱 종료 시 다음 판 선: 바가지면 이긴 자(최저 손합 뽕한 게이머), 아니면 스톱 선언자.</summary>
-        private int StopEnderSeat(int stopSeat)
-        {
-            if (!StopResolver.IsBagaji(_round, stopSeat))
-            {
-                return stopSeat;
-            }
-
-            var winner = stopSeat;
-            var min = _round.Players[stopSeat].Hand.Sum();
-            for (var s = 0; s < PlayerCount; s++)
-            {
-                if (_round.Players[s].HasPonged && _round.Players[s].Hand.Sum() < min)
-                {
-                    min = _round.Players[s].Hand.Sum();
-                    winner = s;
-                }
-            }
-
-            return winner;
-        }
+        /// <summary>스톱 공개 손패 주인: 정상=선언자, 바가지=먹인 승자(동점 포함, 코어 단일 출처).</summary>
+        private int StopEnderSeat(int stopSeat) =>
+            StopResolver.IsBagaji(_round, stopSeat) ? RoundSettlement.BagajiWinner(_round, stopSeat) : stopSeat;
 
         private void OnStop()
         {

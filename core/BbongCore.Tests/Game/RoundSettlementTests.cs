@@ -93,16 +93,28 @@ public class RoundSettlementTests
     // ── 스톱 종료 (rules.md §6, §8) ──
 
     [Test]
-    public void SettleByStop_without_bagaji_everyone_scores_hand_sum()
+    public void SettleByStop_success_clears_debt_by_ten_minus_hand()
     {
+        // 성공한 스톱: 선언자는 (10 − 손합)만큼 빚 청산(음수), 나머지는 자기 손합
         var round = Round(
-            new Player(0, HandOf(1, 2), PongCount: 1),       // 3 (최저, 스톱 선언자)
+            new Player(0, HandOf(1, 2), PongCount: 1),       // 합 3 → -(10-3) = -7
             new Player(1, HandOf(2, 4), PongCount: 1),       // 6
             new Player(2, HandOf(6, 8, 1, 2, 5)));           // 22 (미뽕)
 
         var scores = RoundSettlement.SettleByStop(round, stopSeat: 0);
 
-        Assert.That(scores, Is.EqualTo(new[] { 3, 6, 22 }));
+        Assert.That(scores, Is.EqualTo(new[] { -7, 6, 22 }));
+    }
+
+    [Test]
+    public void Stop_fails_on_tie_hand_sum()
+    {
+        // 동점(합 6 vs 6)도 실패(박) — "적거나 같은 유저가 없어야" 성공
+        var round = Round(
+            new Player(0, HandOf(2, 4), PongCount: 1),
+            new Player(1, HandOf(1, 5), PongCount: 1));
+
+        Assert.That(StopResolver.IsBagaji(round, stopSeat: 0), Is.True);
     }
 
 }

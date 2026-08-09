@@ -721,26 +721,8 @@ public sealed class GameSession
     }
 
     /// <summary>스톱 승자: 정상 스톱=선언자, 바가지=가장 낮은 손패 합의 뽕 게이머(클라 로직 이식).</summary>
-    private int StopEnderSeat(int stopSeat, bool bagaji)
-    {
-        if (!bagaji)
-        {
-            return stopSeat;
-        }
-
-        var winner = stopSeat;
-        var min = _round.Players[stopSeat].Hand.Sum();
-        for (var s = 0; s < _playerCount; s++)
-        {
-            if (_round.Players[s].HasPonged && _round.Players[s].Hand.Sum() < min)
-            {
-                min = _round.Players[s].Hand.Sum();
-                winner = s;
-            }
-        }
-
-        return winner;
-    }
+    private int StopEnderSeat(int stopSeat, bool bagaji) =>
+        bagaji ? RoundSettlement.BagajiWinner(_round, stopSeat) : stopSeat; // 공개 손패 주인(동점 승자 포함)
 
     private void ClosePongWindow(SessionOutput output)
     {
