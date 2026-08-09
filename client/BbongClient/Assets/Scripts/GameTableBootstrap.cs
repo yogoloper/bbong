@@ -240,7 +240,7 @@ namespace Bbong.Client
 
                 _state = UiState.BotTurn; // 이전 턴의 NeedDiscard가 남아 내 문구·클릭이 살아있는 버그 방지
 
-                if (StopResolver.CanStop(_round, seat) && _bots[seat].ShouldStop(_round, seat))
+                if (StopResolver.CanStop(_round, seat) && _bots[seat].ShouldStop(_round, seat, _game))
                 {
                     yield return new WaitForSeconds(BotDelay); // 직전 카드 착지 후 한 박자 고민하고 선언
                     AnnounceStop(seat);

@@ -198,7 +198,7 @@ public sealed class GameSession
             case RoundPhase.WaitingStop when _botSeats.Contains(_round.CurrentSeat):
             {
                 var seat = _round.CurrentSeat;
-                if (StopResolver.CanStop(_round, seat) && _bots[seat]!.ShouldStop(_round, seat))
+                if (StopResolver.CanStop(_round, seat) && _bots[seat]!.ShouldStop(_round, seat, _game))
                 {
                     var bagaji = StopResolver.IsBagaji(_round, seat);
                     var ender = StopEnderSeat(seat, bagaji);

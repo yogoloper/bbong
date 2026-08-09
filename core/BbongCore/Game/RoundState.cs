@@ -58,6 +58,9 @@ public sealed class RoundState
 
     public IReadOnlyList<Card> DiscardPile => _discardPile;
 
+    /// <summary>뽕/자연뽕으로 테이블에 공개된 나간 패 — 카드 카운팅(공개 정보)용.</summary>
+    public IReadOnlyList<Card> ExhaustPile => _exhaustPile;
+
     public int CurrentSeat { get; }
 
     public Player CurrentPlayer => _players[CurrentSeat];

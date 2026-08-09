@@ -71,7 +71,7 @@ public sealed class Bot
     /// Normal/Hard=손합이 낮을수록 높은 확률로 스톱(항상 지르던 편중을 확률 밴드로 완화).
     /// Hard는 추가로 바가지 회피 + 손패가 쌍이면 두 번 뽕(손 털기·상대 박 +20)을 노리고 자주 보류.
     /// </summary>
-    public bool ShouldStop(RoundState round, int seat)
+    public bool ShouldStop(RoundState round, int seat, GameState? game = null)
     {
         if (Difficulty == BotDifficulty.Easy)
         {
@@ -85,24 +85,82 @@ public sealed class Bot
             return false;
         }
 
-        if (Difficulty == BotDifficulty.Hard)
+        var hard = Difficulty == BotDifficulty.Hard;
+        var leading = game is not null && IsLeading(game, seat);
+
+        if (hard)
         {
             if (StopResolver.IsBagaji(round, seat))
             {
                 return false; // 지면서 +30 무는 스톱은 절대 안 함
             }
 
-            if (IsPair(hand) && Chance(70))
+            // 쌍 보류(두 번 뽕 노림): 1등이면 도박 대신 굳히기(25%), 뒤지면 한 방 지향(85%), 정보 없으면 70%
+            var holdPct = game is null ? 70 : leading ? 25 : 85;
+            if (IsPair(hand) && Chance(holdPct))
             {
-                return false; // 쌍 유지 — 두 번 뽕 한 방을 노린다
+                return false;
             }
         }
 
-        var hard = Difficulty == BotDifficulty.Hard;
         var pct = sum <= 2 ? (hard ? 85 : 80)
             : sum <= 5 ? (hard ? 40 : 30)
             : (hard ? 12 : 8);
+
+        // 카드 카운팅(공개 정보): 스톱 바가지 위험이 높을수록 지르지 않는다 (Normal·Hard 공통)
+        pct = (int)(pct * (1 - EstimateBagajiRisk(round, seat)));
+
+        if (hard && game is not null)
+        {
+            // 순위 전략: 1등이면 빨리 라운드를 끝내 리드를 굳히고, 뒤지면 스톱 대신 빚 유도(§8)
+            pct = leading ? System.Math.Min(95, pct * 2) : pct / 2;
+        }
+
         return Chance(pct);
+    }
+
+    /// <summary>내 누적 빚이 (공동)최저인지 — 1등 방어 전략 판단.</summary>
+    private static bool IsLeading(GameState game, int seat) =>
+        game.CumulativeDebts[seat] <= game.CumulativeDebts.Min();
+
+    /// <summary>
+    /// 공개 정보(내 손, 버림 더미, 나간 패)만으로 "뽕한 상대 중 내 손합보다 낮은 2장 조합" 확률을 추정.
+    /// 미공개 풀에서 무작위 2장을 뽑는 모델 — 실제 상대 손은 보지 않는다(공정 카운팅).
+    /// </summary>
+    public static double EstimateBagajiRisk(RoundState round, int seat)
+    {
+        var mySum = round.Players[seat].Hand.Sum();
+        var rivals = round.Players.Count(p => p.Seat != seat && p.HasPonged && p.Hand.Count == 2);
+        if (rivals == 0 || mySum <= 2)
+        {
+            return 0.0; // 최소 조합이 1+1=2 — 합 2 이하는 언더컷 불가
+        }
+
+        var seen = new List<Card>(round.Players[seat].Hand.Cards);
+        seen.AddRange(round.DiscardPile);
+        seen.AddRange(round.ExhaustPile);
+        var pool = Deck.CreateStandard().Cards.Except(seen).Select(c => c.Number).ToList();
+        if (pool.Count < 2)
+        {
+            return 0.0;
+        }
+
+        var lower = 0;
+        var total = 0;
+        for (var i = 0; i < pool.Count; i++)
+        {
+            for (var j = i + 1; j < pool.Count; j++)
+            {
+                total++;
+                if (pool[i] + pool[j] < mySum)
+                {
+                    lower++;
+                }
+            }
+        }
+
+        var perRival = (double)lower / total;
+        return 1 - System.Math.Pow(1 - perRival, rivals);
     }
 
     private bool Chance(int percent) => _rng.Next(100) < percent;

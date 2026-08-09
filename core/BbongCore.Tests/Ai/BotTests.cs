@@ -168,4 +168,75 @@ public class BotTests
 
         Assert.That(discard.Number, Is.EqualTo(9));
     }
+
+    // ── 카드 카운팅: 공개 정보(버림·나간 패·내 손)로 스톱 바가지 위험 추정 ──
+
+    /// <summary>내(합 4) + 뽕한 상대 1명. unseenLow=true면 미공개 풀이 저카드 천지(위험), false면 11·12뿐(안전).</summary>
+    private static RoundState CountingRound(bool unseenLow)
+    {
+        var me = new Player(0, HandOf(C(1, CardColor.Red), C(3, CardColor.Red)), PongCount: 1);
+        var opp = new Player(1, HandOf(C(6, CardColor.Red), C(6, CardColor.Blue)), PongCount: 1);
+        // 미공개 풀 조작: 위험 케이스는 1·2만 남기고 전부 공개(버림), 안전 케이스는 11·12만 남김
+        var all = Deck.CreateStandard().Cards.ToList();
+        var mine = new[] { C(1, CardColor.Red), C(3, CardColor.Red), C(6, CardColor.Red), C(6, CardColor.Blue) };
+        bool Unseen(Card c) => unseenLow ? c.Number <= 2 : c.Number >= 11;
+        var visible = all.Where(c => !mine.Contains(c) && !Unseen(c)).ToList();
+        var unseenPool = all.Where(c => !mine.Contains(c) && Unseen(c)).ToList();
+        return RoundState.Restore(new[] { me, opp }, unseenPool, visible, 0, new SeededRandom(1));
+    }
+
+    [Test]
+    public void Bagaji_risk_reflects_unseen_card_pool()
+    {
+        // 위험 풀: 미공개 9장(저카드 7 + 상대 숨은 2장) → 합<4 쌍 15/36 ≈ 0.417
+        Assert.That(Bot.EstimateBagajiRisk(CountingRound(unseenLow: true), 0), Is.EqualTo(15.0 / 36).Within(1e-9));
+        Assert.That(Bot.EstimateBagajiRisk(CountingRound(unseenLow: false), 0), Is.EqualTo(0.0));
+    }
+
+    [Test]
+    public void Normal_counts_cards_to_avoid_bagaji_stops()
+    {
+        // 합 4(기본 30%). 안전 풀 → 30% 유지(roll 20 → 스톱). 위험 풀 → 30×(1−0.417)=17%로 급감(roll 20 → 보류)
+        Assert.That(new Bot(BotDifficulty.Normal, new FixedRandom(20))
+            .ShouldStop(CountingRound(unseenLow: false), 0), Is.True);
+        Assert.That(new Bot(BotDifficulty.Normal, new FixedRandom(20))
+            .ShouldStop(CountingRound(unseenLow: true), 0), Is.False);
+    }
+
+    // ── Hard 순위 전략: 1등이면 빨리 털고, 뒤지면 바가지 유도 ──
+
+    private static GameState Standings(int myDebt, int otherDebt, int roundsPlayed = 2)
+    {
+        var g = GameState.Start(2, setRounds: 5);
+        for (var i = 0; i < roundsPlayed; i++)
+        {
+            g = g.ApplyRoundScores(new[] { i == 0 ? myDebt : 0, i == 0 ? otherDebt : 0 });
+        }
+
+        return g;
+    }
+
+    [Test]
+    public void Hard_leader_stops_more_eagerly()
+    {
+        var round = StopRound(declarerSum: 4, otherSum: 9); // 바가지 아님, 기본 40%
+        // 1등(빚 적음) → 확률 상향: roll 60도 스톱
+        Assert.That(new Bot(BotDifficulty.Hard, new FixedRandom(60))
+            .ShouldStop(round, 0, Standings(myDebt: 5, otherDebt: 30)), Is.True);
+        // 꼴찌 → 확률 하향: roll 25도 보류(빚 굳히기보다 한 방 노림)
+        Assert.That(new Bot(BotDifficulty.Hard, new FixedRandom(25))
+            .ShouldStop(round, 0, Standings(myDebt: 30, otherDebt: 5)), Is.False);
+    }
+
+    [Test]
+    public void Hard_leader_does_not_gamble_on_pair_holding()
+    {
+        var round = PairStopRound(pairNumber: 4, otherSum: 12);
+        // 1등 + 쌍: 보류 도박 대신 스톱으로 굳힌다(보류 굴림 0이어도 확률 25%라 25≥25 → 통과, 스톱 굴림 0 → 스톱)
+        Assert.That(new Bot(BotDifficulty.Hard, new FixedRandom(30, 0))
+            .ShouldStop(round, 0, Standings(myDebt: 0, otherDebt: 40)), Is.True);
+        // 꼴찌 + 쌍: 보류 확률 85% — roll 30이면 보류(두 번 뽕 노림)
+        Assert.That(new Bot(BotDifficulty.Hard, new FixedRandom(30, 0))
+            .ShouldStop(round, 0, Standings(myDebt: 40, otherDebt: 0)), Is.False);
+    }
 }
