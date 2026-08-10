@@ -28,7 +28,7 @@ namespace Bbong.Client
 
             // 광고 카드 2개(루미큐브 코인 카드 레이아웃 차용)
             AdCard(root, "광고 보고\n2,000P", "30분마다", new Vector2(0.24f, 0.34f), new Vector2(0.49f, 0.68f), OnStandard, out _standardBtn);
-            AdCard(root, "구제 광고\n10,000P", "잔액 부족 시 · 하루 3번", new Vector2(0.51f, 0.34f), new Vector2(0.76f, 0.68f), OnBankrupt, out _bankruptBtn);
+            AdCard(root, "구제 광고\n10,000P", "포인트 떨어졌을 때 · 하루 3번", new Vector2(0.51f, 0.34f), new Vector2(0.76f, 0.68f), OnBankrupt, out _bankruptBtn);
 
             UiKit.BackButton(root, Back);
 
@@ -58,10 +58,10 @@ namespace Bbong.Client
             s.color = new Color(1f, 1f, 1f, 0.6f);
         }
 
-        private void RenderBalance() => _balance.text = $"현재 {Session.Balance:N0} P";
+        private void RenderBalance() => _balance.text = $"보유 {Session.Balance:N0} P";
 
-        private void OnStandard() => Claim("Standard", "광고 시청 완료 — 2,000P 적립!");
-        private void OnBankrupt() => Claim("Bankruptcy", "구제 완료 — 10,000P 적립!");
+        private void OnStandard() => Claim("Standard", "2,000P 받았어요!");
+        private void OnBankrupt() => Claim("Bankruptcy", "10,000P 받았어요!");
 
         private void Claim(string kind, string okMsg)
         {

@@ -36,9 +36,9 @@ namespace Bbong.Client
             // 통계 placeholder
             var statsPanel = UiKit.CreatePanel(root, new Color(0, 0, 0, 0.3f));
             UiKit.Anchor(statsPanel.rectTransform, new Vector2(0.2f, 0.3f), new Vector2(0.8f, 0.52f));
-            UiKit.CreateText(root, "전적\n0전 0승 0패  ·  최고 기록 -", 32, TextAnchor.MiddleCenter,
+            UiKit.CreateText(root, "전적\n0전 0승 0패", 32, TextAnchor.MiddleCenter,
                 new Vector2(0.2f, 0.3f), new Vector2(0.8f, 0.52f)).color = new Color(1, 1, 1, 0.6f);
-            UiKit.CreateText(root, "온라인 게임을 플레이하면 전적이 쌓입니다", 24, TextAnchor.MiddleCenter,
+            UiKit.CreateText(root, "맞춤게임을 하면 전적이 쌓여요", 24, TextAnchor.MiddleCenter,
                 new Vector2(0.2f, 0.24f), new Vector2(0.8f, 0.29f)).color = new Color(1, 1, 1, 0.4f);
 
             UiKit.BackButton(root, Back);
@@ -53,7 +53,7 @@ namespace Bbong.Client
             var nick = _nickInput.text;
             if (!GameConfig.IsValidNickname(nick))
             {
-                _status.text = $"닉네임은 1~{GameConfig.MaxNicknameLength}자여야 합니다.";
+                _status.text = $"닉네임은 1~{GameConfig.MaxNicknameLength}자로 지어주세요.";
                 return;
             }
 

@@ -160,7 +160,7 @@ namespace Bbong.Client
                 var winners = _game.WinnerSeats();
                 var who = string.Join(", ", winners.Select(s => _names[s]));
                 SetLog($"━━ 게임 종료(5라운드) ━━ 사유: {reason} → 다음 선 P{enderSeat} | 1등 {who} | 점수[{detail}] 누적[{cumulative}]");
-                title = $"게임 종료 — 1등 {who}";
+                title = $"게임 끝! 1등 {who}";
                 _state = UiState.SetOver;
             }
             else

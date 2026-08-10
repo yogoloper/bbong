@@ -52,15 +52,15 @@ namespace Bbong.Client
             var title = UiKit.CreateText(root, "친구와 함께", 56, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.74f), new Vector2(0.9f, 0.86f));
             title.fontStyle = FontStyle.Bold;
-            UiKit.CreateText(root, "포인트 없이 친구들과 한 판 (입장료 없음)", 28, TextAnchor.MiddleCenter,
+            UiKit.CreateText(root, "입장료 없이 친구들끼리 편하게 한 판", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.66f), new Vector2(0.9f, 0.73f)).color = new Color(1f, 1f, 1f, 0.7f);
 
-            UiKit.CtaButton(root, "방 만들기 (호스트)",
+            UiKit.CtaButton(root, "방 만들기",
                 new Vector2(0.34f, 0.50f), new Vector2(0.66f, 0.62f), OnCreateRoom, 38);
             UiKit.CreateButton(root, "초대코드로 입장",
                 new Vector2(0.34f, 0.36f), new Vector2(0.66f, 0.48f), BuildCodeInput, 38);
 
-            UiKit.CreateText(root, "방을 만들면 6자리 초대코드가 나옵니다.\n친구에게 코드를 알려주고 함께 시작하세요.", 28,
+            UiKit.CreateText(root, "방을 만들면 초대코드가 나옵니다.\n친구에게 코드를 알려주고 함께 플레이하세요.", 28,
                 TextAnchor.MiddleCenter, new Vector2(0.1f, 0.20f), new Vector2(0.9f, 0.32f))
                 .color = new Color(1f, 1f, 1f, 0.7f);
 
@@ -140,13 +140,13 @@ namespace Bbong.Client
                 start.interactable = _room.members.Length >= 2; // 봇 포함 2명 이상
                 if (!start.interactable)
                 {
-                    UiKit.CreateText(root, "2명 이상이어야 시작할 수 있어요", 26, TextAnchor.MiddleCenter,
+                    UiKit.CreateText(root, "2명부터 시작할 수 있어요", 26, TextAnchor.MiddleCenter,
                         new Vector2(0.1f, 0.165f), new Vector2(0.9f, 0.215f)).color = new Color(1f, 1f, 1f, 0.6f);
                 }
             }
             else
             {
-                UiKit.CreateText(root, "호스트가 시작하길 기다리는 중...", 30, TextAnchor.MiddleCenter,
+                UiKit.CreateText(root, "방장이 시작하기를 기다리는 중...", 30, TextAnchor.MiddleCenter,
                     new Vector2(0.1f, 0.13f), new Vector2(0.9f, 0.20f)).color = new Color(1f, 1f, 1f, 0.7f);
             }
 
@@ -184,7 +184,7 @@ namespace Bbong.Client
         {
             if (string.IsNullOrEmpty(code) || code.Length != 6)
             {
-                _status.text = "6자리 코드를 입력하세요.";
+                _status.text = "초대코드 6자리를 입력해 주세요.";
                 return;
             }
 

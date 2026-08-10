@@ -170,7 +170,7 @@ namespace Bbong.Client
                     // 이탈/무응답 좌석을 봇이 이어받음(§9-4). 닉네임은 원래 게이머 것 유지.
                     var bot = JsonUtility.FromJson<BotTookOverMsg>(json);
                     Nicknames[bot.seat] = bot.nickname;
-                    _table.ShowCallout($"{bot.nickname}\n자리 교대");
+                    _table.ShowCallout($"{bot.nickname}\n봇으로 교체");
                     break;
 
                 case ServerMessageType.MeldDeclared:
@@ -195,7 +195,7 @@ namespace Bbong.Client
                     _table.SetEndReason(set.reason);
                     _roundHistory.Add(set.scores);
                     var winners = string.Join(", ", set.winnerSeats.Select(s => Nicknames[s]));
-                    var title = $"게임 종료 — 1등 {winners}";
+                    var title = $"게임 끝! 1등 {winners}";
                     if (Stake > 0 && set.winnerSeats.Length > 0)
                     {
                         title += $" · 상금 {(long)Stake * PlayerCount / set.winnerSeats.Length:N0}";

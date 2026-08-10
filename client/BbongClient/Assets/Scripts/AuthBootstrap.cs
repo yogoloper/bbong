@@ -67,7 +67,7 @@ namespace Bbong.Client
         private void OnError(string error)
         {
             _guestBtn.interactable = true;
-            _status.text = $"실패: {error}\n서버(localhost:5080)가 켜져 있는지 확인하세요.";
+            _status.text = $"접속 실패: {error}\n잠시 후 다시 시도해 주세요.";
         }
     }
 }

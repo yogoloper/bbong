@@ -903,9 +903,9 @@ namespace Bbong.Client
 
             SetPrompt(view.phase switch
             {
-                RoundPhase.WaitingStop when view.currentSeat == MySeat => "스톱? 또는 계속",
+                RoundPhase.WaitingStop when view.currentSeat == MySeat => "스톱할까요, 계속할까요?",
                 RoundPhase.WaitingDiscard when view.currentSeat == MySeat && view.canMeld =>
-                    $"족보 완성! [{MeldKorean(view.meldType)} {view.meldScore}점] — 선언 또는 버리고 계속",
+                    $"{MeldKorean(view.meldType)} {view.meldScore}점! 선언하거나 그냥 버려도 됩니다",
                 RoundPhase.WaitingDiscard when view.currentSeat == MySeat && view.canNaturalPong =>
                     "버릴 카드를 클릭하세요 (또는 자연뽕)",
                 RoundPhase.WaitingDiscard when view.currentSeat == MySeat => "버릴 카드를 클릭하세요",

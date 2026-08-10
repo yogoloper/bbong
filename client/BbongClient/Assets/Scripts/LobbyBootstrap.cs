@@ -86,7 +86,7 @@ namespace Bbong.Client
             title.fontStyle = FontStyle.Bold;
             Anchor(title.rectTransform, new Vector2(0.05f, 0.79f), new Vector2(0.95f, 0.875f));
 
-            var subtitle = CreateText(root, "컴퓨터와 연습 — 우승해도 포인트 없음", 30, TextAnchor.MiddleCenter);
+            var subtitle = CreateText(root, "봇 상대로 부담 없이 한 판, 포인트는 안 걸어요", 30, TextAnchor.MiddleCenter);
             subtitle.color = new Color(1f, 1f, 1f, 0.7f);
             Anchor(subtitle.rectTransform, new Vector2(0.05f, 0.73f), new Vector2(0.95f, 0.78f));
 

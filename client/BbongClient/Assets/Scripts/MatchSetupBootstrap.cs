@@ -58,7 +58,7 @@ namespace Bbong.Client
             UiKit.CreateText(root, "맞춤게임", 56, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.87f)).fontStyle = FontStyle.Bold;
 
-            var subtitle = UiKit.CreateText(root, "실유저와 포인트 대결 — 우승자가 총상금 독식", 26, TextAnchor.MiddleCenter,
+            var subtitle = UiKit.CreateText(root, "1등이 총상금을 전부 가져갑니다", 26, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.735f), new Vector2(0.9f, 0.775f));
             subtitle.color = new Color(1f, 1f, 1f, 0.8f);
 
@@ -227,12 +227,12 @@ namespace Bbong.Client
             }
         }
 
-        /// <summary>정원 충족: "잠시 후 시작합니다 (5)" 카운트다운. 이탈자가 생기면 roomUpdate가 대기 화면으로 되돌린다.</summary>
+        /// <summary>정원 충족: "곧 시작합니다 (5)" 카운트다운. 이탈자가 생기면 roomUpdate가 대기 화면으로 되돌린다.</summary>
         private System.Collections.IEnumerator StartCountdown(int seconds)
         {
             for (var remain = seconds; remain > 0 && _searchLabel != null; remain--)
             {
-                _searchLabel.text = $"잠시 후 시작합니다 ({remain})";
+                _searchLabel.text = $"곧 시작합니다 ({remain})";
                 yield return new WaitForSeconds(1f);
             }
         }

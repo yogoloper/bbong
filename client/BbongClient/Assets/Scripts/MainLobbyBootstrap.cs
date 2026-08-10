@@ -27,7 +27,7 @@ namespace Bbong.Client
 
             // 6개 모드 카드 — 가로 한 줄(루미큐브식 카드 레이아웃 차용)
             var titles = new[] { "튜토리얼", "연습", "맞춤게임", "친구와 함께", "포인트 얻기", "프로필" };
-            var descs = new[] { "규칙을 처음부터", "컴퓨터와 연습", "실유저와 포인트 대결", "포인트 없이 친구끼리", "광고 보고 포인트", "닉네임·통계" };
+            var descs = new[] { "처음이면 여기부터", "봇 상대로 몸풀기", "포인트 걸고 한 판", "초대코드로 친구랑", "광고 보고 포인트", "닉네임과 전적" };
             UnityEngine.Events.UnityAction[] actions = { OnTutorial, OnPractice, OnMatch, OnFriend, OnShop, OnProfile };
 
             const float pad = 0.012f, top = 0.80f, bottom = 0.13f;
