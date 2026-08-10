@@ -528,22 +528,20 @@ namespace Bbong.Client
                 row.childControlWidth = true;
                 row.childControlHeight = true;
                 row.childForceExpandWidth = false;
-                // 6인 리더보드(6행)는 좌상단 좌석 패널과 겹치지 않게 행을 압축한다
-                var compact = PlayerCount >= 6;
-                row.gameObject.AddComponent<LayoutElement>().preferredHeight = compact ? 26f : 32f;
+                row.gameObject.AddComponent<LayoutElement>().preferredHeight = 32f;
 
                 // 순위·점수는 우측, 닉네임은 좌측 정렬 — 세로 정렬선이 생겨 표로 읽힌다
-                LeaderboardCell(row.transform, $"{rank}위", 48f, color, mine, TextAnchor.MiddleRight, compact);
-                LeaderboardCell(row.transform, seat.nickname, 196f, color, mine, TextAnchor.MiddleLeft, compact, fit: true); // 12자 × 최소 15px가 한 줄에 들어가는 폭
-                LeaderboardCell(row.transform, seat.cumulativeDebt.ToString(), 56f, color, mine, TextAnchor.MiddleRight, compact);
+                LeaderboardCell(row.transform, $"{rank}위", 48f, color, mine, TextAnchor.MiddleRight);
+                LeaderboardCell(row.transform, seat.nickname, 196f, color, mine, TextAnchor.MiddleLeft, fit: true); // 12자 × 최소 15px가 한 줄에 들어가는 폭
+                LeaderboardCell(row.transform, seat.cumulativeDebt.ToString(), 56f, color, mine, TextAnchor.MiddleRight);
             }
         }
 
         /// <summary>리더보드 셀: 고정 폭(선 없는 표).</summary>
         private void LeaderboardCell(Transform row, string text, float width, Color color, bool bold,
-            TextAnchor align, bool compact, bool fit = false)
+            TextAnchor align, bool fit = false)
         {
-            var cell = UiKit.CreateText(row, text, compact ? 20 : 24, align, Vector2.zero, Vector2.one);
+            var cell = UiKit.CreateText(row, text, 24, align, Vector2.zero, Vector2.one);
             cell.color = color;
             if (bold)
             {
@@ -556,7 +554,7 @@ namespace Bbong.Client
             le.flexibleWidth = 0f;
             if (fit)
             {
-                FitText(cell, 15, compact ? 20 : 24);
+                FitText(cell, 15, 24);
             }
         }
 
@@ -753,7 +751,13 @@ namespace Bbong.Client
         {
             var displayIndex = (seat - MySeat + PlayerCount) % PlayerCount;
             var angle = (-90f + displayIndex * 360f / PlayerCount) * Mathf.Deg2Rad;
-            return SeatCenter + new Vector2(Mathf.Cos(angle) * _seatRadius.x, Mathf.Sin(angle) * _seatRadius.y);
+            var ry = _seatRadius.y;
+            if (PlayerCount == 6 && (displayIndex == 2 || displayIndex == 4))
+            {
+                ry = 0.25f; // 6인 상단 대각 좌석만 중앙 쪽으로 — 좌상단 리더보드(6행)와 간섭 방지
+            }
+
+            return SeatCenter + new Vector2(Mathf.Cos(angle) * _seatRadius.x, Mathf.Sin(angle) * ry);
         }
 
         private void RenderHand(RoundView view, ICollection<Card> hidden)
