@@ -157,6 +157,8 @@ namespace Bbong.Client
             deckRt.anchorMin = deckRt.anchorMax = DeckAnchor;
             deckRt.pivot = new Vector2(0.5f, 0.5f);
             deckRt.sizeDelta = new Vector2(110f, 165f);
+            // 버림 카드(특히 6장 공개 패)가 덱을 스치더라도 항상 덱 위에 보이도록 덱을 버림 영역 뒤로
+            _deckGroup.transform.SetSiblingIndex(_discardRow.GetSiblingIndex());
             for (var i = 1; i >= 0; i--)
             {
                 var back = UiKit.CreatePanel(_deckGroup.transform, Color.white);
@@ -526,20 +528,22 @@ namespace Bbong.Client
                 row.childControlWidth = true;
                 row.childControlHeight = true;
                 row.childForceExpandWidth = false;
-                row.gameObject.AddComponent<LayoutElement>().preferredHeight = 32f;
+                // 6인 리더보드(6행)는 좌상단 좌석 패널과 겹치지 않게 행을 압축한다
+                var compact = PlayerCount >= 6;
+                row.gameObject.AddComponent<LayoutElement>().preferredHeight = compact ? 26f : 32f;
 
                 // 순위·점수는 우측, 닉네임은 좌측 정렬 — 세로 정렬선이 생겨 표로 읽힌다
-                LeaderboardCell(row.transform, $"{rank}위", 48f, color, mine, TextAnchor.MiddleRight);
-                LeaderboardCell(row.transform, seat.nickname, 196f, color, mine, TextAnchor.MiddleLeft, fit: true); // 12자 × 최소 15px가 한 줄에 들어가는 폭
-                LeaderboardCell(row.transform, seat.cumulativeDebt.ToString(), 56f, color, mine, TextAnchor.MiddleRight);
+                LeaderboardCell(row.transform, $"{rank}위", 48f, color, mine, TextAnchor.MiddleRight, compact);
+                LeaderboardCell(row.transform, seat.nickname, 196f, color, mine, TextAnchor.MiddleLeft, compact, fit: true); // 12자 × 최소 15px가 한 줄에 들어가는 폭
+                LeaderboardCell(row.transform, seat.cumulativeDebt.ToString(), 56f, color, mine, TextAnchor.MiddleRight, compact);
             }
         }
 
         /// <summary>리더보드 셀: 고정 폭(선 없는 표).</summary>
         private void LeaderboardCell(Transform row, string text, float width, Color color, bool bold,
-            TextAnchor align, bool fit = false)
+            TextAnchor align, bool compact, bool fit = false)
         {
-            var cell = UiKit.CreateText(row, text, 24, align, Vector2.zero, Vector2.one);
+            var cell = UiKit.CreateText(row, text, compact ? 20 : 24, align, Vector2.zero, Vector2.one);
             cell.color = color;
             if (bold)
             {
@@ -552,7 +556,7 @@ namespace Bbong.Client
             le.flexibleWidth = 0f;
             if (fit)
             {
-                FitText(cell, 15, 24);
+                FitText(cell, 15, compact ? 20 : 24);
             }
         }
 
@@ -933,7 +937,8 @@ namespace Bbong.Client
             new Vector2(TableArt.Tri(150f), TableArt.Tri(50f)), TableArt.Tri(28f)));
 
         public void AddGroup(IEnumerable<Card> cards) => _timeline.Add((TableArt.Sorted(cards), true,
-            new Vector2(TableArt.Tri(120f), TableArt.Tri(45f)), TableArt.Tri(16f)));
+            // 그룹은 오른쪽으로만 흩뿌림 — 6장 부채꼴(±170px)이 왼쪽 덱을 침범하지 않는 하한 확보
+            new Vector2(60f + Mathf.Abs(TableArt.Tri(90f)), TableArt.Tri(45f)), TableArt.Tri(16f)));
 
         /// <summary>마지막 그룹을 확정 카드 구성으로 치환(자리·회전 유지, 팝 연출 없음).</summary>
         public void ReplaceLastGroup(IEnumerable<Card> cards)
