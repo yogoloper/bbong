@@ -801,29 +801,46 @@ namespace Bbong.Client
             const float w = 120f, h = 180f;
             var heapAnchor = new Vector2(0.63f, 0.45f); // 버림 더미 — 중앙에서 살짝 오른쪽(덱과 한 세트)
             GameObject last = null;
-            var singles = new List<GameObject>();
-            foreach (var (cards, group, pos, rot) in _timeline)
+            var older = new List<GameObject>();
+            for (var t = 0; t < _timeline.Count; t++)
             {
+                var (cards, group, pos, rot) = _timeline[t];
+                var isTop = t == _timeline.Count - 1;
                 if (group)
                 {
                     for (var j = 0; j < cards.Count; j++)
                     {
                         var fan = j - (cards.Count - 1) / 2f;
-                        last = PlaceCard(cards[j], w, h, heapAnchor, pos + new Vector2(fan * GroupSpread, -Mathf.Abs(fan) * 8f), rot - fan * 10f);
+                        var go = PlaceCard(cards[j], w, h, heapAnchor, pos + new Vector2(fan * GroupSpread, -Mathf.Abs(fan) * 8f), rot - fan * 10f);
+                        if (isTop)
+                        {
+                            last = go;
+                        }
+                        else
+                        {
+                            older.Add(go);
+                        }
                     }
                 }
                 else
                 {
-                    last = PlaceCard(cards[0], w, h, heapAnchor, pos, rot);
-                    singles.Add(last);
+                    var go = PlaceCard(cards[0], w, h, heapAnchor, pos, rot);
+                    if (isTop)
+                    {
+                        last = go;
+                    }
+                    else
+                    {
+                        older.Add(go);
+                    }
                 }
             }
 
-            // 맨 위(마지막) 낱장만 원색 — 아래 깔린 낱장은 어둡게+축소해 위계를 만든다
-            for (var i = 0; i < singles.Count - 1; i++)
+            // 최신 항목만 원색 — 그 아래 깔린 카드(낱장·뽕 묶음 모두)는 어둡게+축소해 위계를 만든다
+            foreach (var under in older)
             {
-                singles[i].transform.localScale = Vector3.one * 0.92f;
-                var dim = UiKit.CreatePanel(singles[i].transform, new Color(0.03f, 0.05f, 0.12f, 0.45f));
+                under.transform.localScale = Vector3.one * 0.92f;
+                var dim = UiKit.CreatePanel(under.transform, new Color(0.03f, 0.05f, 0.12f, 0.45f));
                 dim.raycastTarget = false;
                 UiKit.Stretch(dim.rectTransform);
             }
@@ -1300,16 +1317,19 @@ namespace Bbong.Client
                 }
             }
 
+            // 열 순서는 순위 오름차순 — 1위가 왼쪽(동점은 좌석 순)
+            var order = Enumerable.Range(0, PlayerCount).OrderBy(s => debts[s]).ThenBy(s => s).ToArray();
+
             // 등수 행(닉네임 위 별도 셀)
             AddCell("", Color.white, bold: false);
-            for (var s = 0; s < PlayerCount; s++)
+            foreach (var s in order)
             {
                 AddCell($"{ranks[s]}위", new Color(0.75f, 0.77f, 0.83f), bold: true, size: 30);
             }
 
             // 닉네임 행 — 내 닉네임은 하늘색으로만 구분
             AddCell("라운드", GoldText, bold: true, size: 30);
-            for (var s = 0; s < PlayerCount; s++)
+            foreach (var s in order)
             {
                 AddCell(Nicknames[s], s == MySeat ? MineText : new Color(0.96f, 0.94f, 0.86f), bold: true, size: 26, fit: true);
             }
@@ -1317,7 +1337,7 @@ namespace Bbong.Client
             for (var r = 0; r < roundHistory.Count; r++)
             {
                 AddCell($"{r + 1}", new Color(0.75f, 0.77f, 0.83f), bold: true, size: 30);
-                for (var s = 0; s < PlayerCount; s++)
+                foreach (var s in order)
                 {
                     var value = roundHistory[r][s];
                     AddCell(value.ToString("+0;-0;0"), ScoreColor(value), bold: false);
@@ -1325,7 +1345,7 @@ namespace Bbong.Client
             }
 
             AddCell("계", GoldText, bold: true);
-            for (var s = 0; s < PlayerCount; s++)
+            foreach (var s in order)
             {
                 AddCell($"{debts[s]}", Color.white, bold: true);
             }
