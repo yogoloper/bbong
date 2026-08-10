@@ -488,6 +488,9 @@ namespace Bbong.Client
         private void OpenPongWindow(int discarderSeat)
         {
             _flowToken++;
+            // 내 버림 직후 걸린 턴 간격(_turnGap)이 남아 있으면 phase가 TurnGap으로 합성돼
+            // 뽕/패스 버튼이 숨은 채 타이머만 돌다 자동 패스된다(봇이 내 버림을 뽕한 뒤 경로)
+            _turnGap = false;
             _pongNumber = TopDiscardNumber();
             _pongDiscarderSeat = discarderSeat;
             _state = UiState.PongWindow;

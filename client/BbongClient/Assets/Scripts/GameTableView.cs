@@ -802,6 +802,7 @@ namespace Bbong.Client
             var heapAnchor = new Vector2(0.63f, 0.45f); // 버림 더미 — 중앙에서 살짝 오른쪽(덱과 한 세트)
             GameObject last = null;
             var older = new List<GameObject>();
+            var top = new List<GameObject>();
             for (var t = 0; t < _timeline.Count; t++)
             {
                 var (cards, group, pos, rot) = _timeline[t];
@@ -815,6 +816,7 @@ namespace Bbong.Client
                         if (isTop)
                         {
                             last = go;
+                            top.Add(go);
                         }
                         else
                         {
@@ -828,6 +830,7 @@ namespace Bbong.Client
                     if (isTop)
                     {
                         last = go;
+                        top.Add(go);
                     }
                     else
                     {
@@ -847,7 +850,13 @@ namespace Bbong.Client
 
             if (last != null)
             {
-                HighlightTop(last);
+                // 묶음(뽕/자연뽕/족보)은 한 단위 — 헤일로를 묶음 전체 아래에 깔아
+                // 카드 사이 이음새 없이 바깥 실루엣만 골드 테두리로 읽히게 한다
+                var below = top[0].transform.GetSiblingIndex();
+                foreach (var go in top)
+                {
+                    HighlightTop(go, below);
+                }
 
                 if (_timeline.Count > _timelineShown)
                 {
@@ -859,7 +868,7 @@ namespace Bbong.Client
         }
 
         /// <summary>맨 위(마지막 버림) 카드 강조: 카드 바로 아래에 노란 헤일로를 깔아 테두리처럼 보이게.</summary>
-        private void HighlightTop(GameObject top)
+        private void HighlightTop(GameObject top, int? siblingIndex = null)
         {
             var topRt = (RectTransform)top.transform;
             var halo = new GameObject("TopHalo", typeof(RectTransform), typeof(Image));
@@ -878,7 +887,7 @@ namespace Bbong.Client
             rt.anchoredPosition = topRt.anchoredPosition;
             rt.localRotation = topRt.localRotation;
 
-            halo.transform.SetSiblingIndex(top.transform.GetSiblingIndex()); // 카드 바로 아래로
+            halo.transform.SetSiblingIndex(siblingIndex ?? top.transform.GetSiblingIndex()); // 카드(또는 묶음 전체) 바로 아래로
         }
 
         /// <summary>
