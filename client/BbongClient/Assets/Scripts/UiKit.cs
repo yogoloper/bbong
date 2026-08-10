@@ -273,6 +273,20 @@ namespace Bbong.Client
             rt.offsetMax = Vector2.zero;
         }
 
+        /// <summary>남아 있는 게임 테이블 전부 폭파(캔버스 포함) — 로비 화면이 뜰 때 이전 판이 잔존하는 버그 방지.</summary>
+        public static void DestroyStrayTables()
+        {
+            foreach (var stray in UnityEngine.Object.FindObjectsByType<GameTableView>(FindObjectsSortMode.None))
+            {
+                if (stray.CanvasGo != null)
+                {
+                    UnityEngine.Object.Destroy(stray.CanvasGo);
+                }
+
+                UnityEngine.Object.Destroy(stray.gameObject);
+            }
+        }
+
         /// <summary>화면 전환: 현재 화면 파기 후 새 부트스트랩 컴포넌트 생성.</summary>
         public static void GoTo<T>(GameObject currentCanvas, MonoBehaviour current) where T : MonoBehaviour
         {

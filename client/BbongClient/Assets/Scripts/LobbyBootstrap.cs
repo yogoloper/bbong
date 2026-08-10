@@ -39,16 +39,21 @@ namespace Bbong.Client
             _font = Resources.Load<Font>("Fonts/Pretendard-SemiBold")
                     ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             EnsureEventSystem();
+            UiKit.DestroyStrayTables(); // 연습 설정에 들어온 시점엔 이전 판이 남아 있으면 안 됨
             BuildUi();
             RefreshSelection();
         }
 
+        private bool _started;
+
         private void OnStartGame()
         {
-            if (!GameConfig.IsValidPlayerCount(_playerCount))
+            if (!GameConfig.IsValidPlayerCount(_playerCount) || _started)
             {
                 return;
             }
+
+            _started = true; // 더블클릭으로 테이블이 2개 생기는 것 방지
 
             // 연습은 판돈 없음(무료). 봇 인원·난이도만 적용.
             var table = new GameObject("GameTable").AddComponent<GameTableBootstrap>();

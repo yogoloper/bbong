@@ -11,6 +11,7 @@ namespace Bbong.Client
         private void Start()
         {
             UiKit.EnsureEventSystem();
+            UiKit.DestroyStrayTables(); // 메인 로비가 떴다 = 어떤 게임도 진행 중이면 안 됨
             Build();
             if (Session.IsLoggedIn)
             {
