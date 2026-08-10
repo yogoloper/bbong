@@ -61,6 +61,13 @@ namespace Bbong.Client
         private static readonly Vector2 HeapScreenAnchor = new(0.578f, 0.555f); // 버림 더미 중심(화면 좌표 — 비행 연출용)
         private const float GroupSpread = 68f; // 그룹(뽕/공개 패) 부채꼴 카드 간격
 
+        /// <summary>
+        /// 액션·모달 버튼 높이(캔버스 단위). Expand 스케일러에서 캔버스 높이는 항상 1080 이상이라
+        /// 이 값이 곧 화면 최소 터치 높이(≈46px @ 높이 375px 모바일 웹 가로화면)를 보장한다.
+        /// 앵커 비율로 잡으면 부모 rect가 작을 때(모달 안 등) 터치 높이가 무너진다.
+        /// </summary>
+        private const float TapButtonHeight = UiKit.MinTapHeight * 1080f;
+
         private Transform _seatsArea;
         private Transform _discardRow;
         private GameObject _deckGroup;
@@ -228,14 +235,17 @@ namespace Bbong.Client
             TableArt.AddOutline(_prompt);
 
             // 액션 버튼(손패 우측) — 공통 5개. 모드 전용 버튼은 AddBarButton으로 추가.
+            // 상단 0.35는 6인 우측 좌석 패널 하단(≈0.356)과 안 겹치는 상한. 버튼은 아래에 붙여
+            // 쌓으므로(LowerCenter) 개수가 적을 땐 위쪽 여백이 그대로 남는다.
             var barGo = new GameObject("Buttons", typeof(RectTransform));
             barGo.transform.SetParent(root, false);
-            UiKit.Anchor((RectTransform)barGo.transform, new Vector2(0.80f, 0.04f), new Vector2(0.995f, 0.21f));
+            UiKit.Anchor((RectTransform)barGo.transform, new Vector2(0.80f, 0.025f), new Vector2(0.995f, 0.35f));
             var layout = barGo.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 10;
+            layout.spacing = 14;
+            layout.childAlignment = TextAnchor.LowerCenter;
             layout.childControlWidth = true;
             layout.childControlHeight = true;
-            layout.childForceExpandHeight = true;
+            layout.childForceExpandHeight = false; // 개수에 따라 늘어나면 2개일 때만 커진다 — 높이는 고정
             _buttonBar = barGo.transform;
 
             // 선언 액션(뽕/자연뽕/족보)은 같은 레드오렌지 — 시그니처 색으로 통일
@@ -381,7 +391,8 @@ namespace Bbong.Client
                 box.type = Image.Type.Sliced;
             }
 
-            UiKit.Anchor(box.rectTransform, new Vector2(0.33f, 0.38f), new Vector2(0.67f, 0.62f));
+            // 세로 375px 모바일 웹에서 버튼 두 개가 하단에 44px 이상으로 들어가는 최소 높이
+            UiKit.Anchor(box.rectTransform, new Vector2(0.30f, 0.30f), new Vector2(0.70f, 0.70f));
             var boxShadow = box.gameObject.AddComponent<Shadow>();
             boxShadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
             boxShadow.effectDistance = new Vector2(8f, -8f);
@@ -410,12 +421,20 @@ namespace Bbong.Client
             _exitModal.SetActive(false);
         }
 
+        /// <summary>모달 버튼: 글자 스타일 + 하단 고정 높이 배치(가로 위치는 호출부 앵커 유지).</summary>
         private static void StyleModalButton(Button button)
         {
             var text = button.GetComponentInChildren<Text>();
             text.color = Color.white;
             text.fontStyle = FontStyle.Bold;
             TableArt.AddOutline(text);
+
+            var rt = button.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(rt.anchorMin.x, 0f);
+            rt.anchorMax = new Vector2(rt.anchorMax.x, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.offsetMin = new Vector2(0f, 26f);
+            rt.offsetMax = new Vector2(0f, 26f + TapButtonHeight);
         }
 
         private void ShowExitConfirm()
@@ -429,6 +448,9 @@ namespace Bbong.Client
         public Button AddBarButton(string label, UnityEngine.Events.UnityAction onClick, Color? tint = null)
         {
             var btn = UiKit.CreateButton(_buttonBar, label, Vector2.zero, Vector2.one, onClick, 36);
+            var size = btn.gameObject.AddComponent<LayoutElement>();
+            size.preferredHeight = TapButtonHeight;
+            size.flexibleHeight = 0f;
             var buttonShadow = btn.gameObject.AddComponent<Shadow>();
             buttonShadow.effectColor = new Color(0f, 0f, 0f, 0.45f);
             buttonShadow.effectDistance = new Vector2(4f, -4f);

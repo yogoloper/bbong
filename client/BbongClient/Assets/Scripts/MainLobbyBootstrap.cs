@@ -38,7 +38,7 @@ namespace Bbong.Client
             }
         }
 
-        // 모드별 강조색·글리프 — 카드 얼굴이자 하위 화면까지 이어지는 색 체계
+        // 모드별 강조색 — 카드 얼굴이자 하위 화면까지 이어지는 색 체계
         private static readonly Color[] ModeTint =
         {
             new(0.35f, 0.62f, 0.95f), // 튜토리얼 — 하늘
@@ -49,7 +49,15 @@ namespace Bbong.Client
             new(0.60f, 0.66f, 0.80f), // 프로필 — 중성 회청
         };
 
-        private static readonly string[] ModeGlyph = { "?", "♣", "◆", "♥", "★", "●" };
+        private static Sprite ModeIcon(int i) => i switch
+        {
+            0 => UiArt.IconBook,
+            1 => UiArt.IconRobot,
+            2 => UiArt.IconTrophy,
+            3 => UiArt.IconFriends,
+            4 => UiArt.IconCoins,
+            _ => UiArt.IconAvatar,
+        };
 
         private int _modeIndex;
 
@@ -58,7 +66,7 @@ namespace Bbong.Client
         {
             var i = _modeIndex++;
 
-            // 카드 = 반투명 패널 + 클릭 버튼. 제목은 하단, 위쪽은 모드 색 글리프 영역.
+            // 카드 = 반투명 패널 + 클릭 버튼. 제목은 하단, 위쪽은 모드 색 아이콘 영역.
             var btn = UiKit.CreateButton(root, "", min, max, onClick);
             btn.GetComponent<Image>().color = new Color(0.12f, 0.22f, 0.42f, 0.95f);
             var colors = btn.colors;
@@ -69,10 +77,8 @@ namespace Bbong.Client
             accentTop.sprite = UiArt.Pill;
             accentTop.type = Image.Type.Sliced;
             UiKit.Anchor(accentTop.rectTransform, new Vector2(0.08f, 0.45f), new Vector2(0.92f, 0.9f));
-            var glyph = UiKit.CreateText(accentTop.transform, ModeGlyph[i], 96, TextAnchor.MiddleCenter,
-                Vector2.zero, Vector2.one);
-            glyph.color = new Color(0.10f, 0.16f, 0.30f); // 카드 배경 네이비로 뚫린 느낌
-            glyph.fontStyle = FontStyle.Bold;
+            UiKit.CreateIcon(accentTop.transform, ModeIcon(i),
+                new Vector2(0.12f, 0.1f), new Vector2(0.88f, 0.9f));
 
             var t = UiKit.CreateText(btn.transform, title, 40, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.25f), new Vector2(1f, 0.42f));
