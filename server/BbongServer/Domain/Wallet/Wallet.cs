@@ -18,6 +18,21 @@ public sealed class Wallet
         _entries = new List<LedgerEntry>();
     }
 
+    private Wallet(Guid userId, long openingBalance)
+    {
+        UserId = userId;
+        _entries = new List<LedgerEntry>();
+        _openingBalance = openingBalance;
+    }
+
+    /// <summary>
+    /// 과거 기록 없이 알려진 잔액에서 시작하는 지갑. 잔액만 필요한 경로(에스크로·적립)에서
+    /// 원장 전체를 읽지 않기 위한 것으로, Entries에는 이번에 새로 쓴 기록만 담긴다.
+    /// </summary>
+    public static Wallet FromBalance(Guid userId, long balance) => new(userId, balance);
+
+    private readonly long _openingBalance;
+
     private Wallet(Guid userId, IEnumerable<LedgerEntry> entries)
     {
         UserId = userId;
@@ -26,7 +41,7 @@ public sealed class Wallet
 
     public Guid UserId { get; }
 
-    public long Balance => _entries.Sum(e => e.Delta);
+    public long Balance => _openingBalance + _entries.Sum(e => e.Delta);
 
     public IReadOnlyList<LedgerEntry> Entries => _entries;
 

@@ -20,7 +20,7 @@ public sealed class LedgerStakeBank : IStakeBank
     public Task<bool> TryEscrowAsync(Guid userId, int stake, Guid? gameId = null) =>
         _ledger.WithWalletLockAsync(userId, async () =>
         {
-            var wallet = await _ledger.LoadWalletAsync(userId);
+            var wallet = await _ledger.LoadBalanceAsync(userId);
             if (wallet.Balance < stake)
             {
                 return false;
@@ -45,7 +45,7 @@ public sealed class LedgerStakeBank : IStakeBank
     private Task CreditAsync(Guid userId, long amount, LedgerReason reason, Guid? gameId) =>
         _ledger.WithWalletLockAsync<object?>(userId, async () =>
         {
-            var wallet = await _ledger.LoadWalletAsync(userId);
+            var wallet = await _ledger.LoadBalanceAsync(userId);
             await _ledger.AppendAsync(new[] { wallet.Credit(amount, reason, _clock.UtcNow, Reference(gameId)) });
             return null;
         });

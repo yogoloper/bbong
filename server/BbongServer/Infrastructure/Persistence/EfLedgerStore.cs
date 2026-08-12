@@ -32,6 +32,17 @@ public sealed class EfLedgerStore : ILedgerStore
         return Wallet.Rehydrate(userId, entries);
     }
 
+    public async Task<Wallet> LoadBalanceAsync(Guid userId)
+    {
+        var balance = await _db.Ledger
+            .Where(e => e.UserId == userId)
+            .OrderByDescending(e => e.Id)
+            .Select(e => (long?)e.BalanceAfter)
+            .FirstOrDefaultAsync();
+
+        return Wallet.FromBalance(userId, balance ?? 0);
+    }
+
     /// <summary>
     /// 트랜잭션 + pg_advisory_xact_lock으로 같은 유저의 잔액 조회→append를 직렬화(R7).
     /// 락은 트랜잭션 종료 시 자동 해제. PG가 아니면(테스트 등) 락 없이 실행.

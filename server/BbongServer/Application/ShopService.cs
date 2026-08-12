@@ -44,7 +44,7 @@ public sealed class ShopService
     /// <summary>구제 광고 보상. 잔액이 파산 임계값 이하 + 하루 한도 내일 때만.</summary>
     public async Task ClaimBankruptcyAsync(Guid userId)
     {
-        var wallet = await _ledger.LoadWalletAsync(userId);
+        var wallet = await _ledger.LoadBalanceAsync(userId);
         if (wallet.Balance > BbongCore.Config.GameConfig.BankruptcyThreshold)
         {
             throw new InvalidOperationException("파산 상태가 아닙니다(잔액이 충분합니다).");
@@ -62,7 +62,7 @@ public sealed class ShopService
     private Task GrantAsync(Guid userId, AdRewardKind kind, long amount, LedgerReason reason) =>
         _ledger.WithWalletLockAsync<object>(userId, async () =>
         {
-            var wallet = await _ledger.LoadWalletAsync(userId);
+            var wallet = await _ledger.LoadBalanceAsync(userId);
             var entry = wallet.Credit(amount, reason, _clock.UtcNow);
             await _ledger.AppendAsync(new[] { entry });
             await _rewards.AppendAsync(new AdRewardClaim(userId, kind, _clock.UtcNow));

@@ -32,6 +32,15 @@ public sealed class InMemoryLedgerStore : ILedgerStore
         }
     }
 
+    public Task<Wallet> LoadBalanceAsync(Guid userId)
+    {
+        lock (_gate)
+        {
+            var last = _entries.LastOrDefault(e => e.UserId == userId);
+            return Task.FromResult(Wallet.FromBalance(userId, last?.BalanceAfter ?? 0));
+        }
+    }
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, System.Threading.SemaphoreSlim> _userLocks = new();
 
     public async Task<T> WithWalletLockAsync<T>(Guid userId, Func<Task<T>> action)
