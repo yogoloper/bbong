@@ -13,6 +13,8 @@ public sealed class BbongDbContext : DbContext
 
     public DbSet<UserAccount> Accounts => Set<UserAccount>();
 
+    public DbSet<AccountSocialRow> AccountSocials => Set<AccountSocialRow>();
+
     public DbSet<LedgerRow> Ledger => Set<LedgerRow>();
 
     public DbSet<AdRewardRow> AdRewards => Set<AdRewardRow>();
@@ -33,8 +35,9 @@ public sealed class BbongDbContext : DbContext
             account.HasKey(a => a.Id);
             account.Property(a => a.Nickname).HasMaxLength(BbongCore.Config.GameConfig.MaxNicknameLength);
             account.Property(a => a.CreatedAt);
-            account.Property(a => a.Provider).HasConversion<string>(); // enum → 문자열(nullable)
-            account.Property(a => a.SocialSubject);
+            account.Ignore(a => a.Provider);       // account_socials의 첫 항목에서 파생
+            account.Ignore(a => a.SocialSubject);
+            account.Ignore(a => a.Socials);        // 별도 테이블로 읽고 쓴다
             account.Property(a => a.ResumeSecretHash); // 기기 재개 자격(해시만 보관)
             account.Property(a => a.Status).HasConversion<string>();
             account.Property(a => a.LastLoginAt);
@@ -42,10 +45,20 @@ public sealed class BbongDbContext : DbContext
             // 탈퇴 유예 만료 처리와 휴면 계정 조회
             account.HasIndex(a => new { a.Status, a.DeletionRequestedAt });
             account.Ignore(a => a.IsGuest); // 계산 속성(Provider null 여부)
-            // 같은 (provider, subject)는 한 계정만 — 소셜 계정에만 적용(부분 인덱스)
-            account.HasIndex(a => new { a.Provider, a.SocialSubject })
-                .IsUnique()
-                .HasFilter("\"Provider\" IS NOT NULL");
+
+        });
+
+        modelBuilder.Entity<AccountSocialRow>(social =>
+        {
+            social.ToTable("account_socials");
+            social.HasKey(e => e.Id);
+            social.Property(e => e.Id).ValueGeneratedOnAdd();
+            social.Property(e => e.Provider).HasConversion<string>();
+            social.HasIndex(e => e.AccountId);
+            // 하나의 소셜 신원은 한 계정에만 붙는다
+            social.HasIndex(e => new { e.Provider, e.Subject }).IsUnique();
+            // 한 계정에 같은 provider를 두 번 붙일 수 없다
+            social.HasIndex(e => new { e.AccountId, e.Provider }).IsUnique();
         });
 
         modelBuilder.Entity<LedgerRow>(ledger =>

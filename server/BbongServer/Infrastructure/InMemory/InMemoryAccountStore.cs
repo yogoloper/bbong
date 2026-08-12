@@ -24,5 +24,5 @@ public sealed class InMemoryAccountStore : IAccountStore
 
     public Task<UserAccount?> GetBySocialAsync(SocialProvider provider, string subject) =>
         Task.FromResult(_accounts.Values.FirstOrDefault(a =>
-            a.Provider == provider && a.SocialSubject == subject));
+            a.Socials.Any(link => link.Provider == provider && link.Subject == subject)));
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using BbongServer.Application;
 using BbongServer.Infrastructure;
@@ -84,12 +85,18 @@ public class SocialLoginTests
             _service.LinkSocialAsync(guest.Id, SocialProvider.Google, "taken-sub"));
     }
 
+    /// <summary>
+    /// 소셜 계정에 다른 provider를 덧붙이는 것은 허용한다(구글 가입 → 애플 추가).
+    /// 같은 provider를 두 번 붙이는 것만 막는다 — 자세한 경우는 MultipleSocialTests에 있다.
+    /// </summary>
     [Test]
-    public async Task Link_fails_when_account_is_already_social()
+    public async Task Link_adds_another_provider_to_a_social_account()
     {
         var social = await _service.LoginWithSocialAsync(SocialProvider.Google, "g-1");
 
-        Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _service.LinkSocialAsync(social.Id, SocialProvider.Kakao, "k-1"));
+        var linked = await _service.LinkSocialAsync(social.Id, SocialProvider.Kakao, "k-1");
+
+        Assert.That(linked.Socials.Select(s => s.Provider),
+            Is.EquivalentTo(new[] { SocialProvider.Google, SocialProvider.Kakao }));
     }
 }

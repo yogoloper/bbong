@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using BbongServer.Domain.Auth;
 
 namespace BbongServer.Domain.Accounts;
@@ -9,14 +11,11 @@ namespace BbongServer.Domain.Accounts;
 /// </summary>
 public sealed class UserAccount
 {
-    private UserAccount(Guid id, string nickname, DateTimeOffset createdAt,
-        SocialProvider? provider, string? socialSubject)
+    private UserAccount(Guid id, string nickname, DateTimeOffset createdAt)
     {
         Id = id;
         Nickname = nickname;
         CreatedAt = createdAt;
-        Provider = provider;
-        SocialSubject = socialSubject;
     }
 
     /// <summary>
@@ -64,31 +63,50 @@ public sealed class UserAccount
 
     public DateTimeOffset CreatedAt { get; }
 
-    public SocialProvider? Provider { get; private set; }
+    private readonly List<SocialLink> _socials = new();
 
-    public string? SocialSubject { get; private set; }
+    /// <summary>연결된 소셜 신원들. 한 계정에 provider별로 하나씩 붙일 수 있다.</summary>
+    public IReadOnlyList<SocialLink> Socials => _socials;
 
-    public bool IsGuest => Provider is null;
+    /// <summary>첫 연동(호환용 파생값). 조회는 Socials를 쓴다.</summary>
+    public SocialProvider? Provider => _socials.Count > 0 ? _socials[0].Provider : null;
+
+    public string? SocialSubject => _socials.Count > 0 ? _socials[0].Subject : null;
+
+    public bool IsGuest => _socials.Count == 0;
+
+    /// <summary>저장소가 읽어온 연동 목록을 복원할 때 쓴다.</summary>
+    public void RestoreSocials(IEnumerable<SocialLink> links)
+    {
+        _socials.Clear();
+        _socials.AddRange(links);
+    }
 
     public static UserAccount NewGuest(Guid id, string nickname, DateTimeOffset createdAt) =>
-        new(id, nickname, createdAt, provider: null, socialSubject: null);
+        new(id, nickname, createdAt);
 
-    public static UserAccount NewSocial(Guid id, SocialIdentity identity, string nickname, DateTimeOffset createdAt) =>
-        new(id, nickname, createdAt, identity.Provider, identity.Subject);
+    public static UserAccount NewSocial(Guid id, SocialIdentity identity, string nickname, DateTimeOffset createdAt)
+    {
+        var account = new UserAccount(id, nickname, createdAt);
+        account.LinkSocial(identity);
+        return account;
+    }
 
     /// <summary>닉네임 변경(검증은 호출자가 GameConfig.IsValidNickname으로).</summary>
     public void Rename(string nickname) => Nickname = nickname;
 
-    /// <summary>게스트를 소셜 계정으로 승격(기존 id·잔액 유지). 이미 소셜이면 예외.</summary>
+    /// <summary>
+    /// 소셜 연동(기존 id·잔액 유지). 같은 provider를 두 번 붙이는 것만 막는다 —
+    /// 구글로 가입한 뒤 애플을 추가하는 흐름이 필요하기 때문이다.
+    /// </summary>
     public void LinkSocial(SocialIdentity identity)
     {
-        if (!IsGuest)
+        if (_socials.Any(s => s.Provider == identity.Provider))
         {
-            throw new InvalidOperationException("이미 소셜 계정에 연동된 계정입니다.");
+            throw new InvalidOperationException($"{identity.Provider} 계정은 이미 연동돼 있습니다.");
         }
 
-        Provider = identity.Provider;
-        SocialSubject = identity.Subject;
+        _socials.Add(new SocialLink(identity.Provider, identity.Subject));
     }
 }
 
@@ -99,3 +117,6 @@ public enum AccountStatus
     Suspended,
     PendingDeletion
 }
+
+/// <summary>계정에 연결된 소셜 신원 하나.</summary>
+public sealed record SocialLink(SocialProvider Provider, string Subject);
