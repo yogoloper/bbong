@@ -95,10 +95,15 @@ public static class WsEndpoint
     private static async Task RouteAsync(RoomRegistry registry, IStakeBank bank, IGameHistoryStore history, WebSocketSessionSink sink, RoomMember member, object message)
     {
         var room = registry.FindByUser(member.UserId);
+
+        // 모바일은 서버가 옛 소켓의 죽음을 알아채기 전에 돌아오는 일이 흔하다. 같은 방으로의
+        // 재입장은 "이미 방에 있습니다"로 막지 말고 방에 넘겨 재접속(자리 복귀)으로 처리한다.
+        var rejoiningSameRoom = message is JoinRoomMsg rejoin && room is not null && room.Code == rejoin.code;
+
         switch (message)
         {
             case CreateRoomMsg when room is not null:
-            case JoinRoomMsg when room is not null:
+            case JoinRoomMsg when room is not null && !rejoiningSameRoom:
             case QuickMatchMsg when room is not null:
                 _ = sink.SendAsync(new ErrorMsg { code = "already_in_room", message = "이미 방에 있습니다." });
                 break;

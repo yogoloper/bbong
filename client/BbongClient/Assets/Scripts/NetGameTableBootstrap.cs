@@ -292,7 +292,7 @@ namespace Bbong.Client
         {
             for (var attempt = 1; attempt <= ReconnectAttempts; attempt++)
             {
-                _table.SetPrompt($"연결이 끊겼습니다. 다시 연결 중... ({attempt}/{ReconnectAttempts})");
+                _table.SetPrompt($"연결이 끊겼습니다. 다시 연결 중... ({attempt}/{ReconnectAttempts})\n나가려면 우측 상단 나가기를 누르세요");
 
                 var settled = false;
                 var ok = false;
@@ -321,8 +321,10 @@ namespace Bbong.Client
             LeaveToLobby("서버에 다시 연결하지 못했습니다");
         }
 
-        private const int ReconnectAttempts = 3;
-        private const float ReconnectDelaySeconds = 2f;
+        // 지하철·엘리베이터처럼 몇 분씩 끊기는 상황이 있다. 서버는 판이 끝날 때까지 자리를 잡아두므로
+        // 짧게 포기하지 않고 약 2분간 재시도한다. 그 사이 유저는 나가기 버튼으로 직접 빠져나갈 수 있다.
+        private const int ReconnectAttempts = 12;
+        private const float ReconnectDelaySeconds = 3f;
         private const float ConnectWaitSeconds = 10f;
 
         private void ApplyView(RoundView view)
