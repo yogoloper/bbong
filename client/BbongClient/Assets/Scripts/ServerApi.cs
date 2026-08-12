@@ -118,7 +118,7 @@ namespace Bbong.Client
         }
 
         private static IEnumerator Send(string method, string path, string body, bool auth,
-            Action<string> onOk, Action<string> onErr)
+            Action<string> onOk, Action<string> onErr, bool retried = false)
         {
             using var req = new UnityWebRequest(BaseUrl + path, method)
             {
@@ -141,11 +141,23 @@ namespace Bbong.Client
             if (req.result == UnityWebRequest.Result.Success)
             {
                 onOk(req.downloadHandler.text);
+                yield break;
             }
-            else
+
+            // 액세스 토큰은 60분짜리다. 앱을 오래 켜두면 그냥 끊기므로, 저장된 재개 자격으로
+            // 토큰을 새로 받아 한 번만 다시 시도한다(재시도는 1회 — 무한 루프 방지).
+            if (auth && req.responseCode == 401 && Session.HasSavedCredentials && !retried)
             {
-                onErr(ParseError(req));
+                var refreshed = false;
+                yield return ResumeLogin(() => refreshed = true, _ => { });
+                if (refreshed)
+                {
+                    yield return Send(method, path, body, auth, onOk, onErr, retried: true);
+                    yield break;
+                }
             }
+
+            onErr(ParseError(req));
         }
 
         private static string ParseError(UnityWebRequest req)

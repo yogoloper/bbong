@@ -294,6 +294,15 @@ namespace Bbong.Client
             {
                 _table.SetPrompt($"연결이 끊겼습니다. 다시 연결 중... ({attempt}/{ReconnectAttempts})\n나가려면 우측 상단 나가기를 누르세요");
 
+                // 오래 끊겨 있었다면 액세스 토큰(60분)이 만료됐을 수 있다. 소켓은 연결 시점에
+                // 토큰을 쓰므로 재시도 전에 먼저 갱신한다.
+                if (attempt > 1 && Session.HasSavedCredentials)
+                {
+                    var tokenDone = false;
+                    yield return ServerApi.ResumeLogin(() => tokenDone = true, _ => tokenDone = true);
+                    yield return new WaitUntil(() => tokenDone);
+                }
+
                 var settled = false;
                 var ok = false;
                 WsClient.Instance.Connect(() => { ok = true; settled = true; }, _ => settled = true);
