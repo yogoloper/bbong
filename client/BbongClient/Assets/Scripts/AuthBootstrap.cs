@@ -16,7 +16,27 @@ namespace Bbong.Client
         private void Start()
         {
             UiKit.EnsureEventSystem();
+            UiKit.BackAction = null; // 로그인 화면 — 기기 뒤로가기는 앱 종료
             Build();
+
+            if (Session.HasSavedCredentials)
+            {
+                _guestBtn.interactable = false;
+                _status.text = "이어서 접속 중...";
+                StartCoroutine(ServerApi.ResumeLogin(OnLoggedIn, OnResumeFailed));
+            }
+        }
+
+        /// <summary>
+        /// 저장된 자격이 거부됨(계정 삭제·서버 초기화 등). 자동으로 새 게스트를 만들지 않고
+        /// 버튼을 돌려준다 — 조용히 새 계정이 생기면 유저는 포인트가 사라진 걸로 본다.
+        /// </summary>
+        private void OnResumeFailed(string error)
+        {
+            Session.ForgetCredentials();
+            _guestBtn.interactable = true;
+            _status.text = "이전 계정을 불러오지 못했습니다.\n새로 시작하려면 아래 버튼을 눌러 주세요.";
+            Debug.LogWarning($"[BBONG] 재개 실패: {error}");
         }
 
         private void Build()

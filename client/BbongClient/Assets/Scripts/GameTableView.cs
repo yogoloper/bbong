@@ -129,16 +129,19 @@ namespace Bbong.Client
             scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
 
+            // 배경은 안전 영역 밖(화면 끝까지), 그 위에 안전 영역 루트를 얹는다
+            var felt = UiKit.CreatePanel(canvasGo.transform, Color.white);
+            felt.sprite = UiArt.Backdrop; // 로비와 동일한 네이비 배경(전 화면 톤 통일)
+            UiKit.Stretch(felt.rectTransform);
+
+            var safeRoot = SafeArea.Wrap(canvasGo.transform);
+
             // 전체 UI를 담는 셰이크 루트 — 뽕/셔플 연출 때 화면 전체를 흔든다
             var shakeGo = new GameObject("ShakeRoot", typeof(RectTransform));
-            shakeGo.transform.SetParent(canvasGo.transform, false);
+            shakeGo.transform.SetParent(safeRoot, false);
             _shakeRoot = (RectTransform)shakeGo.transform;
             UiKit.Stretch(_shakeRoot);
             var root = shakeGo.transform;
-
-            var felt = UiKit.CreatePanel(root, Color.white);
-            felt.sprite = UiArt.Backdrop; // 로비와 동일한 네이비 배경(전 화면 톤 통일)
-            UiKit.Stretch(felt.rectTransform);
 
             var seatsGo = new GameObject("SeatsArea", typeof(RectTransform));
             seatsGo.transform.SetParent(root, false);
@@ -214,7 +217,7 @@ namespace Bbong.Client
             lbRt.anchorMin = lbRt.anchorMax = new Vector2(0f, 1f); // 좌상단 고정
             lbRt.pivot = new Vector2(0f, 1f);
             lbRt.anchoredPosition = new Vector2(10f, -10f);
-            lbRt.sizeDelta = new Vector2(328f, 0f); // 높이는 인원수에 맞춰 자동. 닉네임 12자 한 줄 폭 + 6인 좌석과 간섭 없는 높이
+            lbRt.sizeDelta = new Vector2(372f, 0f); // 높이는 인원수에 맞춰 자동. 닉네임 12자가 한 줄에 들어가는 폭
             var lbLayout = lbPanel.gameObject.AddComponent<VerticalLayoutGroup>();
             lbLayout.padding = new RectOffset(8, 8, 6, 6);
             lbLayout.spacing = 2;
@@ -421,6 +424,18 @@ namespace Bbong.Client
             StyleModalButton(leave);
 
             _exitModal.SetActive(false);
+
+            // 게임 중 기기 뒤로가기 = 나가기 확인(모달이 떠 있으면 닫기). 판이 통째로 날아가는 걸 막는다.
+            UiKit.BackAction = () =>
+            {
+                if (_exitModal != null && _exitModal.activeSelf)
+                {
+                    _exitModal.SetActive(false);
+                    return;
+                }
+
+                ShowExitConfirm();
+            };
         }
 
         /// <summary>모달 버튼: 글자 스타일 + 하단 고정 높이 배치(가로 위치는 호출부 앵커 유지).</summary>
@@ -532,7 +547,7 @@ namespace Bbong.Client
 
                 // 순위·점수는 우측, 닉네임은 좌측 정렬 — 세로 정렬선이 생겨 표로 읽힌다
                 LeaderboardCell(row.transform, $"{rank}위", 48f, color, mine, TextAnchor.MiddleRight);
-                LeaderboardCell(row.transform, seat.nickname, 196f, color, mine, TextAnchor.MiddleLeft, fit: true); // 12자 × 최소 15px가 한 줄에 들어가는 폭
+                LeaderboardCell(row.transform, seat.nickname, 240f, color, mine, TextAnchor.MiddleLeft, fit: true); // "형용사 동물 봇"(최대 12자)이 한 줄에 들어가는 폭
                 LeaderboardCell(row.transform, seat.cumulativeDebt.ToString(), 56f, color, mine, TextAnchor.MiddleRight);
             }
         }
@@ -554,7 +569,9 @@ namespace Bbong.Client
             le.flexibleWidth = 0f;
             if (fit)
             {
-                FitText(cell, 15, 24);
+                FitText(cell, 13, 24);
+                // 자동 축소는 줄바꿈을 동반한다. 세로로 넘치면 아랫줄 닉네임과 겹치므로 한 줄로 잘라낸다.
+                cell.verticalOverflow = VerticalWrapMode.Truncate;
             }
         }
 

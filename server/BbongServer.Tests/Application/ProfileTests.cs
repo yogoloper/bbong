@@ -29,7 +29,7 @@ public class ProfileTests
     [Test]
     public async Task Rename_updates_nickname()
     {
-        var guest = await _service.RegisterGuestAsync();
+        var guest = (await _service.RegisterGuestAsync()).Account;
 
         var updated = await _service.RenameAsync(guest.Id, "용감한 두더지");
 
@@ -41,7 +41,7 @@ public class ProfileTests
     [Test]
     public async Task Rename_rejects_invalid_nickname()
     {
-        var guest = await _service.RegisterGuestAsync();
+        var guest = (await _service.RegisterGuestAsync()).Account;
 
         Assert.ThrowsAsync<ArgumentException>(() => _service.RenameAsync(guest.Id, ""));
         Assert.ThrowsAsync<ArgumentException>(() => _service.RenameAsync(guest.Id, "열세글자가되는닉네임이름임"));

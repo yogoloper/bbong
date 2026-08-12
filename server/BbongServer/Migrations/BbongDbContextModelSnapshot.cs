@@ -39,6 +39,9 @@ namespace BbongServer.Migrations
                     b.Property<string>("Provider")
                         .HasColumnType("text");
 
+                    b.Property<string>("ResumeSecretHash")
+                        .HasColumnType("text");
+
                     b.Property<string>("SocialSubject")
                         .HasColumnType("text");
 

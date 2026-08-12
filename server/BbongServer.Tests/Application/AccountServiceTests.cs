@@ -32,7 +32,7 @@ public class AccountServiceTests
     [Test]
     public async Task RegisterGuest_creates_guest_account()
     {
-        var account = await _service.RegisterGuestAsync();
+        var account = (await _service.RegisterGuestAsync()).Account;
 
         Assert.That(account.IsGuest, Is.True);
         Assert.That(account.Id, Is.Not.EqualTo(System.Guid.Empty));
@@ -42,7 +42,7 @@ public class AccountServiceTests
     [Test]
     public async Task RegisterGuest_grants_starting_balance()
     {
-        var account = await _service.RegisterGuestAsync();
+        var account = (await _service.RegisterGuestAsync()).Account;
 
         var wallet = await _ledger.LoadWalletAsync(account.Id);
         Assert.That(wallet.Balance, Is.EqualTo(AccountService.StartingGrant));
@@ -53,7 +53,7 @@ public class AccountServiceTests
     [Test]
     public async Task RegisterGuest_assigns_valid_nickname()
     {
-        var account = await _service.RegisterGuestAsync();
+        var account = (await _service.RegisterGuestAsync()).Account;
 
         Assert.That(BbongCore.Config.GameConfig.IsValidNickname(account.Nickname), Is.True);
     }
@@ -61,8 +61,8 @@ public class AccountServiceTests
     [Test]
     public async Task RegisterGuest_assigns_unique_ids_and_nicknames()
     {
-        var a = await _service.RegisterGuestAsync();
-        var b = await _service.RegisterGuestAsync();
+        var a = (await _service.RegisterGuestAsync()).Account;
+        var b = (await _service.RegisterGuestAsync()).Account;
 
         Assert.That(a.Id, Is.Not.EqualTo(b.Id));
         Assert.That(a.Nickname, Is.Not.EqualTo(b.Nickname));

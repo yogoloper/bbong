@@ -29,10 +29,21 @@ namespace Bbong.Client
                 return Uri.UnescapeDataString(match.Groups[1].Value).TrimEnd('/');
             }
 #endif
+#if UNITY_ANDROID && !UNITY_EDITOR
+            // 에뮬레이터에서 localhost는 기기 자신을 가리킨다. 10.0.2.2가 호스트 PC 루프백.
+            return Debug.isDebugBuild ? "http://10.0.2.2:5080" : ProductionUrl;
+#elif UNITY_IOS && !UNITY_EDITOR
+            return Debug.isDebugBuild ? "http://localhost:5080" : ProductionUrl;
+#else
             return "http://localhost:5080";
+#endif
         }
 
-        [Serializable] public class AuthResult { public string accessToken; public string userId; public string nickname; public bool isGuest; }
+        /// <summary>스토어 배포 빌드가 붙을 서버(웹처럼 ?server=로 갈아끼울 수 없다).</summary>
+        private const string ProductionUrl = "https://bbong.fly.dev";
+
+        [Serializable] public class AuthResult { public string accessToken; public string userId; public string nickname; public bool isGuest; public string resumeSecret; }
+        [Serializable] private class ResumeBody { public string userId; public string resumeSecret; }
         [Serializable] public class MeResult { public string userId; public string nickname; public bool isGuest; public long balance; }
         [Serializable] private class BalanceResult { public long balance; }
         [Serializable] private class ErrorResult { public string error; }
@@ -43,12 +54,37 @@ namespace Bbong.Client
             Send("POST", "/auth/guest", "{}", auth: false, text =>
             {
                 var r = JsonUtility.FromJson<AuthResult>(text);
-                Session.Token = r.accessToken;
-                Session.UserId = r.userId;
-                Session.Nickname = r.nickname;
-                Session.IsGuest = r.isGuest;
+                Apply(r);
+                Session.SaveCredentials(r.userId, r.resumeSecret); // 다음 실행에서 같은 계정으로 복귀
                 onOk();
             }, onErr);
+
+        /// <summary>
+        /// 기기에 보관된 자격으로 계정 복귀. 자격이 거부되면(계정 삭제 등) onErr로 알리고,
+        /// 호출자가 저장분을 버린 뒤 새 게스트를 만들지 결정한다.
+        /// </summary>
+        public static IEnumerator ResumeLogin(Action onOk, Action<string> onErr)
+        {
+            var body = JsonUtility.ToJson(new ResumeBody
+            {
+                userId = Session.SavedUserId,
+                resumeSecret = Session.SavedResumeSecret
+            });
+
+            return Send("POST", "/auth/resume", body, auth: false, text =>
+            {
+                Apply(JsonUtility.FromJson<AuthResult>(text));
+                onOk();
+            }, onErr);
+        }
+
+        private static void Apply(AuthResult r)
+        {
+            Session.Token = r.accessToken;
+            Session.UserId = r.userId;
+            Session.Nickname = r.nickname;
+            Session.IsGuest = r.isGuest;
+        }
 
         public static IEnumerator RefreshMe(Action onOk, Action<string> onErr) =>
             Send("GET", "/me", null, auth: true, text =>

@@ -189,15 +189,17 @@ namespace Bbong.Client
             UiKit.CreateText(root, lines, 34, TextAnchor.UpperCenter,
                 new Vector2(0.25f, 0.24f), new Vector2(0.75f, 0.49f));
 
+            void CancelMatching()
+            {
+                WsClient.Instance.Send(new LeaveRoomMsg());
+                _room = null;
+                _matching = false;
+                Rebuild();
+            }
+
             UiKit.CreateButton(root, "매칭 취소",
-                new Vector2(0.40f, 0.06f), new Vector2(0.60f, 0.15f),
-                () =>
-                {
-                    WsClient.Instance.Send(new LeaveRoomMsg());
-                    _room = null;
-                    _matching = false;
-                    Rebuild();
-                }, 32);
+                new Vector2(0.40f, 0.06f), new Vector2(0.60f, 0.15f), CancelMatching, 32);
+            UiKit.BackAction = CancelMatching; // 대기 중 뒤로가기 = 매칭 취소(방에 남지 않게)
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.0f), new Vector2(0.9f, 0.06f));

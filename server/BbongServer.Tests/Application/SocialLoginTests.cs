@@ -62,7 +62,7 @@ public class SocialLoginTests
     [Test]
     public async Task Link_promotes_guest_keeping_id_and_balance()
     {
-        var guest = await _service.RegisterGuestAsync();
+        var guest = (await _service.RegisterGuestAsync()).Account;
 
         var linked = await _service.LinkSocialAsync(guest.Id, SocialProvider.Apple, "apple-sub");
 
@@ -77,7 +77,7 @@ public class SocialLoginTests
     public async Task Link_fails_when_social_already_used_by_another_account()
     {
         await _service.LoginWithSocialAsync(SocialProvider.Google, "taken-sub");
-        var guest = await _service.RegisterGuestAsync();
+        var guest = (await _service.RegisterGuestAsync()).Account;
 
         Assert.ThrowsAsync<InvalidOperationException>(() =>
             _service.LinkSocialAsync(guest.Id, SocialProvider.Google, "taken-sub"));

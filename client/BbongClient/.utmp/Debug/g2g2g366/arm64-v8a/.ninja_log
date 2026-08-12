@@ -1,0 +1,14 @@
+# ninja log v5
+0	765	1786543049919451002	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	3bda25a3a7721d7d
+4	707	1786543049855278947	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	2298261e933b1161
+0	724	1786543049880679293	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	f2cc8a77faf77c68
+3	725	1786543049879731329	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	63a93121af758239
+6	741	1786543049898117637	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	9f19a461762171df
+765	827	1786543049982746385	/Users/hyeong-won/Desktop/01.projects/06.bbong/client/BbongClient/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/g2g2g366/obj/arm64-v8a/libgame.so	2ba74da58c33970b
+4	641	1786543049795402498	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	4b95d0ab7f42733d
+1	689	1786543049846319482	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	93e228fe850bbc37
+0	654	1786543049811817754	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	6b1de5c7351e7d5b
+62	124	1786546598887412762	/Users/hyeong-won/Desktop/01.projects/06.bbong/client/BbongClient/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/g2g2g366/obj/arm64-v8a/libswappywrapper.so	36b59ed3075617e2
+0	62	1786546598832793931	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	cf971601ed2c63be
+0	59	1786547002645498408	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	cf971601ed2c63be
+59	130	1786547002698282151	/Users/hyeong-won/Desktop/01.projects/06.bbong/client/BbongClient/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/g2g2g366/obj/arm64-v8a/libswappywrapper.so	36b59ed3075617e2

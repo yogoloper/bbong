@@ -23,12 +23,36 @@ public sealed class AccountService
         _social = social;
     }
 
-    public async Task<UserAccount> RegisterGuestAsync()
+    public async Task<GuestRegistration> RegisterGuestAsync()
     {
         var id = Guid.NewGuid();
         var account = UserAccount.NewGuest(id, GuestNickname(id), DateTimeOffset.UtcNow);
+
+        var secret = ResumeSecret.Generate();
+        account.SetResumeSecretHash(ResumeSecret.Hash(secret));
+
         await PersistNewAsync(account);
-        return account;
+        return new GuestRegistration(account, secret);
+    }
+
+    /// <summary>
+    /// 기기에 보관된 재개 자격으로 계정 복귀. 자격이 안 맞거나 계정이 없으면 null을 돌려주고,
+    /// 호출자는 새 게스트를 만들지 말지 판단한다(자동으로 만들면 계정이 조용히 갈린다).
+    /// </summary>
+    public async Task<UserAccount?> ResumeGuestAsync(Guid userId, string resumeSecret)
+    {
+        if (string.IsNullOrEmpty(resumeSecret))
+        {
+            return null;
+        }
+
+        var account = await _accounts.GetByIdAsync(userId);
+        if (account?.ResumeSecretHash is null)
+        {
+            return null;
+        }
+
+        return ResumeSecret.Matches(resumeSecret, account.ResumeSecretHash) ? account : null;
     }
 
     /// <summary>

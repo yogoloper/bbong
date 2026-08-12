@@ -158,7 +158,26 @@ BbongServer.Realtime.WsEndpoint.Map(app); // /ws — 친구방 실시간(JWT 재
 // 게스트 등록 → 계정 생성 + 초기 지급 + 액세스 토큰 발급
 app.MapPost("/auth/guest", async (AccountService accounts, ITokenIssuer tokens) =>
 {
-    var account = await accounts.RegisterGuestAsync();
+    var registration = await accounts.RegisterGuestAsync();
+    var account = registration.Account;
+    return Results.Ok(new
+    {
+        accessToken = tokens.IssueAccessToken(account.Id),
+        userId = account.Id,
+        nickname = account.Nickname,
+        resumeSecret = registration.ResumeSecret // 기기에 보관 — 재설치 전까지 같은 계정으로 복귀
+    });
+});
+
+// 기기에 보관된 자격으로 계정 복귀 → 새 액세스 토큰 발급(게스트 계정이 재시작마다 갈리는 것 방지)
+app.MapPost("/auth/resume", async (ResumeRequest req, AccountService accounts, ITokenIssuer tokens) =>
+{
+    var account = await accounts.ResumeGuestAsync(req.UserId, req.ResumeSecret);
+    if (account is null)
+    {
+        return Results.Unauthorized();
+    }
+
     return Results.Ok(new
     {
         accessToken = tokens.IssueAccessToken(account.Id),
@@ -351,6 +370,9 @@ public sealed record AdRewardRequest(AdRewardKind Kind);
 
 /// <summary>닉네임 변경 요청 본문.</summary>
 public sealed record RenameRequest(string Nickname);
+
+/// <summary>기기 재개 요청 본문(앱이 보관한 userId + 발급받은 재개 자격).</summary>
+public sealed record ResumeRequest(Guid UserId, string ResumeSecret);
 
 /// <summary>매치 시작 요청 본문(판돈은 GameConfig.StakeOptions 중 하나).</summary>
 public sealed record MatchStartRequest(int Stake, int PlayerCount);

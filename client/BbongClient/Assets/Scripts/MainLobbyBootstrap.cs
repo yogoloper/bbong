@@ -12,6 +12,7 @@ namespace Bbong.Client
         {
             UiKit.EnsureEventSystem();
             UiKit.DestroyStrayTables(); // 메인 로비가 떴다 = 어떤 게임도 진행 중이면 안 됨
+            UiKit.BackAction = null;    // 최상위 화면 — 기기 뒤로가기는 앱 종료
             Build();
             if (Session.IsLoggedIn)
             {

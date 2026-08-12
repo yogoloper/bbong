@@ -19,6 +19,14 @@ public sealed class UserAccount
         SocialSubject = socialSubject;
     }
 
+    /// <summary>
+    /// 기기 재개용 장기 자격의 해시. 평문은 발급 시 한 번만 클라이언트에 내려주고 서버는 보관하지 않는다.
+    /// 액세스 토큰(60분)과 달리 만료가 없어, 앱을 껐다 켜도 같은 계정으로 돌아올 수 있다.
+    /// </summary>
+    public string? ResumeSecretHash { get; private set; }
+
+    public void SetResumeSecretHash(string hash) => ResumeSecretHash = hash;
+
     public Guid Id { get; }
 
     public string Nickname { get; private set; }

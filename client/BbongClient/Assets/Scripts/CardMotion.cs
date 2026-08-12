@@ -16,6 +16,12 @@ namespace Bbong.Client
         private float _scale = 1f;
         private bool _hovered;
 
+        /// <summary>
+        /// 터치는 손을 떼도 Exit가 오지 않는 경우가 있어 확대가 그대로 남는다(카드 한 장만 커진 채 흔들림도 멈춤).
+        /// 마우스에만 호버 개념을 적용하고, 터치는 누르는 동안만 반응하게 한다.
+        /// </summary>
+        private static bool IsTouch(PointerEventData eventData) => eventData.pointerId >= 0;
+
         private void Start() => _phase = transform.GetSiblingIndex() * 0.9f;
 
         private void Update()
@@ -28,6 +34,11 @@ namespace Bbong.Client
 
         public void OnPointerEnter(PointerEventData eventData)
         {
+            if (IsTouch(eventData))
+            {
+                return;
+            }
+
             _hovered = true;
             _targetScale = 1.12f;
         }
@@ -40,6 +51,14 @@ namespace Bbong.Client
 
         public void OnPointerDown(PointerEventData eventData) => _scale = 0.92f;
 
-        public void OnPointerUp(PointerEventData eventData) => _targetScale = _hovered ? 1.12f : 1f;
+        public void OnPointerUp(PointerEventData eventData)
+        {
+            if (IsTouch(eventData))
+            {
+                _hovered = false; // 손을 떼면 즉시 평상 상태로
+            }
+
+            _targetScale = _hovered ? 1.12f : 1f;
+        }
     }
 }

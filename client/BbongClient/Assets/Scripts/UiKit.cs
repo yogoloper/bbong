@@ -40,16 +40,19 @@ namespace Bbong.Client
             scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
 
+            // 배경은 안전 영역 밖 — 노치 주변까지 채워야 검은 띠가 안 생긴다
             var bg = CreatePanel(canvasGo.transform, Color.white);
             bg.sprite = UiArt.Backdrop;
             Stretch(bg.rectTransform);
 
+            var root = SafeArea.Wrap(canvasGo.transform);
+
             if (topBar)
             {
-                TopBar(canvasGo.transform);
+                TopBar(root);
             }
 
-            return (canvasGo, canvasGo.transform);
+            return (canvasGo, root);
         }
 
         /// <summary>스프라이트 아이콘(클릭 통과). 비율 유지.</summary>
@@ -255,11 +258,29 @@ namespace Bbong.Client
             return input;
         }
 
+        /// <summary>
+        /// 기기 뒤로가기(안드로이드)가 눌렸을 때 실행할 동작. 화면마다 뒤로 동작이 정확히 하나뿐이라
+        /// 스택 대신 슬롯 하나로 충분하다. 화면을 새로 만들 때마다 덮어쓴다.
+        /// </summary>
+        public static System.Action BackAction { get; set; }
+
+        public static void InvokeBack()
+        {
+            if (BackAction != null)
+            {
+                BackAction();
+                return;
+            }
+
+            Application.Quit(); // 최상위 화면에서 뒤로 = 앱 종료(기기 관례)
+        }
+
         /// <summary>화면 왼쪽 하단 고정 뒤로가기 버튼(루미큐브식, 상단바와 안 겹침).</summary>
         public static Button BackButton(Transform root, UnityEngine.Events.UnityAction onBack)
         {
             var btn = CreateButton(root, "← 뒤로", new Vector2(0.015f, 0.02f), new Vector2(0.12f, 0.095f), onBack, 32);
             btn.transform.SetAsLastSibling(); // 항상 최상위(다른 패널에 안 가림)
+            BackAction = () => onBack(); // 기기 뒤로가기도 같은 동작
             return btn;
         }
 

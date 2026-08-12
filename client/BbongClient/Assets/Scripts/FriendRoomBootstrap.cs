@@ -76,12 +76,21 @@ namespace Bbong.Client
             title.fontStyle = FontStyle.Bold;
 
             var input = UiKit.CreateInputField(root, "", 6,
-                new Vector2(0.38f, 0.52f), new Vector2(0.62f, 0.62f));
+                new Vector2(0.38f, 0.60f), new Vector2(0.62f, 0.70f));
             input.contentType = InputField.ContentType.IntegerNumber;
 
+            // 모바일 소프트 키보드가 화면 아래 절반을 덮는다. 버튼을 키보드 위로 올리고,
+            // 키보드의 완료(엔터)만으로도 입장되게 해 키보드를 먼저 닫아야 하는 상황을 없앤다.
             UiKit.CreateButton(root, "입장",
-                new Vector2(0.40f, 0.38f), new Vector2(0.60f, 0.48f),
+                new Vector2(0.40f, 0.46f), new Vector2(0.60f, 0.58f),
                 () => JoinWithCode(input.text), 38);
+            input.onEndEdit.AddListener(text =>
+            {
+                if (text.Length == 6)
+                {
+                    JoinWithCode(text);
+                }
+            });
 
             BuildStatus(root);
             UiKit.BackButton(root, BuildEntry);
@@ -120,8 +129,9 @@ namespace Bbong.Client
                 lines += "<color=#FFFFFF40>- 빈 자리 -</color>\n"; // 정원까지 줄 유지 — 진행률이 목록만 봐도 읽힘
             }
 
-            UiKit.CreateText(root, lines.TrimEnd(), 34, TextAnchor.UpperCenter,
-                new Vector2(0.25f, 0.30f), new Vector2(0.75f, 0.55f));
+            // 6줄(정원)이 아래 봇 버튼 영역을 침범하지 않도록 목록 상단을 올리고 줄 높이를 줄인다.
+            UiKit.CreateText(root, lines.TrimEnd(), 28, TextAnchor.UpperCenter,
+                new Vector2(0.25f, 0.365f), new Vector2(0.75f, 0.545f)).verticalOverflow = VerticalWrapMode.Truncate;
 
             if (Session.UserId == _room.hostUserId)
             {
