@@ -188,6 +188,20 @@ app.MapPost("/auth/resume", async (ResumeRequest req, AccountService accounts, I
     });
 });
 
+// 계정 삭제 요청/취소 — 스토어 정책상 앱 안에 삭제 경로가 있어야 한다.
+// 즉시 지우지 않고 표시만 남겨 유예 기간 내 복구가 가능하고, 정산 기록은 보존된다.
+app.MapPost("/me/deletion", async (ClaimsPrincipal user, AccountService accounts) =>
+{
+    await accounts.RequestDeletionAsync(CurrentUserId(user));
+    return Results.Ok(new { status = "PendingDeletion" });
+}).RequireAuthorization();
+
+app.MapDelete("/me/deletion", async (ClaimsPrincipal user, AccountService accounts) =>
+{
+    await accounts.CancelDeletionAsync(CurrentUserId(user));
+    return Results.Ok(new { status = "Active" });
+}).RequireAuthorization();
+
 // 소셜 로그인 → 기존 계정 반환 또는 신규 생성 + 토큰 발급
 app.MapPost("/auth/social", async (SocialLoginRequest req, AccountService accounts, ITokenIssuer tokens) =>
 {
@@ -363,6 +377,12 @@ app.MapPost("/match/{id:guid}/result", async (ClaimsPrincipal user, Guid id, Mat
 }).RequireAuthorization();
 
 app.Run();
+
+/// <summary>클레임에서 현재 유저 id 추출(엔드포인트 공통).</summary>
+static Guid CurrentUserId(ClaimsPrincipal user) =>
+    Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+
 
 /// <summary>소셜 로그인/승격 요청 본문.</summary>
 public sealed record SocialLoginRequest(SocialProvider Provider, string IdToken);

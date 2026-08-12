@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using BbongServer.Application;
+using BbongServer.Infrastructure;
 using BbongServer.Domain.Auth;
 using BbongServer.Infrastructure.InMemory;
 using NUnit.Framework;
@@ -22,7 +23,7 @@ public class GuestResumeTests
     public void SetUp()
     {
         _accounts = new InMemoryAccountStore();
-        _service = new AccountService(_accounts, new InMemoryLedgerStore(), new UnusedSocialVerifier());
+        _service = new AccountService(_accounts, new InMemoryLedgerStore(), new UnusedSocialVerifier(), new SystemClock());
     }
 
     private sealed class UnusedSocialVerifier : ISocialTokenVerifier

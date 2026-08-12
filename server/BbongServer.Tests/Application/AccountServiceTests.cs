@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using BbongServer.Application;
+using BbongServer.Infrastructure;
 using BbongServer.Domain.Wallet;
 using BbongServer.Infrastructure.InMemory;
 using NUnit.Framework;
@@ -18,7 +19,7 @@ public class AccountServiceTests
     {
         _accounts = new InMemoryAccountStore();
         _ledger = new InMemoryLedgerStore();
-        _service = new AccountService(_accounts, _ledger, new StubSocialVerifier());
+        _service = new AccountService(_accounts, _ledger, new StubSocialVerifier(), new SystemClock());
     }
 
     // 게스트 등록 테스트는 소셜을 안 쓰므로 호출되면 실패하는 스텁.

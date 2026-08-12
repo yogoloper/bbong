@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using BbongServer.Application;
+using BbongServer.Infrastructure;
 using BbongServer.Domain.Auth;
 using BbongServer.Infrastructure.InMemory;
 using NUnit.Framework;
@@ -23,7 +24,7 @@ public class ProfileTests
     public void SetUp()
     {
         _accounts = new InMemoryAccountStore();
-        _service = new AccountService(_accounts, new InMemoryLedgerStore(), new StubVerifier());
+        _service = new AccountService(_accounts, new InMemoryLedgerStore(), new StubVerifier(), new SystemClock());
     }
 
     [Test]

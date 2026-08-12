@@ -36,6 +36,11 @@ public sealed class BbongDbContext : DbContext
             account.Property(a => a.Provider).HasConversion<string>(); // enum → 문자열(nullable)
             account.Property(a => a.SocialSubject);
             account.Property(a => a.ResumeSecretHash); // 기기 재개 자격(해시만 보관)
+            account.Property(a => a.Status).HasConversion<string>();
+            account.Property(a => a.LastLoginAt);
+            account.Property(a => a.DeletionRequestedAt);
+            // 탈퇴 유예 만료 처리와 휴면 계정 조회
+            account.HasIndex(a => new { a.Status, a.DeletionRequestedAt });
             account.Ignore(a => a.IsGuest); // 계산 속성(Provider null 여부)
             // 같은 (provider, subject)는 한 계정만 — 소셜 계정에만 적용(부분 인덱스)
             account.HasIndex(a => new { a.Provider, a.SocialSubject })

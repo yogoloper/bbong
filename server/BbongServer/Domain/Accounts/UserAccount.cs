@@ -27,6 +27,37 @@ public sealed class UserAccount
 
     public void SetResumeSecretHash(string hash) => ResumeSecretHash = hash;
 
+    /// <summary>계정 상태. 정지·탈퇴 계정은 로그인·재개를 막는다.</summary>
+    public AccountStatus Status { get; private set; } = AccountStatus.Active;
+
+    /// <summary>마지막 접속 시각. CS 대응("언제 마지막으로 들어왔나")과 휴면 판단의 근거.</summary>
+    public DateTimeOffset? LastLoginAt { get; private set; }
+
+    /// <summary>탈퇴 요청 시각. 유예 기간 계산과 실제 삭제 처리의 기준이 된다.</summary>
+    public DateTimeOffset? DeletionRequestedAt { get; private set; }
+
+    /// <summary>로그인·재개 성공 시 갱신.</summary>
+    public void MarkLogin(DateTimeOffset at) => LastLoginAt = at;
+
+    /// <summary>운영 제재. 사유·이력은 별도 테이블로 남길 여지를 둔다.</summary>
+    public void Suspend() => Status = AccountStatus.Suspended;
+
+    /// <summary>
+    /// 탈퇴 요청(스토어 정책상 앱 내 삭제 경로 필수). 즉시 지우지 않고 표시만 해
+    /// 유예 기간 동안 되돌릴 수 있게 하고, 정산·분쟁 기록은 보존한다.
+    /// </summary>
+    public void RequestDeletion(DateTimeOffset at)
+    {
+        Status = AccountStatus.PendingDeletion;
+        DeletionRequestedAt = at;
+    }
+
+    public void CancelDeletion()
+    {
+        Status = AccountStatus.Active;
+        DeletionRequestedAt = null;
+    }
+
     public Guid Id { get; }
 
     public string Nickname { get; private set; }
@@ -59,4 +90,12 @@ public sealed class UserAccount
         Provider = identity.Provider;
         SocialSubject = identity.Subject;
     }
+}
+
+/// <summary>계정 상태. 정지·탈퇴는 접속을 막지만 기록은 남긴다.</summary>
+public enum AccountStatus
+{
+    Active,
+    Suspended,
+    PendingDeletion
 }

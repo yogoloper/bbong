@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using BbongServer.Application;
+using BbongServer.Infrastructure;
 using BbongServer.Domain.Auth;
 using BbongServer.Infrastructure.InMemory;
 using NUnit.Framework;
@@ -26,7 +27,7 @@ public class SocialLoginTests
     {
         _accounts = new InMemoryAccountStore();
         _ledger = new InMemoryLedgerStore();
-        _service = new AccountService(_accounts, _ledger, new FakeVerifier());
+        _service = new AccountService(_accounts, _ledger, new FakeVerifier(), new SystemClock());
     }
 
     [Test]

@@ -15,18 +15,21 @@ public sealed class AccountService
     private readonly IAccountStore _accounts;
     private readonly ILedgerStore _ledger;
     private readonly ISocialTokenVerifier _social;
+    private readonly IClock _clock;
 
-    public AccountService(IAccountStore accounts, ILedgerStore ledger, ISocialTokenVerifier social)
+    public AccountService(IAccountStore accounts, ILedgerStore ledger, ISocialTokenVerifier social, IClock clock)
     {
         _accounts = accounts;
         _ledger = ledger;
         _social = social;
+        _clock = clock;
     }
 
     public async Task<GuestRegistration> RegisterGuestAsync()
     {
         var id = Guid.NewGuid();
-        var account = UserAccount.NewGuest(id, GuestNickname(id), DateTimeOffset.UtcNow);
+        var account = UserAccount.NewGuest(id, GuestNickname(id), _clock.UtcNow);
+        account.MarkLogin(_clock.UtcNow);
 
         var secret = ResumeSecret.Generate();
         account.SetResumeSecretHash(ResumeSecret.Hash(secret));
@@ -47,12 +50,41 @@ public sealed class AccountService
         }
 
         var account = await _accounts.GetByIdAsync(userId);
-        if (account?.ResumeSecretHash is null)
+        if (account?.ResumeSecretHash is null || account.Status != AccountStatus.Active)
+        {
+            return null; // 정지·탈퇴 계정은 자격이 맞아도 돌려보내지 않는다
+        }
+
+        if (!ResumeSecret.Matches(resumeSecret, account.ResumeSecretHash))
         {
             return null;
         }
 
-        return ResumeSecret.Matches(resumeSecret, account.ResumeSecretHash) ? account : null;
+        account.MarkLogin(_clock.UtcNow);
+        await _accounts.SaveAsync(account);
+        return account;
+    }
+
+    /// <summary>
+    /// 탈퇴 요청. 즉시 삭제하지 않고 표시만 남긴다 — 오조작 복구가 가능해야 하고,
+    /// 정산·분쟁 기록은 보존해야 한다(스토어 정책상 앱 내 삭제 경로는 필수).
+    /// </summary>
+    public async Task RequestDeletionAsync(Guid userId)
+    {
+        var account = await _accounts.GetByIdAsync(userId)
+            ?? throw new InvalidOperationException("계정을 찾을 수 없습니다.");
+
+        account.RequestDeletion(_clock.UtcNow);
+        await _accounts.SaveAsync(account);
+    }
+
+    public async Task CancelDeletionAsync(Guid userId)
+    {
+        var account = await _accounts.GetByIdAsync(userId)
+            ?? throw new InvalidOperationException("계정을 찾을 수 없습니다.");
+
+        account.CancelDeletion();
+        await _accounts.SaveAsync(account);
     }
 
     /// <summary>
@@ -70,7 +102,8 @@ public sealed class AccountService
         }
 
         var id = Guid.NewGuid();
-        var account = UserAccount.NewSocial(id, identity, GuestNickname(id), DateTimeOffset.UtcNow);
+        var account = UserAccount.NewSocial(id, identity, GuestNickname(id), _clock.UtcNow);
+        account.MarkLogin(_clock.UtcNow);
         await PersistNewAsync(account);
         return account;
     }
@@ -115,7 +148,7 @@ public sealed class AccountService
     private async Task PersistNewAsync(UserAccount account)
     {
         var wallet = new Wallet(account.Id);
-        wallet.Credit(StartingGrant, LedgerReason.Welcome, DateTimeOffset.UtcNow);
+        wallet.Credit(StartingGrant, LedgerReason.Welcome, _clock.UtcNow);
 
         await _accounts.SaveAsync(account);
         await _ledger.AppendAsync(wallet.Entries);
