@@ -44,6 +44,8 @@ builder.Services.AddScoped<ShopService>();
 builder.Services.AddScoped<MatchService>();
 builder.Services.AddSingleton<BbongServer.Realtime.RoomRegistry>(); // 친구방(인메모리, 단일 프로세스)
 builder.Services.AddSingleton<BbongServer.Realtime.IStakeBank, ScopedStakeBank>(); // 판돈 방 자금 흐름(§9)
+// 정산이 오지 않은 입장료 회수 — 크래시·비정상 종료로 묶인 포인트를 돌려준다
+builder.Services.AddHostedService<BbongServer.Infrastructure.UnsettledStakeService>();
 builder.Services.AddSingleton<BbongServer.Realtime.IGameHistoryStore,
     BbongServer.Infrastructure.Persistence.ScopedGameHistoryStore>(); // 게임 히스토리(CS/디버깅)
 

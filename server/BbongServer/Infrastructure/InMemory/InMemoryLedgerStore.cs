@@ -41,6 +41,27 @@ public sealed class InMemoryLedgerStore : ILedgerStore
         }
     }
 
+    public Task<IReadOnlyList<UnsettledEscrow>> FindUnsettledEscrowsAsync(DateTimeOffset olderThan)
+    {
+        lock (_gate)
+        {
+            var settled = _entries
+                .Where(e => e.Reason is LedgerReason.StakePayout or LedgerReason.StakeRefund && e.RefId is not null)
+                .Select(e => (e.UserId, e.RefId))
+                .ToHashSet();
+
+            var stranded = _entries
+                .Where(e => e.Reason == LedgerReason.StakeEscrow
+                    && e.RefId is not null
+                    && e.OccurredAt < olderThan
+                    && !settled.Contains((e.UserId, e.RefId)))
+                .Select(e => new UnsettledEscrow(e.UserId, e.RefId!.Value, -e.Delta))
+                .ToList();
+
+            return Task.FromResult<IReadOnlyList<UnsettledEscrow>>(stranded);
+        }
+    }
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, System.Threading.SemaphoreSlim> _userLocks = new();
 
     public async Task<T> WithWalletLockAsync<T>(Guid userId, Func<Task<T>> action)

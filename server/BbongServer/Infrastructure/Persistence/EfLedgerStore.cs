@@ -43,6 +43,19 @@ public sealed class EfLedgerStore : ILedgerStore
         return Wallet.FromBalance(userId, balance ?? 0);
     }
 
+    public async Task<IReadOnlyList<UnsettledEscrow>> FindUnsettledEscrowsAsync(DateTimeOffset olderThan)
+    {
+        return await _db.Ledger
+            .Where(e => e.Reason == LedgerReason.StakeEscrow
+                && e.RefId != null
+                && e.OccurredAt < olderThan
+                && !_db.Ledger.Any(settle => settle.UserId == e.UserId
+                    && settle.RefId == e.RefId
+                    && (settle.Reason == LedgerReason.StakePayout || settle.Reason == LedgerReason.StakeRefund)))
+            .Select(e => new UnsettledEscrow(e.UserId, e.RefId!.Value, -e.Delta))
+            .ToListAsync();
+    }
+
     /// <summary>
     /// 트랜잭션 + pg_advisory_xact_lock으로 같은 유저의 잔액 조회→append를 직렬화(R7).
     /// 락은 트랜잭션 종료 시 자동 해제. PG가 아니면(테스트 등) 락 없이 실행.

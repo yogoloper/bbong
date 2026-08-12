@@ -97,4 +97,30 @@ public class LedgerBalanceTests
 
         Assert.That(wallet.Balance, Is.EqualTo(0));
     }
+
+    /// <summary>회수 조회는 SQL로 번역돼야 한다(메모리에서 거르면 원장 전체를 읽는다).</summary>
+    [Test]
+    public async Task Postgres_store_finds_only_escrow_without_settlement()
+    {
+        var stranded = Guid.NewGuid();
+        var settled = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var old = DateTimeOffset.UtcNow.AddHours(-3);
+
+        await using var db = NewDb();
+        var store = new EfLedgerStore(db);
+        var wallet = new Wallet(userId);
+        wallet.Credit(10_000, LedgerReason.Welcome, old);
+        wallet.Debit(1_000, LedgerReason.StakeEscrow, old, LedgerRef.Game(stranded));
+        wallet.Debit(1_000, LedgerReason.StakeEscrow, old, LedgerRef.Game(settled));
+        wallet.Credit(2_000, LedgerReason.StakePayout, old, LedgerRef.Game(settled));
+        await store.AppendAsync(wallet.Entries);
+
+        var found = await store.FindUnsettledEscrowsAsync(DateTimeOffset.UtcNow.AddHours(-1));
+        var mine = found.Where(e => e.UserId == userId).ToList();
+
+        Assert.That(mine, Has.Count.EqualTo(1));
+        Assert.That(mine[0].GameId, Is.EqualTo(stranded));
+        Assert.That(mine[0].Amount, Is.EqualTo(1_000));
+    }
 }
