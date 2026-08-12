@@ -83,4 +83,32 @@ public class ReconnectTests
         room.Execute(new DisconnectCmd(guest.UserId)); // 재이탈해도 방은 유지(다른 인원 있음)
         Assert.That(room.Phase, Is.EqualTo(RoomPhase.Playing));
     }
+
+    /// <summary>
+    /// 재접속하려면 클라이언트가 방 코드를 알아야 한다. 모바일에서 앱을 잠깐 벗어나면
+    /// 소켓이 끊기는데, 게임 화면은 그 값을 어디서도 받지 못하고 있었다.
+    /// </summary>
+    [Test]
+    public void Game_start_tells_each_player_the_room_code()
+    {
+        var (room, hostSink, _, guestSink, _) = StartedRoom();
+
+        foreach (var sink in new[] { hostSink, guestSink })
+        {
+            Assert.That(sink.Last<GameStartedMsg>().code, Is.EqualTo(room.Code));
+        }
+    }
+
+    [Test]
+    public void Rejoining_after_a_drop_tells_the_room_code_again()
+    {
+        var (room, _, _, _, guest) = StartedRoom();
+        room.Execute(new DisconnectCmd(guest.UserId));
+
+        var (freshSink, rejoin) = NewMember("손님", guest.UserId);
+        room.Execute(new JoinCmd(rejoin));
+
+        Assert.That(freshSink.Last<GameStartedMsg>().code, Is.EqualTo(room.Code));
+        Assert.That(room.HasSeatFor(guest.UserId), Is.True);
+    }
 }

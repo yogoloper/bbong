@@ -42,6 +42,20 @@ namespace Bbong.Client
         }
 
         /// <summary>
+        /// 모바일은 알림·전화로 앱을 잠깐 벗어나는 일이 잦고, 그 사이 소켓이 조용히 끊긴다.
+        /// 복귀 시점에 상태를 확인해 끊겨 있으면 알려준다 — 화면(게임 테이블)이 자리 복귀를 맡는다.
+        /// </summary>
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused || !WsClient.HasInstance)
+            {
+                return;
+            }
+
+            WsClient.Instance.NotifyIfDropped();
+        }
+
+        /// <summary>
         /// Unity 입력으로는 안드로이드 뒤로가기를 못 받는다(Keyboard 장치는 있는데 Escape로 매핑되지 않고,
         /// 레거시 입력 활성화도 빌드에 반영되지 않음). 그래서 플랫폼 API에 콜백을 직접 등록한다.
         /// Android 13(API 33)부터의 OnBackInvokedCallback을 쓰고, 그 미만은 Unity 기본 동작에 맡긴다.

@@ -65,6 +65,10 @@ public sealed class RoomUpdateMsg
 public sealed class GameStartedMsg
 {
     public string type = ServerMessageType.GameStarted;
+
+    /// <summary>방 코드. 끊겼다 돌아올 때 이 값으로 자리에 복귀한다(모바일 백그라운드 전환).</summary>
+    public string code = "";
+
     public int yourSeat;
     public int stake; // 0 = 무료방
     public int playerCount;

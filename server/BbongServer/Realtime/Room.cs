@@ -287,6 +287,7 @@ public sealed class Room
         var nicknames = _session!.Nicknames.ToArray();
         Send(member.Sink, new GameStartedMsg
         {
+            code = Code,
             yourSeat = seat,
             stake = Stake,
             playerCount = nicknames.Length,
@@ -449,6 +450,7 @@ public sealed class Room
         {
             Send(_members[seat].Sink, new GameStartedMsg
             {
+                code = Code,
                 yourSeat = seat,
                 stake = Stake,
                 playerCount = nicknames.Length,

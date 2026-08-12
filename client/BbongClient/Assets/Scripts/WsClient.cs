@@ -227,6 +227,19 @@ namespace Bbong.Client
         }
 #endif
 
+        /// <summary>
+        /// 백그라운드에 있는 동안 끊긴 소켓은 종료 신호가 유실될 수 있다. 복귀 시점에
+        /// 연결이 살아 있는지 확인해, 죽어 있으면 종료로 처리해 화면이 복구를 시작하게 한다.
+        /// </summary>
+        public void NotifyIfDropped()
+        {
+            if (_connectedNotified && !IsConnected)
+            {
+                _closeReason = "연결이 끊어졌습니다.";
+                _closed = true;
+            }
+        }
+
         private void Update()
         {
 #if UNITY_WEBGL && !UNITY_EDITOR

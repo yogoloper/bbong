@@ -284,6 +284,7 @@ namespace Bbong.Client
                     table.PlayerCount = started.playerCount;
                     table.Nicknames = started.nicknames;
                     table.Stake = started.stake;
+                    table.RoomCode = started.code; // 끊겼을 때 이 코드로 자리 복귀
                     Destroy(_canvas);
                     Destroy(gameObject);
                     break;

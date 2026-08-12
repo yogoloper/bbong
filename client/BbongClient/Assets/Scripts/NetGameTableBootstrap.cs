@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Cards;
@@ -30,6 +31,11 @@ namespace Bbong.Client
         private bool _naturalLaidLocally;                  // 자연뽕 선언 즉시 내려놓기 연출(서버 확정 전)
         private RoomUpdateMsg _pendingRoom;                // 세트 종료 후 대기실 복귀 대기(무료방)
         private bool _gameOver;                            // 세트 종료 — 방 폭파/소켓 종료에도 점수판 유지
+
+        /// <summary>재접속에 쓰는 방 코드(gameStarted로 받음). 없으면 복귀를 시도하지 않는다.</summary>
+        public string RoomCode = "";
+
+        private Coroutine _reconnect;
         private readonly List<int[]> _roundHistory = new(); // 게임(세트) 내 판별 점수
         private Button _roomBtn;
         private Button _lobbyBtn;
@@ -75,6 +81,16 @@ namespace Bbong.Client
         {
             switch (JsonUtility.FromJson<ServerEnvelope>(json).type)
             {
+                case ServerMessageType.GameStarted:
+                    // 재입장 성공. 좌석이 바뀌어 있을 수 있어 뷰 기준값을 다시 맞춘다.
+                    var restarted = JsonUtility.FromJson<GameStartedMsg>(json);
+                    RoomCode = restarted.code;
+                    MySeat = restarted.yourSeat;
+                    _table.MySeat = restarted.yourSeat;
+                    _table.Nicknames = restarted.nicknames;
+                    _table.SetPrompt("다시 연결됐습니다");
+                    break;
+
                 case ServerMessageType.RoundStarted:
                     var round = JsonUtility.FromJson<RoundStartedMsg>(json);
                     _table.ClearTimeline();
@@ -245,11 +261,50 @@ namespace Bbong.Client
 
         private void HandleClosed(string reason)
         {
-            if (!_gameOver)
+            if (_gameOver)
+            {
+                return;
+            }
+
+            // 모바일은 백그라운드 전환·통신 전환으로 소켓이 쉽게 끊긴다. 서버는 좌석을 들고
+            // 기다리므로(봇이 대신 두는 중) 바로 로비로 보내지 말고 자리 복귀를 시도한다.
+            if (string.IsNullOrEmpty(RoomCode) || _reconnect != null)
             {
                 LeaveToLobby(reason);
+                return;
             }
+
+            _reconnect = StartCoroutine(Reconnect());
         }
+
+        /// <summary>끊긴 소켓을 다시 붙이고 같은 방에 재입장. 서버가 좌석을 돌려주면 게임이 이어진다.</summary>
+        private IEnumerator Reconnect()
+        {
+            for (var attempt = 1; attempt <= ReconnectAttempts; attempt++)
+            {
+                _table.SetPrompt($"연결이 끊겼습니다. 다시 연결 중... ({attempt}/{ReconnectAttempts})");
+
+                var settled = false;
+                var ok = false;
+                WsClient.Instance.Connect(() => { ok = true; settled = true; }, _ => settled = true);
+                yield return new WaitUntil(() => settled);
+
+                if (ok)
+                {
+                    WsClient.Instance.Send(new JoinRoomMsg { code = RoomCode });
+                    _reconnect = null;
+                    yield break; // 성공 여부는 서버 응답(gameStarted / error)이 알려준다
+                }
+
+                yield return new WaitForSeconds(ReconnectDelaySeconds);
+            }
+
+            _reconnect = null;
+            LeaveToLobby("서버에 다시 연결하지 못했습니다");
+        }
+
+        private const int ReconnectAttempts = 3;
+        private const float ReconnectDelaySeconds = 2f;
 
         private void ApplyView(RoundView view)
         {
