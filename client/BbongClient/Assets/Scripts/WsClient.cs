@@ -39,6 +39,7 @@ namespace Bbong.Client
 
         private bool _webglStarted;
 #else
+        private const int ConnectTimeoutSeconds = 8;
         private ClientWebSocket _socket;
         private readonly SemaphoreSlim _sendLock = new(1, 1);
 #endif
@@ -164,7 +165,11 @@ namespace Bbong.Client
             {
                 _socket = new ClientWebSocket();
                 _socket.Options.SetRequestHeader("Authorization", "Bearer " + Session.Token);
-                await _socket.ConnectAsync(new Uri(WsUrl), CancellationToken.None);
+
+                // 네트워크가 끊긴 상태에서는 OS 타임아웃까지(수십 초) 매달린다.
+                // 재접속 재시도가 그동안 멈춰 있으므로 직접 제한을 건다.
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(ConnectTimeoutSeconds));
+                await _socket.ConnectAsync(new Uri(WsUrl), timeout.Token);
                 _ = ReceiveLoopAsync(_socket);
             }
             catch (Exception ex)

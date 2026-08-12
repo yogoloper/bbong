@@ -36,6 +36,7 @@ namespace Bbong.Client
         public string RoomCode = "";
 
         private Coroutine _reconnect;
+        private bool _rejoining;   // 재입장 요청을 보내고 응답을 기다리는 중
         private readonly List<int[]> _roundHistory = new(); // 게임(세트) 내 판별 점수
         private Button _roomBtn;
         private Button _lobbyBtn;
@@ -84,6 +85,7 @@ namespace Bbong.Client
                 case ServerMessageType.GameStarted:
                     // 재입장 성공. 좌석이 바뀌어 있을 수 있어 뷰 기준값을 다시 맞춘다.
                     var restarted = JsonUtility.FromJson<GameStartedMsg>(json);
+                    _rejoining = false;
                     RoomCode = restarted.code;
                     MySeat = restarted.yourSeat;
                     _table.MySeat = restarted.yourSeat;
@@ -254,6 +256,14 @@ namespace Bbong.Client
                         Render();
                     }
 
+                    // 재입장이 거부되면(방이 이미 닫혔거나 서버가 재기동됨) 죽은 테이블에 남기지 않는다
+                    if (_rejoining)
+                    {
+                        _rejoining = false;
+                        LeaveToLobby(error.message);
+                        break;
+                    }
+
                     _table.SetPrompt(error.message);
                     break;
             }
@@ -287,10 +297,18 @@ namespace Bbong.Client
                 var settled = false;
                 var ok = false;
                 WsClient.Instance.Connect(() => { ok = true; settled = true; }, _ => settled = true);
-                yield return new WaitUntil(() => settled);
+
+                // 콜백이 영영 오지 않는 경우(소켓이 매달림)에도 다음 시도로 넘어가게 한다
+                var waited = 0f;
+                while (!settled && waited < ConnectWaitSeconds)
+                {
+                    waited += Time.deltaTime;
+                    yield return null;
+                }
 
                 if (ok)
                 {
+                    _rejoining = true;
                     WsClient.Instance.Send(new JoinRoomMsg { code = RoomCode });
                     _reconnect = null;
                     yield break; // 성공 여부는 서버 응답(gameStarted / error)이 알려준다
@@ -305,6 +323,7 @@ namespace Bbong.Client
 
         private const int ReconnectAttempts = 3;
         private const float ReconnectDelaySeconds = 2f;
+        private const float ConnectWaitSeconds = 10f;
 
         private void ApplyView(RoundView view)
         {
