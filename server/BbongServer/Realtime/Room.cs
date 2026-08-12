@@ -552,7 +552,8 @@ public sealed class Room
             var share = pot / winners.Count; // 공동 1등 균등 분배, 나머지 절사(§9-3)
             foreach (var userId in winners)
             {
-                _ = _bank.PayoutAsync(userId, share);
+                // gameId를 남겨야 배당 누락(에스크로는 있는데 배당이 없는 게임)을 사후에 찾을 수 있다
+                _ = _bank.PayoutAsync(userId, share, _gameId);
             }
         }
 
@@ -619,7 +620,7 @@ public sealed class Room
     {
         if (Stake > 0 && _bank is not null)
         {
-            _ = _bank.RefundAsync(userId, Stake);
+            _ = _bank.RefundAsync(userId, Stake, _gameId == Guid.Empty ? null : _gameId);
         }
     }
 

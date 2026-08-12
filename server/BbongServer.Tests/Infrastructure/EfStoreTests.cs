@@ -72,8 +72,8 @@ public class EfStoreTests
     {
         var userId = Guid.NewGuid();
         var wallet = new Wallet(userId);
-        wallet.Credit(1000, LedgerReason.Welcome);
-        wallet.Debit(300, LedgerReason.StakeEscrow);
+        wallet.Credit(1000, LedgerReason.Welcome, System.DateTimeOffset.UnixEpoch);
+        wallet.Debit(300, LedgerReason.StakeEscrow, System.DateTimeOffset.UnixEpoch);
 
         await using (var ctx = NewContext())
         {

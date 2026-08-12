@@ -35,7 +35,7 @@ public class ShopServiceTests
     private async Task SeedBalanceAsync(long amount)
     {
         var wallet = new Wallet(_user);
-        wallet.Credit(amount, LedgerReason.Welcome);
+        wallet.Credit(amount, LedgerReason.Welcome, System.DateTimeOffset.UnixEpoch);
         await _ledger.AppendAsync(wallet.Entries);
     }
 
@@ -113,7 +113,7 @@ public class ShopServiceTests
         if (wallet.Balance > 0)
         {
             var w = Wallet.Rehydrate(_user, wallet.Entries);
-            w.Debit(wallet.Balance, LedgerReason.StakeEscrow);
+            w.Debit(wallet.Balance, LedgerReason.StakeEscrow, System.DateTimeOffset.UnixEpoch);
             await _ledger.AppendAsync(new[] { w.Entries[^1] });
         }
     }

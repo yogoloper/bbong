@@ -14,9 +14,9 @@ public class QuickMatchTests
 {
     private sealed class NullBank : IStakeBank
     {
-        public Task<bool> TryEscrowAsync(Guid userId, int stake) => Task.FromResult(true);
-        public Task RefundAsync(Guid userId, int stake) => Task.CompletedTask;
-        public Task PayoutAsync(Guid userId, long amount) => Task.CompletedTask;
+        public Task<bool> TryEscrowAsync(Guid userId, int stake, Guid? gameId = null) => Task.FromResult(true);
+        public Task RefundAsync(Guid userId, int stake, Guid? gameId = null) => Task.CompletedTask;
+        public Task PayoutAsync(Guid userId, long amount, Guid? gameId = null) => Task.CompletedTask;
     }
 
     private RoomRegistry _registry = null!;
@@ -222,9 +222,9 @@ public class QuickMatchTests
     {
         private readonly List<(Guid, long)> _payouts;
         public RecordingBank(List<(Guid, long)> payouts) => _payouts = payouts;
-        public Task<bool> TryEscrowAsync(Guid userId, int stake) => Task.FromResult(true);
-        public Task RefundAsync(Guid userId, int stake) => Task.CompletedTask;
-        public Task PayoutAsync(Guid userId, long amount)
+        public Task<bool> TryEscrowAsync(Guid userId, int stake, Guid? gameId = null) => Task.FromResult(true);
+        public Task RefundAsync(Guid userId, int stake, Guid? gameId = null) => Task.CompletedTask;
+        public Task PayoutAsync(Guid userId, long amount, Guid? gameId = null)
         {
             _payouts.Add((userId, amount));
             return Task.CompletedTask;

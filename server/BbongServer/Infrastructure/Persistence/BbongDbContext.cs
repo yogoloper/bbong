@@ -49,7 +49,16 @@ public sealed class BbongDbContext : DbContext
             ledger.HasKey(e => e.Id);
             ledger.Property(e => e.Id).ValueGeneratedOnAdd();
             ledger.Property(e => e.Reason).HasConversion<string>(); // enum을 가독성 위해 문자열로
+            ledger.Property(e => e.Kind).HasConversion<string>();
+            ledger.Property(e => e.OccurredAt);
+            ledger.Property(e => e.BalanceAfter);
+            ledger.Property(e => e.RefType);
+            ledger.Property(e => e.RefId);
             ledger.HasIndex(e => e.UserId); // 잔액 계산 = 유저별 조회
+            // 유저별 최신 행(현재 잔액)과 기간 조회를 한 인덱스로 처리
+            ledger.HasIndex(e => new { e.UserId, e.OccurredAt });
+            // 게임별 에스크로 ↔ 배당 대조(정산 누락 감지)
+            ledger.HasIndex(e => new { e.RefType, e.RefId }).HasFilter("\"RefId\" IS NOT NULL");
         });
 
         modelBuilder.Entity<AdRewardRow>(reward =>

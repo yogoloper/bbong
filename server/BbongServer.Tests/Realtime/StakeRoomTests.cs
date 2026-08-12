@@ -20,7 +20,7 @@ public class StakeRoomTests
         public readonly List<(Guid UserId, long Amount)> Payouts = new();
         public bool NextEscrowFails;
 
-        public Task<bool> TryEscrowAsync(Guid userId, int stake)
+        public Task<bool> TryEscrowAsync(Guid userId, int stake, Guid? gameId = null)
         {
             if (NextEscrowFails)
             {
@@ -31,13 +31,13 @@ public class StakeRoomTests
             return Task.FromResult(true);
         }
 
-        public Task RefundAsync(Guid userId, int stake)
+        public Task RefundAsync(Guid userId, int stake, Guid? gameId = null)
         {
             Refunds.Add((userId, stake));
             return Task.CompletedTask;
         }
 
-        public Task PayoutAsync(Guid userId, long amount)
+        public Task PayoutAsync(Guid userId, long amount, Guid? gameId = null)
         {
             Payouts.Add((userId, amount));
             return Task.CompletedTask;

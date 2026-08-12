@@ -38,7 +38,7 @@ public class MatchServiceTests
     private async Task SeedBalanceAsync(long amount)
     {
         var wallet = new Wallet(_user);
-        wallet.Credit(amount, LedgerReason.Welcome);
+        wallet.Credit(amount, LedgerReason.Welcome, System.DateTimeOffset.UnixEpoch);
         await _ledger.AppendAsync(wallet.Entries);
     }
 

@@ -39,7 +39,7 @@ public sealed class MatchService
         var (matchId, balance) = await _ledger.WithWalletLockAsync(userId, async () =>
         {
             var wallet = await _ledger.LoadWalletAsync(userId);
-            var entry = wallet.Debit(stake, LedgerReason.StakeEscrow); // 잔액 부족 시 예외, 변동 없음
+            var entry = wallet.Debit(stake, LedgerReason.StakeEscrow, _clock.UtcNow); // 잔액 부족 시 예외, 변동 없음
             await _ledger.AppendAsync(new[] { entry });
 
             var match = Match.Start(Guid.NewGuid(), userId, stake, playerCount, _clock.UtcNow);
@@ -66,7 +66,7 @@ public sealed class MatchService
             var wallet = await _ledger.LoadWalletAsync(userId);
             if (payout > 0)
             {
-                var entry = wallet.Credit(payout, LedgerReason.StakePayout);
+                var entry = wallet.Credit(payout, LedgerReason.StakePayout, _clock.UtcNow, LedgerRef.Game(match.Id));
                 await _ledger.AppendAsync(new[] { entry });
             }
 

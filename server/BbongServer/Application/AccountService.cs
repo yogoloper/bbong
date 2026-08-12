@@ -115,7 +115,7 @@ public sealed class AccountService
     private async Task PersistNewAsync(UserAccount account)
     {
         var wallet = new Wallet(account.Id);
-        wallet.Credit(StartingGrant, LedgerReason.Welcome);
+        wallet.Credit(StartingGrant, LedgerReason.Welcome, DateTimeOffset.UtcNow);
 
         await _accounts.SaveAsync(account);
         await _ledger.AppendAsync(wallet.Entries);

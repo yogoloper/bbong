@@ -14,24 +14,25 @@ public sealed class ScopedStakeBank : IStakeBank
 
     public ScopedStakeBank(IServiceScopeFactory scopes) => _scopes = scopes;
 
-    public async Task<bool> TryEscrowAsync(Guid userId, int stake)
+    public async Task<bool> TryEscrowAsync(Guid userId, int stake, Guid? gameId = null)
     {
         using var scope = _scopes.CreateScope();
-        return await Bank(scope).TryEscrowAsync(userId, stake);
+        return await Bank(scope).TryEscrowAsync(userId, stake, gameId);
     }
 
-    public async Task RefundAsync(Guid userId, int stake)
+    public async Task RefundAsync(Guid userId, int stake, Guid? gameId = null)
     {
         using var scope = _scopes.CreateScope();
-        await Bank(scope).RefundAsync(userId, stake);
+        await Bank(scope).RefundAsync(userId, stake, gameId);
     }
 
-    public async Task PayoutAsync(Guid userId, long amount)
+    public async Task PayoutAsync(Guid userId, long amount, Guid? gameId = null)
     {
         using var scope = _scopes.CreateScope();
-        await Bank(scope).PayoutAsync(userId, amount);
+        await Bank(scope).PayoutAsync(userId, amount, gameId);
     }
 
     private static LedgerStakeBank Bank(IServiceScope scope) =>
-        new(scope.ServiceProvider.GetRequiredService<ILedgerStore>());
+        new(scope.ServiceProvider.GetRequiredService<ILedgerStore>(),
+            scope.ServiceProvider.GetRequiredService<IClock>());
 }

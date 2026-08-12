@@ -34,14 +34,16 @@ public sealed class Wallet
     public static Wallet Rehydrate(Guid userId, IEnumerable<LedgerEntry> entries) => new(userId, entries);
 
     /// <summary>적립(amount &gt; 0). 광고·일일지급·구매 등.</summary>
-    public LedgerEntry Credit(long amount, LedgerReason reason)
+    public LedgerEntry Credit(long amount, LedgerReason reason, DateTimeOffset at,
+        LedgerRef? reference = null, LedgerKind kind = LedgerKind.Free)
     {
         RequirePositive(amount);
-        return Append(amount, reason);
+        return Append(amount, reason, at, reference, kind);
     }
 
     /// <summary>차감(amount &gt; 0). 잔액 부족 시 예외, 변동 없음.</summary>
-    public LedgerEntry Debit(long amount, LedgerReason reason)
+    public LedgerEntry Debit(long amount, LedgerReason reason, DateTimeOffset at,
+        LedgerRef? reference = null, LedgerKind kind = LedgerKind.Free)
     {
         RequirePositive(amount);
         if (Balance < amount)
@@ -49,12 +51,15 @@ public sealed class Wallet
             throw new InvalidOperationException($"잔액 부족: 보유 {Balance}, 요청 {amount}");
         }
 
-        return Append(-amount, reason);
+        return Append(-amount, reason, at, reference, kind);
     }
 
-    private LedgerEntry Append(long delta, LedgerReason reason)
+    private LedgerEntry Append(long delta, LedgerReason reason, DateTimeOffset at,
+        LedgerRef? reference, LedgerKind kind)
     {
-        var entry = new LedgerEntry(UserId, delta, reason);
+        // 기록 시점의 결과 잔액을 함께 남긴다 — 나중에 합산으로 재계산하지 않아도 감사·정렬에 쓸 수 있다.
+        var entry = new LedgerEntry(UserId, delta, reason, at, Balance + delta, kind,
+            reference?.Type, reference?.Id);
         _entries.Add(entry);
         return entry;
     }

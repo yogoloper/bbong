@@ -63,7 +63,7 @@ public sealed class ShopService
         _ledger.WithWalletLockAsync<object>(userId, async () =>
         {
             var wallet = await _ledger.LoadWalletAsync(userId);
-            var entry = wallet.Credit(amount, reason);
+            var entry = wallet.Credit(amount, reason, _clock.UtcNow);
             await _ledger.AppendAsync(new[] { entry });
             await _rewards.AppendAsync(new AdRewardClaim(userId, kind, _clock.UtcNow));
             return null;
