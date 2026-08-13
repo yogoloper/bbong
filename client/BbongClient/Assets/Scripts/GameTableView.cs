@@ -591,6 +591,13 @@ namespace Bbong.Client
                 return;
             }
 
+            // 내 차례가 막 시작된 순간(대기 없음 → 대기)에만 짧게 진동. 소리를 끄고 하는 사람도
+            // 5초 타이머를 놓치지 않게 하는 용도라, 카운트다운이 이어지는 동안엔 다시 울리지 않는다.
+            if (key != null && _turnCountdownKey == null)
+            {
+                AppSettings.Vibrate();
+            }
+
             _turnCountdownKey = key;
             if (_turnCountdownFx != null)
             {

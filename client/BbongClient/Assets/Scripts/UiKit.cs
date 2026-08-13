@@ -30,7 +30,8 @@ namespace Bbong.Client
         }
 
         /// <summary>화면용 전체 캔버스 + 네이비 배경 생성. topBar=true면 공통 상단바(닉네임·포인트).</summary>
-        public static (GameObject canvasGo, Transform root) CreateScreen(string name, bool topBar = false)
+        public static (GameObject canvasGo, Transform root) CreateScreen(string name, bool topBar = false,
+            bool settingsEntry = true)
         {
             var canvasGo = new GameObject(name, typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasGo.GetComponent<Canvas>();
@@ -49,7 +50,7 @@ namespace Bbong.Client
 
             if (topBar)
             {
-                TopBar(root);
+                TopBar(root, settingsEntry);
             }
 
             return (canvasGo, root);
@@ -69,7 +70,7 @@ namespace Bbong.Client
         }
 
         /// <summary>공통 상단바: 좌측 아바타+닉네임, 우측 코인 + 보유 포인트.</summary>
-        public static void TopBar(Transform root)
+        public static void TopBar(Transform root, bool settingsEntry = true)
         {
             var panel = CreatePanel(root, new Color(0, 0, 0, 0.35f));
             if (UiArt.Panel9 != null)
@@ -94,6 +95,26 @@ namespace Bbong.Client
 
             CreateText(root, Session.Nickname, 34, TextAnchor.MiddleLeft,
                 new Vector2(0.06f, 0.9f), new Vector2(0.5f, 1f));
+
+            // 설정 진입점. 방에 들어가 있는 화면(친구방·매칭 대기)에서는 빼는데, 화면을 갈아엎으면
+            // 방 연결이 남은 채 로비로 튕겨 상태가 어긋나기 때문이다.
+            // 상단바 높이에 맞춰야 해서 최소 탭 높이 보정(EnsureTapHeight)을 타지 않게 직접 만든다.
+            if (settingsEntry)
+            {
+                var gearGo = new GameObject("Settings", typeof(RectTransform), typeof(Image), typeof(Button));
+                gearGo.transform.SetParent(root, false);
+                var gearImg = gearGo.GetComponent<Image>();
+                gearImg.sprite = UiArt.Button;
+                gearImg.type = Image.Type.Sliced;
+                gearImg.color = new Color(0.16f, 0.24f, 0.42f, 0.9f);
+                Anchor(gearGo.GetComponent<RectTransform>(),
+                    new Vector2(0.575f, 0.912f), new Vector2(0.68f, 0.988f));
+                CreateText(gearGo.transform, "설정", 30, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one)
+                    .color = Color.white;
+                var gearBtn = gearGo.GetComponent<Button>();
+                gearBtn.onClick.AddListener(OpenSettings);
+                ApplyButtonStates(gearBtn);
+            }
 
             // 코인+숫자를 우측 정렬 레이아웃으로 묶어 자릿수와 무관하게 우측 여백 고정
             var wallet = new GameObject("Wallet", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -123,6 +144,33 @@ namespace Bbong.Client
             var ptsRt = pts.rectTransform;
             ptsRt.sizeDelta = new Vector2(ptsRt.sizeDelta.x, 108f);
             BalanceLabel = pts; // 서버 재조회(RefreshMe) 후 갱신용 — 최신 화면의 상단바
+        }
+
+        /// <summary>
+        /// 설정 화면으로 이동. 상단바는 화면마다 새로 그려지므로, 현재 살아 있는 화면 캔버스를
+        /// 찾아 정리하고 넘어간다.
+        /// </summary>
+        private static void OpenSettings()
+        {
+            if (UnityEngine.Object.FindAnyObjectByType<SettingsBootstrap>() != null)
+            {
+                return; // 이미 설정 화면
+            }
+
+            foreach (var canvas in UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
+            {
+                UnityEngine.Object.Destroy(canvas.gameObject);
+            }
+
+            foreach (var screen in UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+            {
+                if (screen.GetType().Name.EndsWith("Bootstrap", StringComparison.Ordinal))
+                {
+                    UnityEngine.Object.Destroy(screen.gameObject);
+                }
+            }
+
+            new GameObject(nameof(SettingsBootstrap), typeof(SettingsBootstrap));
         }
 
         /// <summary>현재 화면 상단바의 잔액 라벨(게임 정산 후 재조회 반영용).</summary>

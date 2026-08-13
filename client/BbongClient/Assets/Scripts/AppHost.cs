@@ -38,6 +38,7 @@ namespace Bbong.Client
 
         private void Start()
         {
+            AppSettings.Apply(); // 저장된 소리 설정을 실행 즉시 반영
             RegisterAndroidBackHandler();
         }
 

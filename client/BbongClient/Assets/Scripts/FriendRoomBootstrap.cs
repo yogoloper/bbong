@@ -176,7 +176,7 @@ namespace Bbong.Client
                 Destroy(_canvas);
             }
 
-            (_canvas, root) = UiKit.CreateScreen("FriendRoomCanvas", topBar: true);
+            (_canvas, root) = UiKit.CreateScreen("FriendRoomCanvas", topBar: true, settingsEntry: false);
         }
 
         private void BuildStatus(Transform root)
