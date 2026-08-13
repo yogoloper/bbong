@@ -33,9 +33,9 @@ namespace Bbong.Client
             var descs = new[] { "처음이면 여기부터", "봇 상대로 몸풀기", "포인트 걸고 한 판", "초대코드로 친구랑", "광고 보고 포인트" };
             UnityEngine.Events.UnityAction[] actions = { OnTutorial, OnPractice, OnMatch, OnFriend, OnShop };
 
-            // 화면을 8등분한 2/8~7/8 구간에만 깐다 — 카드 5장이 다섯 칸을 하나씩 차지한다.
-            // 높이도 같이 줄여 카드 비율(가로:세로 ≈ 1:1.6)을 유지한다. 폭만 줄이면 길쭉해진다.
-            const float left = 0.25f, right = 0.875f, pad = 0.012f, top = 0.68f, bottom = 0.26f;
+            // 가운데 70% 폭에 좌우 같은 여백으로 깐다. 높이는 카드 비율(가로:세로 ≈ 1:1.6)에서
+            // 역산한 값이다 — 폭만 건드리면 카드가 길쭉해진다.
+            const float left = 0.15f, right = 0.85f, pad = 0.012f, top = 0.70f, bottom = 0.24f;
             var count = titles.Length;
             var w = (right - left - pad * (count - 1)) / count;
             for (var i = 0; i < count; i++)
