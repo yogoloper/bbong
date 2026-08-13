@@ -89,16 +89,16 @@ namespace Bbong.Client
             var (canvas, root) = UiKit.CreateScreen("ProfileCanvas", topBar: true);
             _canvas = canvas;
 
-            UiKit.CreateText(root, "닉네임", 26, TextAnchor.MiddleLeft,
-                new Vector2(0.06f, 0.845f), new Vector2(0.16f, 0.885f));
-            // 입력창·버튼 같은 높이(터치 하한 이상 명시) — 폼 한 줄의 위아래 선을 맞춘다
+            // 닉네임 입력·저장은 탭과 같은 줄(보드 윗변~탭 윗변)에 세운다 — 헤더가 한 층으로
+            // 정리되고, 입력창 높이도 탭 높이(=최소 탭 높이)와 자로 잰 듯 맞는다.
             _nickInput = UiKit.CreateInputField(root, Session.Nickname, GameConfig.MaxNicknameLength,
-                new Vector2(0.06f, 0.745f), new Vector2(0.26f, 0.845f));
+                new Vector2(BoardLeft, BoardTop), new Vector2(0.24f, TabTop));
             _saveBtn = UiKit.CreateButton(root, "저장",
-                new Vector2(0.275f, 0.745f), new Vector2(0.375f, 0.845f), OnSave, 28);
+                new Vector2(0.25f, BoardTop), new Vector2(0.35f, TabTop), OnSave, 28);
 
+            // 저장 결과는 그 줄 바로 위에 잠깐 떠오른다
             _status = UiKit.CreateText(root, "", 24, TextAnchor.MiddleLeft,
-                new Vector2(0.06f, 0.70f), new Vector2(0.42f, 0.745f));
+                new Vector2(BoardLeft, TabTop + 0.006f), new Vector2(0.5f, TabTop + 0.056f));
             _status.color = new Color(1f, 0.8f, 0.5f);
 
             // 보드를 탭보다 먼저 만든다 — uGUI는 나중에 만든 쪽이 위에 그려져서,
@@ -263,10 +263,9 @@ namespace Bbong.Client
             StatsHeader();
 
             var rows = mode.byPlayers ?? Array.Empty<ServerApi.SeatCountStats>();
-            var best = BestRow(rows);
             for (var i = 0; i < rows.Length; i++)
             {
-                StatsRow(rows[i], StatsRowTop - (i + 1) * StatsRowH, i % 2 == 1, i == best);
+                StatsRow(rows[i], StatsRowTop - (i + 1) * StatsRowH, i % 2 == 1);
             }
 
             if (_mode == Friend)
@@ -375,40 +374,12 @@ namespace Bbong.Client
             Fill(new Color(1f, 1f, 1f, 0.14f), RowLeft, 0.464f, RowRight, 0.467f);
         }
 
-        /// <summary>
-        /// 가장 잘 나온 인원 수(승률 기준). 해본 인원이 하나뿐이면 견줄 게 없어 강조를 접는다 —
-        /// 비교 대상 없는 "최고"는 정보가 아니라 장식이다.
-        /// </summary>
-        private static int BestRow(ServerApi.SeatCountStats[] rows)
+        private void StatsRow(ServerApi.SeatCountStats row, float y, bool striped)
         {
-            var played = 0;
-            var best = -1;
-            for (var i = 0; i < rows.Length; i++)
-            {
-                if (rows[i].games == 0)
-                {
-                    continue;
-                }
-
-                played++;
-                if (best < 0 || rows[i].winRate > rows[best].winRate)
-                {
-                    best = i;
-                }
-            }
-
-            return played >= 2 ? best : -1;
-        }
-
-        private void StatsRow(ServerApi.SeatCountStats row, float y, bool striped, bool best)
-        {
-            if (best)
-            {
-                // 최고 승률 줄은 금빛 바탕 + 왼쪽 띠. 줄무늬보다 확실히 진해야 강조로 읽힌다.
-                Fill(Gold(0.17f), RowLeft, y, RowRight, y + StatsRowH);
-                Fill(UiKit.Accent, RowLeft, y + 0.008f, RowLeft + 0.007f, y + StatsRowH - 0.008f);
-            }
-            else if (striped)
+            // 표 자체는 강조 없이 담담하게 — 눈이 갈 곳은 승률 게이지 하나로 좁힌다.
+            // 최고 줄 금빛 배경, 골드 상금 글자, 볼드 인원까지 얹었더니 어디를 보라는 건지
+            // 흐려져서 전부 걷어냈다. 줄무늬는 행 구분용으로만 아주 옅게 남긴다.
+            if (striped)
             {
                 Fill(new Color(1f, 1f, 1f, 0.045f), RowLeft, y, RowRight, y + StatsRowH);
             }
@@ -417,7 +388,7 @@ namespace Bbong.Client
             var played = row.games > 0;
             var bright = played ? new Color(1f, 1f, 1f, 0.9f) : new Color(1f, 1f, 1f, 0.28f);
 
-            WinRateBar(row, y, played, best);
+            WinRateBar(row, y, played);
 
             var values = new[]
             {
@@ -432,22 +403,17 @@ namespace Bbong.Client
             for (var i = 0; i < Columns.Length; i++)
             {
                 var (_, min, max, anchor) = Columns[i];
-                var text = UiKit.CreateText(_content, values[i], 26, anchor,
-                    new Vector2(min, y), new Vector2(max, y + StatsRowH));
-                text.color = i == Columns.Length - 1 && row.totalWinnings > 0 ? UiKit.Accent : bright;
-                if (i == 0)
-                {
-                    text.color = best ? UiKit.Accent : text.color;
-                    text.fontStyle = FontStyle.Bold;
-                }
+                UiKit.CreateText(_content, values[i], 26, anchor,
+                    new Vector2(min, y), new Vector2(max, y + StatsRowH)).color = bright;
             }
         }
 
         /// <summary>
-        /// 인원별 승률 막대. 퍼센트 숫자만 세로로 늘어놓으면 2인전과 6인전 중 어느 쪽이 나은지
-        /// 매번 읽어서 비교해야 한다. 같은 축에 눕혀 길이로 보이게 하고, 절반 자리에 눈금을 남긴다.
+        /// 인원별 승률 막대 — 이 표의 유일한 강조. 퍼센트 숫자만 세로로 늘어놓으면 2인전과
+        /// 6인전 중 어느 쪽이 나은지 매번 읽어서 비교해야 한다. 같은 축에 눕혀 길이로 보이게
+        /// 하고, 절반 자리에 눈금을 남긴다.
         /// </summary>
-        private void WinRateBar(ServerApi.SeatCountStats row, float y, bool played, bool best)
+        private void WinRateBar(ServerApi.SeatCountStats row, float y, bool played)
         {
             var mid = y + StatsRowH / 2f;
             const float half = 0.011f;
@@ -456,7 +422,7 @@ namespace Bbong.Client
 
             if (played && row.winRate > 0)
             {
-                Fill(best ? UiKit.Accent : Gold(0.7f),
+                Fill(UiKit.Accent,
                     BarLeft, mid - half, BarLeft + (BarRight - BarLeft) * row.winRate / 100f, mid + half);
             }
 
