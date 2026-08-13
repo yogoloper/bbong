@@ -46,9 +46,15 @@ namespace Bbong.Client
             _applied = area;
             _orientation = Screen.orientation;
 
+            // 노치·제스처 바는 대개 한쪽에만 있어서 안전 영역을 그대로 쓰면 화면이 한쪽으로 쏠린다.
+            // 큰 쪽 여백을 양쪽에 똑같이 줘서 가운데 정렬을 유지한다 — 좌우 대칭이 무너지면
+            // 화면 끝에 붙는 요소(설정 톱니, 잔액)가 한쪽만 모서리에 처박힌 것처럼 보인다.
+            var side = Mathf.Max(area.xMin, width - area.xMax);
+            var vertical = Mathf.Max(area.yMin, height - area.yMax);
+
             var rt = (RectTransform)transform;
-            rt.anchorMin = new Vector2(area.xMin / width, area.yMin / height);
-            rt.anchorMax = new Vector2(area.xMax / width, area.yMax / height);
+            rt.anchorMin = new Vector2(side / width, vertical / height);
+            rt.anchorMax = new Vector2((width - side) / width, (height - vertical) / height);
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
         }

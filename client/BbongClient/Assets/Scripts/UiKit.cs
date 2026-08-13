@@ -71,7 +71,10 @@ namespace Bbong.Client
         /// <summary>공통 상단바: 좌측 아바타+닉네임, 우측 코인 + 보유 포인트.</summary>
         public static void TopBar(Transform root)
         {
-            var panel = CreatePanel(root, new Color(0, 0, 0, 0.35f));
+            // 띠 자체는 안전 영역 밖 — 화면 좌우 끝까지 채워야 옆구리에 배경이 비치지 않는다.
+            // 캔버스 직속으로 올리되 배경(0번) 바로 위, 안전 영역 루트 아래에 끼워 넣는다.
+            var canvas = root.parent;
+            var panel = CreatePanel(canvas, new Color(0, 0, 0, 0.35f));
             if (UiArt.Panel9 != null)
             {
                 panel.sprite = UiArt.Panel9;
@@ -80,9 +83,11 @@ namespace Bbong.Client
             }
 
             Anchor(panel.rectTransform, new Vector2(0f, 0.9f), new Vector2(1f, 1f));
+            panel.transform.SetSiblingIndex(1);
 
-            var hairline = CreatePanel(root, new Color(Accent.r, Accent.g, Accent.b, 0.30f)); // 골드 헤어라인
+            var hairline = CreatePanel(canvas, new Color(Accent.r, Accent.g, Accent.b, 0.30f)); // 골드 헤어라인
             Anchor(hairline.rectTransform, new Vector2(0f, 0.898f), new Vector2(1f, 0.9f));
+            hairline.transform.SetSiblingIndex(2);
 
             var avatar = CreatePanel(root, new Color(0.3f, 0.55f, 0.9f));
             avatar.sprite = UiArt.Pill;
