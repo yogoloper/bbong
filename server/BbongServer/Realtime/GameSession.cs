@@ -52,6 +52,12 @@ public sealed class GameSession
     private readonly bool[] _timedOut; // 이 판에 턴 타임아웃을 겪었는가(턴이 안 온 좌석 보호)
     private readonly HashSet<int> _botSeats = new();
 
+    /// <summary>
+    /// 게임 도중 사람이 빠져 봇이 대신 앉은 좌석. 처음부터 봇이던 자리(매칭 충원·방장이 넣은 봇)와
+    /// 구분해야 한다 — 우승 후보에서 빼는 §9-4는 "판을 버리고 간 사람"에게만 적용된다.
+    /// </summary>
+    private readonly HashSet<int> _abandonedSeats = new();
+
     // 다음 타이머 1회에만 가산되는 연출 지연(재셔플 수렴 등) — ArmActorTimer 직전에 설정, 직후 리셋
     private int _timerExtraMs;
     private readonly Bot?[] _bots;
@@ -786,7 +792,7 @@ public sealed class GameSession
                 enderSeat = enderSeat,
                 scores = scores,
                 cumulativeDebts = _game.CumulativeDebts.ToArray(),
-                winnerSeats = WinnerSeatsExcludingBots()
+                winnerSeats = WinnerSeatsExcludingAbandoned()
             });
             return;
         }
@@ -826,6 +832,7 @@ public sealed class GameSession
     private void BotifySeat(SessionOutput output, int seat)
     {
         _botSeats.Add(seat);
+        _abandonedSeats.Add(seat); // 사람이 버리고 간 자리 — 우승 후보에서 빠진다
         _bots[seat] = new Bot(_botDifficulty); // 이어받는 봇 난이도 = 방 정책(친구방 중간, 맞춤게임 어려움)
         // 닉네임은 게임 끝까지 원래 게이머 것 유지 — 남은 사람들이 헷갈리지 않게
         output.ToAll(new BotTookOverMsg { seat = seat, nickname = _nicknames[seat] });
@@ -850,6 +857,7 @@ public sealed class GameSession
     public SessionOutput HandleReconnect(int seat)
     {
         var output = new SessionOutput();
+        _abandonedSeats.Remove(seat); // 돌아왔으니 다시 우승 후보
         if (_botSeats.Remove(seat))
         {
             _bots[seat] = null;
@@ -898,23 +906,27 @@ public sealed class GameSession
         return output;
     }
 
-    /// <summary>§9-4: 이탈(봇 대체) 좌석은 우승 후보 제외 — 남은 사람 중 최저 빚이 우승.</summary>
-    private int[] WinnerSeatsExcludingBots()
+    /// <summary>
+    /// §9-4: 판을 버리고 나간 좌석만 우승 후보에서 뺀다. 처음부터 봇이던 자리는 정상 참가자라
+    /// 그대로 겨룬다 — 빼 버리면 사람이 늘 이기고, 봇 몫까지 얹힌 상금이 매 판 새로 생긴다.
+    /// </summary>
+    private int[] WinnerSeatsExcludingAbandoned()
     {
-        var humans = Enumerable.Range(0, _playerCount).Where(s => !_botSeats.Contains(s)).ToList();
-        if (humans.Count == 0)
+        var contenders = Enumerable.Range(0, _playerCount).Where(s => !_abandonedSeats.Contains(s)).ToList();
+        if (contenders.Count == 0)
         {
             return _game.WinnerSeats().ToArray();
         }
 
-        var minDebt = humans.Min(s => _game.CumulativeDebts[s]);
-        return humans.Where(s => _game.CumulativeDebts[s] == minDebt).ToArray();
+        var minDebt = contenders.Min(s => _game.CumulativeDebts[s]);
+        return contenders.Where(s => _game.CumulativeDebts[s] == minDebt).ToArray();
     }
 
     /// <summary>테스트 전용: 좌석을 즉시 봇으로 전환.</summary>
     internal void BotifyForTest(int seat)
     {
         _botSeats.Add(seat);
+        _abandonedSeats.Add(seat);
         _bots[seat] = new Bot(BotDifficulty.Normal);
     }
 

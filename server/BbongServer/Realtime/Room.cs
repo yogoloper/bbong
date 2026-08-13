@@ -544,21 +544,21 @@ public sealed class Room
             return;
         }
 
-        var winners = winnerSeats
-            .Where(seat => seat < _seatUsers.Length && _seatUsers[seat] is not null)
-            .Select(seat => _seatUsers[seat]!.Value)
-            .ToList();
+        // 사람 판돈(이탈자 몰수 포함) + 위장 봇 몫(하우스 부담) — 화면의 "총상금 = 입장료 × 인원" 유지
+        var pot = (long)Stake * (_seatUsers.Count(u => u is not null) + _fillBotCount);
 
-        if (winners.Count > 0)
+        // 몫은 우승 좌석 수로 나눈다. 봇이 우승 자리를 차지했으면 그 몫은 아무에게도 가지 않고
+        // 사라진다 — 사람 몫으로 몰아주면 봇이 내지 않은 판돈이 매 판 새 포인트가 된다.
+        var share = winnerSeats.Length > 0 ? pot / winnerSeats.Length : 0; // 나머지 절사(§9-3)
+        foreach (var seat in winnerSeats)
         {
-            // 사람 판돈(이탈자 몰수 포함) + 위장 봇 몫(하우스 부담) — 화면의 "총상금 = 입장료 × 인원" 유지
-            var pot = (long)Stake * (_seatUsers.Count(u => u is not null) + _fillBotCount);
-            var share = pot / winners.Count; // 공동 1등 균등 분배, 나머지 절사(§9-3)
-            foreach (var userId in winners)
+            if (seat >= _seatUsers.Length || _seatUsers[seat] is null)
             {
-                // gameId를 남겨야 배당 누락(에스크로는 있는데 배당이 없는 게임)을 사후에 찾을 수 있다
-                _ = _bank.PayoutAsync(userId, share, _gameId);
+                continue; // 봇 우승 몫 — 소멸
             }
+
+            // gameId를 남겨야 배당 누락(에스크로는 있는데 배당이 없는 게임)을 사후에 찾을 수 있다
+            _ = _bank.PayoutAsync(_seatUsers[seat]!.Value, share, _gameId);
         }
 
         CloseRoom("게임 종료 — 정산 완료");
@@ -572,16 +572,16 @@ public sealed class Room
         }
 
         var payouts = new Dictionary<int, long>();
-        if (Stake > 0)
+        if (Stake > 0 && winnerSeats.Length > 0)
         {
             var humans = _seatUsers.Count(u => u is not null);
-            var winners = winnerSeats.Where(seatIdx => seatIdx < _seatUsers.Length && _seatUsers[seatIdx] is not null).ToList();
-            if (winners.Count > 0)
+            // 정산과 같은 나눗셈이어야 기록과 지갑이 어긋나지 않는다 — 봇 우승 몫은 기록에도 안 남는다
+            var share = (long)Stake * (humans + _fillBotCount) / winnerSeats.Length;
+            foreach (var seat in winnerSeats)
             {
-                var share = (long)Stake * (humans + _fillBotCount) / winners.Count;
-                foreach (var w in winners)
+                if (seat < _seatUsers.Length && _seatUsers[seat] is not null)
                 {
-                    payouts[w] = share;
+                    payouts[seat] = share;
                 }
             }
         }

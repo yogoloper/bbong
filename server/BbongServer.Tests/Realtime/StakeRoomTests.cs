@@ -152,6 +152,53 @@ public class StakeRoomTests
         Assert.That(_bank.Payouts, Does.Contain((host.UserId, 2000L))); // 이탈자 판돈 포함 몰아주기
     }
 
+    /// <summary>
+    /// 매칭 정원을 채우는 위장 봇은 입장료를 내지 않는다. 그 몫까지 사람이 가져가면
+    /// 판마다 포인트가 새로 만들어진다 — 봇도 우승 후보라야 기대값이 맞는다.
+    /// </summary>
+    private (Room room, RoomMember host) QuickMatchRoomWithFillBots(int stake, int players, int bots)
+    {
+        var (_, member) = NewMember("호스트");
+        var room = _registry.QuickMatch(member, stake, players, _bank, runLoop: false);
+        for (var i = 0; i < bots; i++)
+        {
+            room.Execute(new FillBotCmd(room.FillTokenForTest));
+        }
+
+        room.Execute(new StartCountdownCmd(room.CountdownTokenForTest));
+        return (room, member);
+    }
+
+    [Test]
+    public void Bot_winner_keeps_its_share_out_of_a_human_pocket()
+    {
+        var (room, _) = QuickMatchRoomWithFillBots(stake: 1000, players: 2, bots: 1);
+
+        room.ForceSetEndForTest(winnerSeats: new[] { 1 }); // seat1 = 위장 봇 단독 우승
+
+        Assert.That(_bank.Payouts, Is.Empty); // 봇 몫은 소멸 — 사람에게 흘러가지 않는다
+    }
+
+    [Test]
+    public void Tie_with_a_bot_pays_the_human_only_its_own_share()
+    {
+        var (room, host) = QuickMatchRoomWithFillBots(stake: 1000, players: 2, bots: 1);
+
+        room.ForceSetEndForTest(winnerSeats: new[] { 0, 1 }); // 사람 + 봇 공동 1등
+
+        Assert.That(_bank.Payouts, Does.Contain((host.UserId, 1000L))); // 2000 중 절반만
+    }
+
+    [Test]
+    public void Human_winner_still_takes_the_whole_pot()
+    {
+        var (room, host) = QuickMatchRoomWithFillBots(stake: 1000, players: 2, bots: 1);
+
+        room.ForceSetEndForTest(winnerSeats: new[] { 0 });
+
+        Assert.That(_bank.Payouts, Does.Contain((host.UserId, 2000L)));
+    }
+
     [Test]
     public void Free_room_never_touches_bank()
     {

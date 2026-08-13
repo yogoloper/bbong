@@ -741,6 +741,30 @@ public class GameSessionTests
     }
 
     [Test]
+    public void Set_winners_include_bots_that_sat_down_from_the_start()
+    {
+        // 매칭 정원을 채우는 위장 봇은 처음부터 한 자리를 차지한 참가자다. 우승 후보에서 빼면
+        // 사람이 늘 이기게 되고, 봇 몫까지 얹힌 상금이 매 판 새로 만들어진다.
+        var session = new GameSession(new[] { "P0", "P1" }, () => new SeededRandom(1), setRounds: 1,
+            botSeats: new[] { 0 });
+        var round = new RoundState(
+            new[]
+            {
+                new Player(0, new Hand(new[] { C(9, CardColor.Red), C(9, CardColor.Green) }), PongCount: 1),
+                P(1, C(9, CardColor.Yellow), C(1, CardColor.Red), C(2, CardColor.Red))
+            },
+            new[] { C(6, CardColor.Red), C(10, CardColor.Red) },
+            Array.Empty<Card>(), currentSeat: 1, new SeededRandom(1), 0);
+        session.RigRoundForTest(round);
+
+        var discarded = session.HandleAction(1, new DiscardMsg { card = CardDto.From(C(9, CardColor.Yellow)) });
+        var set = session.HandleBotAct(BotActToken(discarded));
+
+        var endMsg = For<SetEndedMsg>(set, 1);
+        Assert.That(endMsg.winnerSeats, Does.Contain(0));
+    }
+
+    [Test]
     public void Voluntary_leave_hands_seat_to_bot_immediately()
     {
         // seat0이 버림 대기 중 나가기 → 즉시 봇 전환 + 봇 행동 예약 → 봇이 알아서 버림
