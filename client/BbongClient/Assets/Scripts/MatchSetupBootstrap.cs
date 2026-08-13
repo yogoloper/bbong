@@ -157,7 +157,7 @@ namespace Bbong.Client
         private void BuildMatching()
         {
             Destroy(_canvas);
-            var (canvas, root) = UiKit.CreateScreen("MatchWaitCanvas", topBar: true);
+            var (canvas, root) = UiKit.CreateScreen("MatchWaitCanvas", topBar: true, profileLink: false);
             _canvas = canvas;
 
             _searchLabel = UiKit.CreateText(root, "", 52, TextAnchor.MiddleCenter,

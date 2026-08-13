@@ -26,14 +26,17 @@ namespace Bbong.Client
             var (canvas, root) = UiKit.CreateScreen("MainLobbyCanvas", topBar: true);
             _canvas = canvas;
 
-            // 6개 모드 카드 — 가로 한 줄(루미큐브식 카드 레이아웃 차용)
-            var titles = new[] { "튜토리얼", "연습", "맞춤게임", "친구와 함께", "포인트 얻기", "프로필" };
-            var descs = new[] { "처음이면 여기부터", "봇 상대로 몸풀기", "포인트 걸고 한 판", "초대코드로 친구랑", "광고 보고 포인트", "닉네임과 전적" };
-            UnityEngine.Events.UnityAction[] actions = { OnTutorial, OnPractice, OnMatch, OnFriend, OnShop, OnProfile };
+            // 모드 카드 — 가로 한 줄(루미큐브식 카드 레이아웃 차용).
+            // 프로필은 상단바 아바타가 맡는다: 카드 한 장을 통째로 쓰기엔 자주 들어가는 곳이 아니고,
+            // 아바타를 누르는 쪽이 어느 화면에서나 통한다.
+            var titles = new[] { "튜토리얼", "연습", "맞춤게임", "친구와 함께", "포인트 얻기" };
+            var descs = new[] { "처음이면 여기부터", "봇 상대로 몸풀기", "포인트 걸고 한 판", "초대코드로 친구랑", "광고 보고 포인트" };
+            UnityEngine.Events.UnityAction[] actions = { OnTutorial, OnPractice, OnMatch, OnFriend, OnShop };
 
             const float pad = 0.012f, top = 0.80f, bottom = 0.13f;
-            var w = (1f - pad * 7f) / 6f;
-            for (var i = 0; i < 6; i++)
+            var count = titles.Length;
+            var w = (1f - pad * (count + 1)) / count;
+            for (var i = 0; i < count; i++)
             {
                 var x0 = pad + i * (w + pad);
                 Mode(root, titles[i], descs[i], new Vector2(x0, bottom), new Vector2(x0 + w, top), actions[i]);
@@ -96,6 +99,5 @@ namespace Bbong.Client
         private void OnPractice() => UiKit.GoTo<LobbyBootstrap>(_canvas, this);
         private void OnFriend() => UiKit.GoTo<FriendRoomBootstrap>(_canvas, this);
         private void OnShop() => UiKit.GoTo<ShopBootstrap>(_canvas, this);
-        private void OnProfile() => UiKit.GoTo<ProfileBootstrap>(_canvas, this);
     }
 }

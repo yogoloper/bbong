@@ -3,8 +3,9 @@ using UnityEngine;
 namespace Bbong.Client
 {
     /// <summary>
-    /// 붙은 RectTransform을 기기의 안전 영역(Screen.safeArea)에 맞춘다.
-    /// 노치·펀치홀·제스처 바가 있는 기기에서 상단바나 모서리 버튼이 잘리는 것을 막는다.
+    /// 붙은 RectTransform을 기기의 안전 영역(Screen.safeArea) 중 세로 방향에만 맞춘다.
+    /// 가로는 화면 끝까지 쓴다 — 좌우 인셋은 대개 한쪽에만 잡혀서, 따르면 화면이 쏠리고
+    /// 양쪽에 맞추면 쓸 수 있는 폭이 통째로 줄어든다.
     /// 배경은 이 안에 두지 않는다 — 화면 끝까지 채워야 검은 띠가 안 생긴다.
     /// </summary>
     internal sealed class SafeArea : MonoBehaviour
@@ -46,15 +47,14 @@ namespace Bbong.Client
             _applied = area;
             _orientation = Screen.orientation;
 
-            // 노치·제스처 바는 대개 한쪽에만 있어서 안전 영역을 그대로 쓰면 화면이 한쪽으로 쏠린다.
-            // 큰 쪽 여백을 양쪽에 똑같이 줘서 가운데 정렬을 유지한다 — 좌우 대칭이 무너지면
-            // 화면 끝에 붙는 요소(설정 톱니, 잔액)가 한쪽만 모서리에 처박힌 것처럼 보인다.
-            var side = Mathf.Max(area.xMin, width - area.xMax);
+            // 가로는 화면 끝까지 쓴다. 안전 영역을 그대로 따르면 인셋이 한쪽에만 잡혀 화면이 쏠리고,
+            // 양쪽을 큰 쪽에 맞추면 좌우가 통째로 잘려 나간다 — 상단바·톱니·인게임 모두 끝에 붙는 편이
+            // 낫다는 판단이다. 세로만 큰 쪽 여백을 양쪽에 맞춰 대칭으로 남긴다.
             var vertical = Mathf.Max(area.yMin, height - area.yMax);
 
             var rt = (RectTransform)transform;
-            rt.anchorMin = new Vector2(side / width, vertical / height);
-            rt.anchorMax = new Vector2((width - side) / width, (height - vertical) / height);
+            rt.anchorMin = new Vector2(0f, vertical / height);
+            rt.anchorMax = new Vector2(1f, (height - vertical) / height);
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
         }

@@ -30,7 +30,8 @@ namespace Bbong.Client
         }
 
         /// <summary>화면용 전체 캔버스 + 네이비 배경 생성. topBar=true면 공통 상단바(닉네임·포인트).</summary>
-        public static (GameObject canvasGo, Transform root) CreateScreen(string name, bool topBar = false)
+        public static (GameObject canvasGo, Transform root) CreateScreen(string name, bool topBar = false,
+            bool profileLink = true)
         {
             var canvasGo = new GameObject(name, typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasGo.GetComponent<Canvas>();
@@ -49,7 +50,7 @@ namespace Bbong.Client
 
             if (topBar)
             {
-                TopBar(root);
+                TopBar(root, profileLink);
             }
 
             return (canvasGo, root);
@@ -69,11 +70,12 @@ namespace Bbong.Client
         }
 
         /// <summary>공통 상단바: 좌측 아바타+닉네임, 우측 코인 + 보유 포인트.</summary>
-        public static void TopBar(Transform root)
+        public static void TopBar(Transform root, bool profileLink = true)
         {
             // 띠 자체는 안전 영역 밖 — 화면 좌우 끝까지 채워야 옆구리에 배경이 비치지 않는다.
             // 캔버스 직속으로 올리되 배경(0번) 바로 위, 안전 영역 루트 아래에 끼워 넣는다.
-            var canvas = root.parent;
+            // root가 안전 영역일 수도, 캔버스 자신일 수도 있어(화면마다 다르다) 캔버스를 거슬러 찾는다.
+            var canvas = root.GetComponentInParent<Canvas>().transform;
             var panel = CreatePanel(canvas, new Color(0, 0, 0, 0.35f));
             if (UiArt.Panel9 != null)
             {
@@ -92,13 +94,22 @@ namespace Bbong.Client
             var avatar = CreatePanel(root, new Color(0.3f, 0.55f, 0.9f));
             avatar.sprite = UiArt.Pill;
             avatar.type = Image.Type.Sliced;
-            Anchor(avatar.rectTransform, new Vector2(0.012f, 0.915f), new Vector2(0.05f, 0.985f));
+            Anchor(avatar.rectTransform, new Vector2(0.006f, 0.915f), new Vector2(0.044f, 0.985f));
             var initial = string.IsNullOrEmpty(Session.Nickname) ? "?" : Session.Nickname[..1];
             CreateText(avatar.transform, initial, 38, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one)
                 .fontStyle = FontStyle.Bold;
 
             CreateText(root, Session.Nickname, 34, TextAnchor.MiddleLeft,
-                new Vector2(0.06f, 0.9f), new Vector2(0.5f, 1f));
+                new Vector2(0.054f, 0.9f), new Vector2(0.5f, 1f));
+
+            // 아바타가 프로필 진입점. 방에 들어가 있는 화면에서는 링크를 안 건다 —
+            // 화면을 갈아엎으면 방 연결만 남고 상태가 어긋난다.
+            if (profileLink)
+            {
+                var avatarBtn = avatar.gameObject.AddComponent<Button>();
+                avatarBtn.onClick.AddListener(GoToProfile);
+                ApplyButtonStates(avatarBtn);
+            }
 
             // 설정은 상단바 안이 아니라 바로 아래 오른쪽 끝에 둔다 — 잔액과 한 줄에 넣으면
             // 정사각 아이콘 자리가 안 나오고, 자릿수가 늘 때마다 위치가 밀린다.
@@ -108,7 +119,7 @@ namespace Bbong.Client
             // 코인+숫자를 우측 정렬 레이아웃으로 묶어 자릿수와 무관하게 우측 여백 고정
             var wallet = new GameObject("Wallet", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             wallet.transform.SetParent(root, false);
-            Anchor(wallet.GetComponent<RectTransform>(), new Vector2(0.70f, 0.9f), new Vector2(0.988f, 1f));
+            Anchor(wallet.GetComponent<RectTransform>(), new Vector2(0.70f, 0.9f), new Vector2(0.994f, 1f));
             var lay = wallet.GetComponent<HorizontalLayoutGroup>();
             lay.childAlignment = TextAnchor.MiddleRight;
             lay.spacing = 10f;
@@ -171,7 +182,34 @@ namespace Bbong.Client
         {
             var width = height * 1080f / 1920f;
             return SettingsButton(parent,
-                new Vector2(0.978f - width, top - height), new Vector2(0.978f, top));
+                new Vector2(0.994f - width, top - height), new Vector2(0.994f, top));
+        }
+
+        /// <summary>
+        /// 프로필 화면으로 이동. 상단바는 화면마다 새로 그려져 현재 부트스트랩을 모르므로,
+        /// 살아 있는 화면을 이름으로 찾아 정리하고 넘어간다.
+        /// </summary>
+        public static void GoToProfile()
+        {
+            if (UnityEngine.Object.FindAnyObjectByType<ProfileBootstrap>() != null)
+            {
+                return; // 이미 프로필
+            }
+
+            foreach (var canvas in UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
+            {
+                UnityEngine.Object.Destroy(canvas.gameObject);
+            }
+
+            foreach (var screen in UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+            {
+                if (screen.GetType().Name.EndsWith("Bootstrap", StringComparison.Ordinal))
+                {
+                    UnityEngine.Object.Destroy(screen.gameObject);
+                }
+            }
+
+            new GameObject(nameof(ProfileBootstrap), typeof(ProfileBootstrap));
         }
 
         public static void OpenSettings()
