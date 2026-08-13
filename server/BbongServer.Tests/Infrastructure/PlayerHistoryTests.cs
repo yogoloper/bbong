@@ -102,6 +102,121 @@ public class PlayerHistoryTests
     }
 
     [Test]
+    public async Task Rank_comes_from_the_final_debts_of_the_people_at_the_table()
+    {
+        var userId = Guid.NewGuid();
+        await using var db = NewDb();
+        var gameId = Guid.NewGuid();
+        db.Games.Add(new GameRow
+        {
+            Id = gameId, RoomCode = "000000", Stake = 1000, TargetPlayers = 3,
+            StartedAtUtc = DateTimeOffset.UtcNow, EndedAtUtc = DateTimeOffset.UtcNow,
+            WinnerSeats = "1", Mode = "QuickMatch"
+        });
+        // 빚이 적을수록 좋은 성적. 나(-3)는 우승자(-9)에 이어 2등이다.
+        db.GamePlayers.Add(new GamePlayerRow
+        {
+            GameId = gameId, Seat = 0, UserId = userId, Nickname = "나", FinalDebt = -3
+        });
+        db.GamePlayers.Add(new GamePlayerRow
+        {
+            GameId = gameId, Seat = 1, UserId = Guid.NewGuid(), Nickname = "이긴사람",
+            FinalDebt = -9, Won = true
+        });
+        db.GamePlayers.Add(new GamePlayerRow
+        {
+            GameId = gameId, Seat = 2, UserId = Guid.NewGuid(), Nickname = "꼴찌", FinalDebt = 12
+        });
+        await db.SaveChangesAsync();
+
+        var history = await PlayerHistory.ForAsync(db, userId, limit: 10);
+
+        Assert.That(history[0].Rank, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task Tied_players_share_a_rank()
+    {
+        var userId = Guid.NewGuid();
+        await using var db = NewDb();
+        var gameId = Guid.NewGuid();
+        db.Games.Add(new GameRow
+        {
+            Id = gameId, RoomCode = "000000", Stake = 1000, TargetPlayers = 3,
+            StartedAtUtc = DateTimeOffset.UtcNow, EndedAtUtc = DateTimeOffset.UtcNow,
+            WinnerSeats = "0,1", Mode = "QuickMatch"
+        });
+        db.GamePlayers.Add(new GamePlayerRow
+        {
+            GameId = gameId, Seat = 0, UserId = userId, Nickname = "나", FinalDebt = -5, Won = true
+        });
+        db.GamePlayers.Add(new GamePlayerRow
+        {
+            GameId = gameId, Seat = 1, UserId = Guid.NewGuid(), Nickname = "공동1등",
+            FinalDebt = -5, Won = true
+        });
+        db.GamePlayers.Add(new GamePlayerRow
+        {
+            GameId = gameId, Seat = 2, UserId = Guid.NewGuid(), Nickname = "꼴찌", FinalDebt = 10
+        });
+        await db.SaveChangesAsync();
+
+        var history = await PlayerHistory.ForAsync(db, userId, limit: 10);
+
+        Assert.That(history[0].Rank, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Bot_seats_do_not_take_a_rank_away_from_a_human()
+    {
+        // §9-4: 이탈 대체 봇은 우승 후보가 아니다. 빚만으로 줄 세우면 봇에게 밀려
+        // "이겼는데 3등"처럼 승패와 어긋난 등수가 나온다.
+        var userId = Guid.NewGuid();
+        await using var db = NewDb();
+        var gameId = Guid.NewGuid();
+        db.Games.Add(new GameRow
+        {
+            Id = gameId, RoomCode = "000000", Stake = 1000, TargetPlayers = 4,
+            StartedAtUtc = DateTimeOffset.UtcNow, EndedAtUtc = DateTimeOffset.UtcNow,
+            WinnerSeats = "0", Mode = "QuickMatch"
+        });
+        db.GamePlayers.Add(new GamePlayerRow
+        {
+            GameId = gameId, Seat = 0, UserId = userId, Nickname = "나", FinalDebt = 65,
+            Won = true, Payout = 4000
+        });
+        for (var seat = 1; seat <= 3; seat++)
+        {
+            db.GamePlayers.Add(new GamePlayerRow
+            {
+                GameId = gameId, Seat = seat, UserId = null, Nickname = $"봇{seat}", IsBot = true,
+                FinalDebt = seat == 3 ? 39 : 60 + seat
+            });
+        }
+
+        await db.SaveChangesAsync();
+
+        var history = await PlayerHistory.ForAsync(db, userId, limit: 10);
+
+        Assert.That(history[0].Rank, Is.EqualTo(1));
+        Assert.That(history[0].Humans, Is.EqualTo(1));
+        Assert.That(history[0].Players, Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task Everyone_else_at_the_table_is_named()
+    {
+        var userId = Guid.NewGuid();
+        await using var db = NewDb();
+        await RecordGameAsync(db, userId, GameMode.QuickMatch, won: true, payout: 3000,
+            endedAt: DateTimeOffset.UtcNow, seats: 3);
+
+        var history = await PlayerHistory.ForAsync(db, userId, limit: 10);
+
+        Assert.That(history[0].Opponents, Is.EqualTo(new[] { "봇1", "봇2" }));
+    }
+
+    [Test]
     public async Task Unfinished_games_are_left_out()
     {
         var userId = Guid.NewGuid();

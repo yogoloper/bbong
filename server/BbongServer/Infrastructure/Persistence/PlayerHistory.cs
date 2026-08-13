@@ -14,7 +14,10 @@ public sealed record PlayerHistoryEntry(
     int Stake,
     bool Won,
     long Payout,
-    int? FinalDebt);
+    int? FinalDebt,
+    int Rank,
+    int Humans,
+    IReadOnlyList<string> Opponents);
 
 /// <summary>
 /// 최근 게임 기록. 승률 숫자만으로는 흐름이 안 보이니 판별로 결과·정산액을 최신순으로 준다.
@@ -38,6 +41,7 @@ public static class PlayerHistory
             select new
             {
                 p.GameId,
+                MySeat = p.Seat,
                 EndedAt = g.EndedAtUtc!.Value,
                 g.Mode,
                 g.Stake,
@@ -51,24 +55,42 @@ public static class PlayerHistory
             return Array.Empty<PlayerHistoryEntry>();
         }
 
-        // 인원은 좌석 수로 센다. 정원(TargetPlayers)은 친구방에서 0이고, 매칭에서도
-        // 중도 이탈이 있으면 실제로 앉은 인원과 어긋난다.
+        // 인원·순위·상대는 모두 그 판의 좌석들에서 나온다. 정원(TargetPlayers)은 친구방에서 0이고
+        // 매칭에서도 중도 이탈이 있으면 실제로 앉은 인원과 어긋나 쓸 수 없다.
         var gameIds = mine.Select(m => m.GameId).ToList();
-        var seats = await db.GamePlayers
+        var seatRows = await db.GamePlayers
             .Where(p => gameIds.Contains(p.GameId))
-            .GroupBy(p => p.GameId)
-            .Select(grp => new { GameId = grp.Key, Count = grp.Count() })
-            .ToDictionaryAsync(x => x.GameId, x => x.Count);
+            .Select(p => new { p.GameId, p.Seat, p.Nickname, p.IsBot, p.FinalDebt })
+            .ToListAsync();
+        var tables = seatRows.GroupBy(p => p.GameId).ToDictionary(grp => grp.Key, grp => grp.ToList());
 
-        return mine
-            .Select(m => new PlayerHistoryEntry(
+        return mine.Select(m =>
+        {
+            var table = tables.GetValueOrDefault(m.GameId) ?? [];
+            var humans = table.Where(p => !p.IsBot).ToList();
+            return new PlayerHistoryEntry(
                 m.EndedAt,
                 m.Mode,
-                seats.GetValueOrDefault(m.GameId),
+                table.Count,
                 m.Stake,
                 m.Won,
                 m.Payout,
-                m.FinalDebt))
-            .ToList();
+                m.FinalDebt,
+                RankOf(m.FinalDebt, humans.Select(p => p.FinalDebt)),
+                humans.Count,
+                table.Where(p => p.Seat != m.MySeat).OrderBy(p => p.Seat).Select(p => p.Nickname).ToList());
+        }).ToList();
+    }
+
+    /// <summary>
+    /// 빚이 적을수록 좋은 성적이라 오름차순 등수다. 동점자는 같은 등수를 나눠 갖는다 —
+    /// 우리 규칙상 공동 1등이 실제로 나오고, 그때 둘 다 상금을 받는다.
+    /// 봇 좌석은 세지 않는다: 이탈 대체 봇은 우승 후보가 아니라서(§9-4) 빚만으로 줄 세우면
+    /// "이겼는데 3등" 같은 모순이 나온다. 빚이 없는 좌석(미정산)은 맨 뒤로 민다.
+    /// </summary>
+    private static int RankOf(int? mine, IEnumerable<int?> humans)
+    {
+        var me = mine ?? int.MaxValue;
+        return humans.Count(d => (d ?? int.MaxValue) < me) + 1;
     }
 }

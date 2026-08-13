@@ -30,8 +30,7 @@ namespace Bbong.Client
         }
 
         /// <summary>화면용 전체 캔버스 + 네이비 배경 생성. topBar=true면 공통 상단바(닉네임·포인트).</summary>
-        public static (GameObject canvasGo, Transform root) CreateScreen(string name, bool topBar = false,
-            bool settingsEntry = true)
+        public static (GameObject canvasGo, Transform root) CreateScreen(string name, bool topBar = false)
         {
             var canvasGo = new GameObject(name, typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasGo.GetComponent<Canvas>();
@@ -50,7 +49,7 @@ namespace Bbong.Client
 
             if (topBar)
             {
-                TopBar(root, settingsEntry);
+                TopBar(root);
             }
 
             return (canvasGo, root);
@@ -70,7 +69,7 @@ namespace Bbong.Client
         }
 
         /// <summary>공통 상단바: 좌측 아바타+닉네임, 우측 코인 + 보유 포인트.</summary>
-        public static void TopBar(Transform root, bool settingsEntry = true)
+        public static void TopBar(Transform root)
         {
             var panel = CreatePanel(root, new Color(0, 0, 0, 0.35f));
             if (UiArt.Panel9 != null)
@@ -96,25 +95,9 @@ namespace Bbong.Client
             CreateText(root, Session.Nickname, 34, TextAnchor.MiddleLeft,
                 new Vector2(0.06f, 0.9f), new Vector2(0.5f, 1f));
 
-            // 설정 진입점. 방에 들어가 있는 화면(친구방·매칭 대기)에서는 빼는데, 화면을 갈아엎으면
-            // 방 연결이 남은 채 로비로 튕겨 상태가 어긋나기 때문이다.
+            // 설정 진입점. 오버레이로 열려 뒤 화면을 건드리지 않으므로 어느 화면에서든 안전하다.
             // 상단바 높이에 맞춰야 해서 최소 탭 높이 보정(EnsureTapHeight)을 타지 않게 직접 만든다.
-            if (settingsEntry)
-            {
-                var gearGo = new GameObject("Settings", typeof(RectTransform), typeof(Image), typeof(Button));
-                gearGo.transform.SetParent(root, false);
-                var gearImg = gearGo.GetComponent<Image>();
-                gearImg.sprite = UiArt.Button;
-                gearImg.type = Image.Type.Sliced;
-                gearImg.color = new Color(0.16f, 0.24f, 0.42f, 0.9f);
-                Anchor(gearGo.GetComponent<RectTransform>(),
-                    new Vector2(0.575f, 0.912f), new Vector2(0.68f, 0.988f));
-                CreateText(gearGo.transform, "설정", 30, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one)
-                    .color = Color.white;
-                var gearBtn = gearGo.GetComponent<Button>();
-                gearBtn.onClick.AddListener(OpenSettings);
-                ApplyButtonStates(gearBtn);
-            }
+            SettingsButton(root, new Vector2(0.575f, 0.912f), new Vector2(0.68f, 0.988f));
 
             // 코인+숫자를 우측 정렬 레이아웃으로 묶어 자릿수와 무관하게 우측 여백 고정
             var wallet = new GameObject("Wallet", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -150,26 +133,35 @@ namespace Bbong.Client
         /// 설정 화면으로 이동. 상단바는 화면마다 새로 그려지므로, 현재 살아 있는 화면 캔버스를
         /// 찾아 정리하고 넘어간다.
         /// </summary>
-        private static void OpenSettings()
+        /// <summary>
+        /// 설정 진입 버튼. 상단바가 없는 화면(게임 테이블)도 직접 부를 수 있게 열어 둔다.
+        /// 좁은 띠에 맞춰야 해서 최소 탭 높이 보정(EnsureTapHeight)을 타지 않게 직접 만든다.
+        /// </summary>
+        public static Button SettingsButton(Transform parent, Vector2 min, Vector2 max, int fontSize = 30)
+        {
+            var go = new GameObject("Settings", typeof(RectTransform), typeof(Image), typeof(Button));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = UiArt.Button;
+            img.type = Image.Type.Sliced;
+            img.color = new Color(0.16f, 0.24f, 0.42f, 0.9f);
+            Anchor(go.GetComponent<RectTransform>(), min, max);
+            CreateText(go.transform, "설정", fontSize, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one)
+                .color = Color.white;
+            var btn = go.GetComponent<Button>();
+            btn.onClick.AddListener(OpenSettings);
+            ApplyButtonStates(btn);
+            return btn;
+        }
+
+        public static void OpenSettings()
         {
             if (UnityEngine.Object.FindAnyObjectByType<SettingsBootstrap>() != null)
             {
-                return; // 이미 설정 화면
+                return; // 이미 열려 있다
             }
 
-            foreach (var canvas in UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
-            {
-                UnityEngine.Object.Destroy(canvas.gameObject);
-            }
-
-            foreach (var screen in UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
-            {
-                if (screen.GetType().Name.EndsWith("Bootstrap", StringComparison.Ordinal))
-                {
-                    UnityEngine.Object.Destroy(screen.gameObject);
-                }
-            }
-
+            PreviousBackAction = BackAction;
             new GameObject(nameof(SettingsBootstrap), typeof(SettingsBootstrap));
         }
 
@@ -311,6 +303,9 @@ namespace Bbong.Client
         /// 스택 대신 슬롯 하나로 충분하다. 화면을 새로 만들 때마다 덮어쓴다.
         /// </summary>
         public static System.Action BackAction { get; set; }
+
+        /// <summary>설정 오버레이가 닫힐 때 돌려줄, 오버레이 직전 화면의 뒤로 동작.</summary>
+        public static System.Action PreviousBackAction { get; private set; }
 
         public static void InvokeBack()
         {

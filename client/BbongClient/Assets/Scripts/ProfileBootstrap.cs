@@ -137,15 +137,24 @@ namespace Bbong.Client
                     new Vector2(0.535f, y), new Vector2(0.925f, y + 0.055f));
             }
 
+            // 사람이 여럿이면 등수가 승패보다 정보량이 많다. 3인전 2등과 6인전 2등은 다른 판이라
+            // 사람 수를 붙여 "2/3"으로 읽히게 한다. 봇만 있는 판은 등수가 늘 1/1이라 승패로 쓴다.
             var win = entry.won;
-            var result = UiKit.CreateText(_historyRoot, win ? "승" : "패", 28, TextAnchor.MiddleCenter,
-                new Vector2(0.545f, y), new Vector2(0.585f, y + 0.055f));
-            result.color = win ? UiKit.Accent : new Color(1f, 1f, 1f, 0.45f);
+            var result = UiKit.CreateText(_historyRoot,
+                entry.humans >= 2 ? $"{entry.rank}/{entry.humans}" : win ? "승" : "패", 27,
+                TextAnchor.MiddleCenter, new Vector2(0.54f, y), new Vector2(0.60f, y + 0.055f));
+            result.color = win ? UiKit.Accent : new Color(1f, 1f, 1f, 0.5f);
             result.fontStyle = FontStyle.Bold;
 
             var mode = entry.mode == "Friend" ? "친구와 함께" : "맞춤게임";
-            UiKit.CreateText(_historyRoot, $"{mode} · {entry.players}인", 25, TextAnchor.MiddleLeft,
-                new Vector2(0.595f, y), new Vector2(0.755f, y + 0.055f)).color = new Color(1f, 1f, 1f, 0.8f);
+            var with = entry.opponents == null || entry.opponents.Length == 0
+                ? $"{mode} · {entry.players}인"
+                : $"{mode} · {entry.players}인 · {string.Join(", ", entry.opponents)}";
+            var label = UiKit.CreateText(_historyRoot, with, 24, TextAnchor.MiddleLeft,
+                new Vector2(0.61f, y), new Vector2(0.755f, y + 0.055f));
+            label.color = new Color(1f, 1f, 1f, 0.8f);
+            label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            label.verticalOverflow = VerticalWrapMode.Truncate; // 닉네임이 길어도 다음 줄을 침범하지 않게
 
             // 정산액은 받은 상금 기준. 진 판은 입장료만 나가고 상금이 없어 0으로 남는다.
             var payout = UiKit.CreateText(_historyRoot,

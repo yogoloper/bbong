@@ -47,7 +47,7 @@ namespace Bbong.Client
         [Serializable] public class MeResult { public string userId; public string nickname; public bool isGuest; public long balance; }
         [Serializable] private class BalanceResult { public long balance; }
         [Serializable] public class StatsResult { public int games; public int wins; public int winRate; public long totalWinnings; }
-        [Serializable] public class HistoryEntry { public string endedAt; public string mode; public int players; public int stake; public bool won; public long payout; }
+        [Serializable] public class HistoryEntry { public string endedAt; public string mode; public int players; public int stake; public bool won; public long payout; public int rank; public int humans; public string[] opponents; }
         [Serializable] private class HistoryWrap { public HistoryEntry[] items; }
         [Serializable] private class ErrorResult { public string error; }
         [Serializable] private class RenameBody { public string nickname; }

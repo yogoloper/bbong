@@ -383,6 +383,9 @@ namespace Bbong.Client
             exitLabel.fontStyle = FontStyle.Bold;
             TableArt.AddOutline(exitLabel);
 
+            // 판이 도는 중에도 소리를 꺼야 하는 순간이 있다. 오버레이라 테이블은 그대로 살아 있다.
+            UiKit.SettingsButton(root, new Vector2(0.805f, 0.868f), new Vector2(0.89f, 0.99f), 24);
+
             // 확인 모달 — 캔버스 직속(셰이크 무관), 표시할 때 최상위로 올림
             var dim = UiKit.CreatePanel(_canvasGo.transform, new Color(0f, 0f, 0f, 0.65f));
             dim.raycastTarget = true; // 뒤 클릭 차단
