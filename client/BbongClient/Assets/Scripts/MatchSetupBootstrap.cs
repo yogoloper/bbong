@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using BbongCore.Config;
 using BbongCore.Online;
@@ -13,13 +14,16 @@ namespace Bbong.Client
     /// </summary>
     public sealed class MatchSetupBootstrap : MonoBehaviour
     {
+        private static readonly Color Selected = UiKit.Accent;
+        private static readonly Color Unselected = new(0.16f, 0.24f, 0.42f); // 어두운 네이비 — 밝은 것은 선택/CTA뿐
+
         private GameObject _canvas;
         private int _players = 4;
         private int _stake = 1000;
         private Text _prize;
         private Text _status;
-        private Button[] _playerChoices;
-        private Button[] _stakeChoices;
+        private readonly List<(int value, Button button)> _playerChoices = new();
+        private readonly List<(int value, Button button)> _stakeChoices = new();
 
         private RoomUpdateMsg _room;
         private Coroutine _searchPulse;
@@ -54,44 +58,70 @@ namespace Bbong.Client
             UiKit.CreateText(root, "맞춤게임", 56, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.87f)).fontStyle = FontStyle.Bold;
 
-            UiKit.CreateText(root, "1등이 총상금을 전부 가져갑니다", 26, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.735f), new Vector2(0.9f, 0.775f)).color = UiKit.TextSub;
+            var subtitle = UiKit.CreateText(root, "1등이 총상금을 전부 가져갑니다", 26, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.735f), new Vector2(0.9f, 0.775f));
+            subtitle.color = new Color(1f, 1f, 1f, 0.8f);
 
             // 라벨-칩 간격 < 그룹 간 간격(약 1:2) — 라벨이 아래 칩 무리로 묶여 읽히게 한다
-            UiKit.SectionLabel(root, "인원", 0.66f, 0.71f);
-            var counts = Enumerable.Range(GameConfig.MinPlayers, GameConfig.MaxPlayers - GameConfig.MinPlayers + 1)
-                .ToArray();
-            _playerChoices = UiKit.ChoiceRow(root, counts.Select(n => $"{n}명").ToArray(), 0.515f, 0.637f, 0.09f,
-                i => { _players = counts[i]; RefreshSelection(); });
+            UiKit.CreateText(root, "인원", 36, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.66f), new Vector2(0.9f, 0.71f));
+            var playerCount = GameConfig.MaxPlayers - GameConfig.MinPlayers + 1;
+            PlaceChoices(root, 0.515f, 0.637f, 0.09f, playerCount,
+                i => GameConfig.MinPlayers + i, n => $"{n}명", _playerChoices, v => _players = v);
 
-            UiKit.SectionLabel(root, "입장료", 0.425f, 0.475f);
-            _stakeChoices = UiKit.ChoiceRow(root, GameConfig.StakeOptions.Select(s => $"{s:N0}").ToArray(),
-                0.28f, 0.402f, 0.09f,
-                i => { _stake = GameConfig.StakeOptions[i]; RefreshSelection(); });
+            UiKit.CreateText(root, "입장료", 36, TextAnchor.MiddleCenter,
+                new Vector2(0.1f, 0.425f), new Vector2(0.9f, 0.475f));
+            PlaceChoices(root, 0.28f, 0.402f, 0.09f, GameConfig.StakeOptions.Count,
+                i => GameConfig.StakeOptions[i], s => $"{s:N0}", _stakeChoices, v => _stake = v);
 
-            _prize = UiKit.CreateText(root, "", 34, TextAnchor.MiddleCenter,
+            _prize = UiKit.CreateText(root, "", 38, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.22f), new Vector2(0.9f, 0.268f));
             _prize.color = UiKit.Accent;
             _prize.fontStyle = FontStyle.Bold;
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.168f), new Vector2(0.9f, 0.212f));
-            _status.color = UiKit.Warn;
+            _status.color = new Color(1f, 0.8f, 0.5f);
 
             UiKit.PrimaryCta(root, "시작하기", OnMatch);
             UiKit.BackButton(root, Back);
         }
 
+        /// <summary>선택지 버튼들을 가로 가운데 정렬로 배치 + 선택 강조 등록.</summary>
+        private void PlaceChoices(Transform root, float y0, float y1, float w, int count,
+            Func<int, int> valueAt, Func<int, string> format,
+            List<(int value, Button button)> registry, Action<int> onPick)
+        {
+            const float gap = 0.012f;
+            var start = 0.5f - (count * w + (count - 1) * gap) / 2f;
+            for (var i = 0; i < count; i++)
+            {
+                var v = valueAt(i);
+                var x0 = start + i * (w + gap);
+                var btn = UiKit.CreateButton(root, format(v), new Vector2(x0, y0), new Vector2(x0 + w, y1),
+                    () => { onPick(v); RefreshSelection(); }, 28);
+                registry.Add((v, btn));
+            }
+        }
+
+        private static void Paint(Button button, bool selected)
+        {
+            button.GetComponent<Image>().color = selected ? Selected : Unselected;
+            var text = button.GetComponentInChildren<Text>();
+            text.color = selected ? Color.black : Color.white;
+            text.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
+        }
+
         private void RefreshSelection()
         {
-            for (var i = 0; i < _playerChoices.Length; i++)
+            foreach (var (value, button) in _playerChoices)
             {
-                UiKit.PaintChoice(_playerChoices[i], GameConfig.MinPlayers + i == _players);
+                Paint(button, value == _players);
             }
 
-            for (var i = 0; i < _stakeChoices.Length; i++)
+            foreach (var (value, button) in _stakeChoices)
             {
-                UiKit.PaintChoice(_stakeChoices[i], GameConfig.StakeOptions[i] == _stake);
+                Paint(button, value == _stake);
             }
 
             // winner-takes-all → 총상금 = 입장료 × 인원
@@ -173,7 +203,7 @@ namespace Bbong.Client
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.0f), new Vector2(0.9f, 0.06f));
-            _status.color = UiKit.Warn;
+            _status.color = new Color(1f, 0.8f, 0.5f);
         }
 
         /// <summary>
@@ -219,8 +249,9 @@ namespace Bbong.Client
         {
             _matching = false;
             Destroy(_canvas);
-            Build(); // 칩 목록은 Build가 새로 만들어 채운다
-
+            _playerChoices.Clear();
+            _stakeChoices.Clear();
+            Build();
             RefreshSelection();
         }
 

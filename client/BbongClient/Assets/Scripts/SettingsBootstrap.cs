@@ -19,7 +19,10 @@ namespace Bbong.Client
         private const float SheetTop = 0.92f;
         private const float SheetBottom = 0.10f;
 
-        private static readonly Color Track = new(0f, 0f, 0f, 0.45f); // 세그먼트가 끼워지는 홈
+        private static readonly Color Ink = new(0.07f, 0.11f, 0.22f);            // 골드 바탕 위 글자
+        private static readonly Color Sheet = new(0.10f, 0.15f, 0.30f, 0.97f);   // 판 — 프로필 보드와 동일
+        private static readonly Color SurfaceDim = new(0.13f, 0.19f, 0.36f, 0.75f);
+        private static readonly Color Track = new(0f, 0f, 0f, 0.45f);
 
         private GameObject _canvas;
         private Text _notice;
@@ -58,8 +61,19 @@ namespace Bbong.Client
 
             var root = SafeArea.Wrap(canvasGo.transform);
 
-            // 판은 프로필 보드와 같은 공장에서 나온다(반투명 Panel9 + 단색 백킹)
-            var sheet = UiKit.CreateBoard(root,
+            // Panel9 스프라이트는 반투명이라 뒤 화면이 비친다 — 단색 백킹을 먼저 깔아 가린다
+            var backing = UiKit.CreatePanel(root, new Color(0.07f, 0.11f, 0.23f, 0.995f));
+            UiKit.Anchor(backing.rectTransform,
+                new Vector2(SheetLeft, SheetBottom), new Vector2(SheetRight, SheetTop));
+
+            var sheet = UiKit.CreatePanel(root, Sheet);
+            if (UiArt.Panel9 != null)
+            {
+                sheet.sprite = UiArt.Panel9;
+                sheet.type = Image.Type.Sliced;
+            }
+
+            UiKit.Anchor(sheet.rectTransform,
                 new Vector2(SheetLeft, SheetBottom), new Vector2(SheetRight, SheetTop));
             sheet.gameObject.AddComponent<Button>().transition = Selectable.Transition.None; // 시트 클릭은 안 닫히게
 
@@ -69,7 +83,7 @@ namespace Bbong.Client
             gear.color = new Color(1f, 1f, 1f, 0.9f);
             UiKit.CreateText(root, "설정", 42, TextAnchor.MiddleLeft,
                 new Vector2(0.447f, 0.812f), new Vector2(0.60f, 0.894f)).fontStyle = FontStyle.Bold;
-            UiKit.Anchor(UiKit.CreatePanel(root, UiKit.Gold(0.30f)).rectTransform,
+            UiKit.Anchor(UiKit.CreatePanel(root, Gold(0.30f)).rectTransform,
                 new Vector2(SheetLeft + 0.02f, 0.796f), new Vector2(SheetRight - 0.02f, 0.799f));
 
             Toggle(root, "소리", 0.645f, () => AppSettings.SoundOn, on =>
@@ -97,13 +111,13 @@ namespace Bbong.Client
 
             _notice = UiKit.CreateText(root, "", 23, TextAnchor.UpperCenter,
                 new Vector2(0.295f, 0.25f), new Vector2(0.705f, 0.335f));
-            _notice.color = UiKit.TextSub;
+            _notice.color = new Color(1f, 1f, 1f, 0.7f);
 
             // 턴 타이머는 서버가 돌린다. 오버레이를 열어도 판은 안 멈추니 미리 알려준다.
             if (FindAnyObjectByType<GameTableView>() != null)
             {
                 _notice.text = "판은 계속 진행돼요. 내 차례를 놓치지 않게 곧 닫아주세요.";
-                _notice.color = UiKit.Warn;
+                _notice.color = new Color(1f, 0.8f, 0.5f);
             }
 
             // 게임 중일 때만 나가기. 판을 버리는 동작이라 확인 모달은 테이블이 갖고 있다.
@@ -124,12 +138,15 @@ namespace Bbong.Client
             UiKit.BackAction = Close; // 기기 뒤로가기는 오버레이만 닫는다
         }
 
+        private static Color Gold(float alpha) =>
+            new(UiKit.Accent.r, UiKit.Accent.g, UiKit.Accent.b, alpha);
+
         /// <summary>닫기는 이 시트의 주 동작 — 골드로 채워 시선이 끝나는 자리를 만든다.</summary>
         private static void Primary(Button btn)
         {
             btn.GetComponent<Image>().color = UiKit.Accent;
             var text = btn.GetComponentInChildren<Text>();
-            text.color = UiKit.Ink;
+            text.color = Ink;
             text.fontStyle = FontStyle.Bold;
         }
 
@@ -139,8 +156,8 @@ namespace Bbong.Client
             var btn = UiKit.CreateButton(root, label, min, max, () => onClick(), 25);
             var img = btn.GetComponent<Image>();
             img.sprite = UiArt.Chip;
-            img.color = UiKit.SurfaceDim;
-            btn.GetComponentInChildren<Text>().color = UiKit.TextSub;
+            img.color = SurfaceDim;
+            btn.GetComponentInChildren<Text>().color = new Color(1f, 1f, 1f, 0.85f);
         }
 
         /// <summary>
@@ -185,7 +202,7 @@ namespace Bbong.Client
         {
             btn.GetComponent<Image>().color = selected ? UiKit.Accent : new Color(0f, 0f, 0f, 0f);
             var text = btn.GetComponentInChildren<Text>();
-            text.color = selected ? UiKit.Ink : UiKit.TextSub;
+            text.color = selected ? Ink : new Color(1f, 1f, 1f, 0.55f);
             text.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
         }
 

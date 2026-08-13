@@ -23,9 +23,7 @@ namespace Bbong.Client
             var (canvas, root) = UiKit.CreateScreen("ShopCanvas", topBar: true);
             _canvas = canvas;
 
-            // 제목 크기는 연습·맞춤게임 설정 화면과 같은 56 — 화면마다 60/56/52로 달라
-            // 화면을 옮길 때마다 머리글 높이가 들썩였다
-            UiKit.CreateText(root, "포인트 얻기", 56, TextAnchor.MiddleCenter,
+            UiKit.CreateText(root, "포인트 얻기", 60, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.76f), new Vector2(0.9f, 0.86f)).fontStyle = FontStyle.Bold;
 
             // 광고 카드 2개(루미큐브 코인 카드 레이아웃 차용)
@@ -40,7 +38,7 @@ namespace Bbong.Client
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.22f), new Vector2(0.9f, 0.3f));
-            _status.color = UiKit.Warn;
+            _status.color = new Color(1f, 0.8f, 0.5f);
 
             RenderBalance();
         }
@@ -50,14 +48,14 @@ namespace Bbong.Client
             UnityEngine.Events.UnityAction onClick, out Button btn)
         {
             btn = UiKit.CreateButton(root, "", min, max, onClick);
-            btn.GetComponent<Image>().color = UiKit.Surface; // 로비 모드 카드와 같은 면
+            btn.GetComponent<Image>().color = new Color(0.12f, 0.22f, 0.42f, 0.95f);
             var t = UiKit.CreateText(btn.transform, title, 40, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.38f), new Vector2(1f, 0.92f));
             t.color = Color.white;
             t.fontStyle = FontStyle.Bold;
             var s = UiKit.CreateText(btn.transform, sub, 22, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.1f), new Vector2(1f, 0.34f));
-            s.color = UiKit.TextSub;
+            s.color = new Color(1f, 1f, 1f, 0.6f);
         }
 
         private void RenderBalance() => _balance.text = $"보유 {Session.Balance:N0} P";

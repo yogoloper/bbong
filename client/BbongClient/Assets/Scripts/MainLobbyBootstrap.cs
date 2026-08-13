@@ -33,10 +33,9 @@ namespace Bbong.Client
             var descs = new[] { "처음이면 여기부터", "봇 상대로 몸풀기", "포인트 걸고 한 판", "초대코드로 친구랑", "광고 보고 포인트" };
             UnityEngine.Events.UnityAction[] actions = { OnTutorial, OnPractice, OnMatch, OnFriend, OnShop };
 
-            // 가운데 79% 폭에 좌우 같은 여백으로 깐다. 카드 다섯 장이 화면 한가운데 좁게 몰려 있어
-            // 아래쪽이 통째로 비어 보였다 — 폭과 높이를 함께 키워 여백을 카드 주위로 고르게 돌렸다.
-            // 높이는 카드 비율(가로:세로 ≈ 1:1.8)에서 역산한 값이라 폭만 건드리면 카드가 길쭉해진다.
-            const float left = 0.105f, right = 0.895f, pad = 0.014f, top = 0.715f, bottom = 0.25f;
+            // 가운데 70% 폭에 좌우 같은 여백으로 깐다. 높이는 카드 비율(가로:세로 ≈ 1:1.6)에서
+            // 역산한 값이다 — 폭만 건드리면 카드가 길쭉해진다.
+            const float left = 0.15f, right = 0.85f, pad = 0.012f, top = 0.70f, bottom = 0.24f;
             var count = titles.Length;
             var w = (right - left - pad * (count - 1)) / count;
             for (var i = 0; i < count; i++)
@@ -76,28 +75,25 @@ namespace Bbong.Client
 
             // 카드 = 반투명 패널 + 클릭 버튼. 제목은 하단, 위쪽은 모드 색 아이콘 영역.
             var btn = UiKit.CreateButton(root, "", min, max, onClick);
-            btn.GetComponent<Image>().color = UiKit.Surface; // 판 위의 면 — 전 화면 공용 네이비
+            btn.GetComponent<Image>().color = new Color(0.12f, 0.22f, 0.42f, 0.95f);
             var colors = btn.colors;
             colors.pressedColor = new Color(1.2f, 1.2f, 1.2f); // 눌림 피드백
             btn.colors = colors;
 
-            // 아이콘 판만 캡슐(Pill)이라 카드 모서리보다 훨씬 둥글어 두 겹으로 보였다.
-            // 앱 공용 칩과 같은 반경으로 맞춰 카드 안에 얌전히 앉게 한다.
-            var accentTop = UiKit.CreateChip(btn.transform, ModeTint[i],
-                new Vector2(0.09f, 0.455f), new Vector2(0.91f, 0.90f));
+            var accentTop = UiKit.CreatePanel(btn.transform, ModeTint[i]);
+            accentTop.sprite = UiArt.Pill;
+            accentTop.type = Image.Type.Sliced;
+            UiKit.Anchor(accentTop.rectTransform, new Vector2(0.08f, 0.45f), new Vector2(0.92f, 0.9f));
             UiKit.CreateIcon(accentTop.transform, ModeIcon(i),
                 new Vector2(0.12f, 0.1f), new Vector2(0.88f, 0.9f));
 
             var t = UiKit.CreateText(btn.transform, title, 40, TextAnchor.MiddleCenter,
-                new Vector2(0f, 0.26f), new Vector2(1f, 0.42f));
+                new Vector2(0f, 0.25f), new Vector2(1f, 0.42f));
             t.color = Color.white;
             t.fontStyle = FontStyle.Bold;
-
-            // 설명은 제목을 거들 뿐이다. 0.8이면 제목과 거의 같은 무게라 카드마다 글자 두 줄이
-            // 나란히 소리쳤다 — 한 단 낮춰 제목 → 설명 순서가 보이게 한다.
-            var d = UiKit.CreateText(btn.transform, desc, 25, TextAnchor.MiddleCenter,
-                new Vector2(0f, 0.09f), new Vector2(1f, 0.24f));
-            d.color = UiKit.TextFaint;
+            var d = UiKit.CreateText(btn.transform, desc, 26, TextAnchor.MiddleCenter,
+                new Vector2(0f, 0.08f), new Vector2(1f, 0.24f));
+            d.color = new Color(1f, 1f, 1f, 0.8f);
         }
 
         private void OnTutorial() => UiKit.GoTo<TutorialBootstrap>(_canvas, this);

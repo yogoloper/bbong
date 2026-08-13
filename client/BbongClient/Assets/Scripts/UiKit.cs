@@ -13,25 +13,7 @@ namespace Bbong.Client
     internal static class UiKit
     {
         public static readonly Color Accent = new(0.94f, 0.83f, 0.55f); // 전 화면 공용 소프트 골드(노란 텍스트 단일 출처)
-
-        // ── 색 사다리 ──
-        // 화면마다 네이비를 조금씩 다르게 섞어 쓰다 보니 같은 판인데 재질이 달라 보였다.
-        // 층은 딱 셋이다: 배경 < 판(Panel) < 판 위의 면(Surface). 그 위는 골드뿐.
-        public static readonly Color Ink = new(0.07f, 0.11f, 0.22f);                // 골드 바탕 위 글자
-        public static readonly Color Panel = new(0.10f, 0.15f, 0.30f, 0.94f);       // 큰 판(상단바·보드·시트)
-        public static readonly Color Surface = new(0.15f, 0.22f, 0.42f, 0.92f);     // 판 위 면(카드·타일·배지)
-        public static readonly Color SurfaceDim = new(0.13f, 0.19f, 0.36f, 0.75f);  // 안 고른 면
-        public static readonly Color ButtonColor = new(0.16f, 0.24f, 0.42f);        // 부차 버튼 단일 네이비
-
-        // 글자 투명도도 세 단이면 충분하다. 0.8·0.7·0.55·0.45·0.38이 섞여 있으면
-        // 무엇이 더 중요한 정보인지 눈이 순서를 못 세운다.
-        public static readonly Color TextSub = new(1f, 1f, 1f, 0.72f);   // 부연·설명
-        public static readonly Color TextFaint = new(1f, 1f, 1f, 0.42f); // 라벨·단위·비활성
-        public static readonly Color TextGhost = new(1f, 1f, 1f, 0.22f); // 빈칸 표시("-")
-        public static readonly Color Warn = new(1f, 0.80f, 0.50f);       // 안내·에러 한 줄(골드보다 따뜻하게)
-
-        /// <summary>알파만 바꾼 골드(헤어라인·옅은 강조). 화면마다 만들던 지역 헬퍼를 한곳으로.</summary>
-        public static Color Gold(float alpha) => new(Accent.r, Accent.g, Accent.b, alpha);
+        public static readonly Color ButtonColor = new(0.20f, 0.28f, 0.48f); // 네이비 계열 — 부차 버튼이 CTA보다 밝지 않게
 
         private static Font _font;
 
@@ -99,13 +81,13 @@ namespace Bbong.Client
             {
                 panel.sprite = UiArt.Panel9;
                 panel.type = Image.Type.Sliced;
-                panel.color = Panel; // 보드·시트와 같은 네이비 — 판은 어느 화면에서나 한 가지 색
+                panel.color = new Color(0.10f, 0.16f, 0.32f, 0.95f); // 네이비 틴트 — 배경 테마와 통일
             }
 
             Anchor(panel.rectTransform, new Vector2(0f, 0.9f), new Vector2(1f, 1f));
             panel.transform.SetSiblingIndex(1);
 
-            var hairline = CreatePanel(canvas, Gold(0.30f)); // 골드 헤어라인
+            var hairline = CreatePanel(canvas, new Color(Accent.r, Accent.g, Accent.b, 0.30f)); // 골드 헤어라인
             Anchor(hairline.rectTransform, new Vector2(0f, 0.898f), new Vector2(1f, 0.9f));
             hairline.transform.SetSiblingIndex(2);
 
@@ -180,7 +162,7 @@ namespace Bbong.Client
             var img = go.GetComponent<Image>();
             img.sprite = UiArt.Button;
             img.type = Image.Type.Sliced;
-            img.color = new Color(ButtonColor.r, ButtonColor.g, ButtonColor.b, 0.9f); // 부차 버튼과 같은 네이비
+            img.color = new Color(0.16f, 0.24f, 0.42f, 0.9f);
             Anchor(go.GetComponent<RectTransform>(), min, max);
 
             CreateIcon(go.transform, UiArt.IconGear, new Vector2(0.18f, 0.18f), new Vector2(0.82f, 0.82f));
@@ -263,10 +245,7 @@ namespace Bbong.Client
         public static Button PrimaryCta(Transform root, string label, UnityEngine.Events.UnityAction onClick) =>
             CtaButton(root, label, new Vector2(0.34f, 0.05f), new Vector2(0.66f, 0.16f), onClick, 46);
 
-        /// <summary>
-        /// 주요 액션(게임 시작 등) CTA 버튼. 앱 전체에서 채운 골드는 이것과 "지금 고른 것"뿐이다 —
-        /// 파란 CTA는 이 앱에서 유일한 파란 버튼이라 어디에도 안 물렸고, 골드 선택 칩과 서로 시선을 뺏었다.
-        /// </summary>
+        /// <summary>주요 액션(게임 시작 등) CTA 버튼. 일반 버튼과 같은 모양 + 골드 강조색(테마 일치).</summary>
         public static Button CtaButton(Transform parent, string label, Vector2 min, Vector2 max,
             UnityEngine.Events.UnityAction onClick, int fontSize = 48)
         {
@@ -276,11 +255,11 @@ namespace Bbong.Client
             var img = go.GetComponent<Image>();
             img.sprite = UiArt.Button; // 일반 버튼과 동일한 Kenney 9-slice
             img.type = Image.Type.Sliced;
-            img.color = Accent;
+            img.color = new Color(0.24f, 0.5f, 0.88f); // 우주 배경과 같은 블루 계열(배경보다 밝게 강조)
             Anchor(go.GetComponent<RectTransform>(), min, max);
 
             var text = CreateText(go.transform, label, fontSize, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
-            text.color = Ink;
+            text.color = Color.white;
             text.fontStyle = FontStyle.Bold;
 
             var btn = go.GetComponent<Button>();
@@ -295,36 +274,6 @@ namespace Bbong.Client
             go.transform.SetParent(parent, false);
             go.GetComponent<Image>().color = color;
             return go.GetComponent<Image>();
-        }
-
-        /// <summary>
-        /// 큰 판(프로필 보드·설정 시트). Panel9 스프라이트가 반투명이라 단색 백킹을 먼저 깔아
-        /// 뒤 배경의 별이 비치지 않게 한다 — 판마다 따로 하던 처리를 한곳으로 모았다.
-        /// </summary>
-        public static Image CreateBoard(Transform parent, Vector2 min, Vector2 max)
-        {
-            var backing = CreatePanel(parent, new Color(Panel.r, Panel.g, Panel.b, 0.995f));
-            Anchor(backing.rectTransform, min, max);
-
-            var board = CreatePanel(parent, Panel);
-            if (UiArt.Panel9 != null)
-            {
-                board.sprite = UiArt.Panel9;
-                board.type = Image.Type.Sliced;
-            }
-
-            Anchor(board.rectTransform, min, max);
-            return board;
-        }
-
-        /// <summary>판 위에 얹는 둥근 면(타일·배지·세그먼트 트랙). 모서리 반경을 앱 전체에서 하나로 유지한다.</summary>
-        public static Image CreateChip(Transform parent, Color color, Vector2 min, Vector2 max)
-        {
-            var chip = CreatePanel(parent, color);
-            chip.sprite = UiArt.Chip;
-            chip.type = Image.Type.Sliced;
-            Anchor(chip.rectTransform, min, max);
-            return chip;
         }
 
         public static Text CreateText(Transform parent, string content, int size, TextAnchor anchor,
@@ -394,74 +343,23 @@ namespace Bbong.Client
             return btn;
         }
 
-        /// <summary>
-        /// 설정 화면의 항목 이름(인원·입장료·봇 난이도). 흰 40pt로 세워 두면 이름이 정작 고를
-        /// 칩보다 커서 눈이 라벨부터 읽는다 — 한 단 낮춰 아래 칩 무리의 머리말로만 쓰이게 한다.
-        /// </summary>
-        public static Text SectionLabel(Transform parent, string label, float y0, float y1)
-        {
-            var text = CreateText(parent, label, 30, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, y0), new Vector2(0.9f, y1));
-            text.color = TextFaint;
-            return text;
-        }
-
-        /// <summary>
-        /// 가운데 정렬 선택 칩 한 줄. 연습 설정과 맞춤게임 설정이 각자 그리드를 갖고 있어
-        /// 칩 크기·간격이 화면마다 미묘하게 달랐다 — 두 화면이 같은 자를 쓰게 한곳으로 모은다.
-        /// </summary>
-        public static Button[] ChoiceRow(Transform parent, string[] labels, float y0, float y1, float w,
-            Action<int> onPick)
-        {
-            const float gap = 0.012f;
-            var start = 0.5f - (labels.Length * w + (labels.Length - 1) * gap) / 2f;
-            var buttons = new Button[labels.Length];
-            for (var i = 0; i < labels.Length; i++)
-            {
-                var index = i;
-                var x0 = start + i * (w + gap);
-                buttons[i] = CreateButton(parent, labels[i], new Vector2(x0, y0), new Vector2(x0 + w, y1),
-                    () => onPick(index), 28);
-            }
-
-            return buttons;
-        }
-
-        /// <summary>선택 칩 칠하기 — 고른 것만 골드, 나머지는 부차 네이비(전 화면 공통).</summary>
-        public static void PaintChoice(Button btn, bool selected)
-        {
-            btn.GetComponent<Image>().color = selected ? Accent : ButtonColor;
-            var text = btn.GetComponentInChildren<Text>();
-            text.color = selected ? Ink : TextSub;
-            text.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
-        }
-
-        /// <summary>
-        /// 입력창. 흰 사각형은 네이비 화면에서 제일 밝은 덩어리라 눈이 먼저 거기로 갔다 —
-        /// 판 위의 면과 같은 네이비로 낮추고, 커서만 골드로 켜서 "지금 여기 쓴다"를 표시한다.
-        /// </summary>
         public static InputField CreateInputField(Transform parent, string initial, int charLimit,
             Vector2 min, Vector2 max)
         {
             var go = new GameObject("InputField", typeof(RectTransform), typeof(Image));
             go.transform.SetParent(parent, false);
-            var img = go.GetComponent<Image>();
-            img.sprite = UiArt.Chip; // 앱 공용 모서리 반경
-            img.type = Image.Type.Sliced;
-            img.color = Surface;
+            go.GetComponent<Image>().color = Color.white;
             Anchor(go.GetComponent<RectTransform>(), min, max);
 
             var text = CreateText(go.transform, initial, 36, TextAnchor.MiddleCenter,
                 new Vector2(0.05f, 0f), new Vector2(0.95f, 1f));
+            text.color = Color.black;
             text.supportRichText = false;
 
             var input = go.AddComponent<InputField>();
             input.textComponent = text;
             input.text = initial;
             input.characterLimit = charLimit;
-            input.customCaretColor = true; // 어두운 바탕에선 기본 검정 커서가 안 보인다
-            input.caretColor = Accent;
-            input.selectionColor = Gold(0.35f);
             return input;
         }
 
