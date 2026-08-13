@@ -53,7 +53,7 @@ namespace Bbong.Client
                 new Vector2(0.1f, 0.74f), new Vector2(0.9f, 0.86f));
             title.fontStyle = FontStyle.Bold;
             UiKit.CreateText(root, "입장료 없이 친구들끼리 편하게 한 판", 28, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.66f), new Vector2(0.9f, 0.73f)).color = new Color(1f, 1f, 1f, 0.7f);
+                new Vector2(0.1f, 0.66f), new Vector2(0.9f, 0.73f)).color = UiKit.TextSub;
 
             UiKit.CtaButton(root, "방 만들기",
                 new Vector2(0.34f, 0.50f), new Vector2(0.66f, 0.62f), OnCreateRoom, 38);
@@ -62,7 +62,7 @@ namespace Bbong.Client
 
             UiKit.CreateText(root, "방을 만들면 초대코드가 나옵니다.\n친구에게 코드를 알려주고 함께 플레이하세요.", 28,
                 TextAnchor.MiddleCenter, new Vector2(0.1f, 0.20f), new Vector2(0.9f, 0.32f))
-                .color = new Color(1f, 1f, 1f, 0.7f);
+                .color = UiKit.TextSub;
 
             BuildStatus(root);
             UiKit.BackButton(root, () => UiKit.GoTo<MainLobbyBootstrap>(_canvas, this));
@@ -151,13 +151,13 @@ namespace Bbong.Client
                 if (!start.interactable)
                 {
                     UiKit.CreateText(root, "2명부터 시작할 수 있어요", 26, TextAnchor.MiddleCenter,
-                        new Vector2(0.1f, 0.165f), new Vector2(0.9f, 0.215f)).color = new Color(1f, 1f, 1f, 0.6f);
+                        new Vector2(0.1f, 0.165f), new Vector2(0.9f, 0.215f)).color = UiKit.TextSub;
                 }
             }
             else
             {
                 UiKit.CreateText(root, "방장이 시작하기를 기다리는 중...", 30, TextAnchor.MiddleCenter,
-                    new Vector2(0.1f, 0.13f), new Vector2(0.9f, 0.20f)).color = new Color(1f, 1f, 1f, 0.7f);
+                    new Vector2(0.1f, 0.13f), new Vector2(0.9f, 0.20f)).color = UiKit.TextSub;
             }
 
             BuildStatus(root);
@@ -183,7 +183,7 @@ namespace Bbong.Client
         {
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.02f), new Vector2(0.9f, 0.10f));
-            _status.color = new Color(1f, 0.8f, 0.5f);
+            _status.color = UiKit.Warn;
         }
 
         // ── 액션 ──

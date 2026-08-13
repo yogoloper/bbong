@@ -27,7 +27,71 @@ namespace Bbong.Editor
                 return;
             }
 
+            WriteMobileIndexHtml(path);
             Console.WriteLine($"[CliBuild] OK: {path} ({report.summary.totalSize / 1024 / 1024}MB)");
+        }
+
+        /// <summary>
+        /// 기본 템플릿의 index.html을 모바일 고정 비율 페이지로 교체한다.
+        /// 데스크톱 브라우저에서도 캔버스를 폰 화면 비율(20:9)로 레터박스해 고정 —
+        /// 게임 UI가 모바일 기준으로 설계돼 있어, 브라우저 창 비율을 그대로 따르면
+        /// 시야가 판마다 달라져 레이아웃 검증이 안 된다.
+        /// </summary>
+        private static void WriteMobileIndexHtml(string buildPath)
+        {
+            // 빌드 산출물 이름은 폴더명에서 온다(webgl-cli → webgl-cli.loader.js).
+            // 대소문자까지 실제 파일에서 읽는다 — macOS는 대소문자를 구분하지 않아
+            // 여기서 틀려도 로컬에선 돌고 Pages에서만 404가 난다.
+            var buildDir = System.IO.Path.Combine(buildPath, "Build");
+            var loader = System.IO.Directory.GetFiles(buildDir, "*.loader.js")[0];
+            var stem = System.IO.Path.GetFileName(loader)
+                .Replace(".loader.js", string.Empty);
+
+            var html = @"<!DOCTYPE html>
+<html lang=""ko"">
+<head>
+<meta charset=""utf-8"">
+<meta name=""viewport"" content=""width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"">
+<title>나이롱뽕</title>
+<link rel=""shortcut icon"" href=""TemplateData/favicon.ico"">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #060b1c; overflow: hidden; }
+  /* 폰 가로 화면(20:9) 고정 레터박스 — 창이 어떤 비율이어도 게임 시야는 같다 */
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #unity-canvas { width: min(100vw, calc(100vh * 20 / 9)); aspect-ratio: 20 / 9; background: #060b1c; }
+  #loading { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 14px;
+             align-items: center; justify-content: center; color: #f0d896;
+             font-family: sans-serif; letter-spacing: 0.2em; }
+  #bar { width: 240px; height: 6px; background: #1a2447; border-radius: 3px; overflow: hidden; }
+  #fill { width: 0; height: 100%; background: #f0d896; }
+</style>
+</head>
+<body>
+<div id=""wrap""><canvas id=""unity-canvas"" tabindex=""-1""></canvas></div>
+<div id=""loading""><div>나이롱뽕</div><div id=""bar""><div id=""fill""></div></div></div>
+<script src=""Build/{STEM}.loader.js""></script>
+<script>
+createUnityInstance(document.querySelector('#unity-canvas'), {
+  arguments: [],
+  dataUrl: 'Build/{STEM}.data.unityweb',
+  frameworkUrl: 'Build/{STEM}.framework.js.unityweb',
+  codeUrl: 'Build/{STEM}.wasm.unityweb',
+  streamingAssetsUrl: 'StreamingAssets',
+  companyName: 'Yogoloper',
+  productName: '나이롱뽕',
+  productVersion: '1.0',
+  devicePixelRatio: window.devicePixelRatio
+}, function (p) {
+  document.querySelector('#fill').style.width = (p * 100) + '%';
+}).then(function () {
+  document.querySelector('#loading').style.display = 'none';
+}).catch(function (e) { alert(e); });
+</script>
+</body>
+</html>
+".Replace("{STEM}", stem);
+
+            System.IO.File.WriteAllText(System.IO.Path.Combine(buildPath, "index.html"), html);
         }
 
         /// <summary>

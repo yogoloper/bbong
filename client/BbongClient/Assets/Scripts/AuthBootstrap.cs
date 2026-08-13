@@ -71,7 +71,7 @@ namespace Bbong.Client
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.08f), new Vector2(0.9f, 0.17f));
-            _status.color = new Color(1f, 0.8f, 0.5f);
+            _status.color = UiKit.Warn;
         }
 
         private void OnGuest()
