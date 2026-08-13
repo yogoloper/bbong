@@ -18,6 +18,21 @@ namespace Bbong.Client
             Build();
         }
 
+        private Text _statsText;
+
+        private void ShowStats(ServerApi.StatsResult stats)
+        {
+            if (stats.games == 0)
+            {
+                _statsText.text = "아직 전적이 없어요\n맞춤게임을 한 판 해보세요";
+                return;
+            }
+
+            _statsText.text =
+                $"{stats.games}전 {stats.wins}승 {stats.games - stats.wins}패  ·  승률 {stats.winRate}%\n" +
+                $"누적 상금 {stats.totalWinnings:N0}";
+        }
+
         private void Build()
         {
             var (canvas, root) = UiKit.CreateScreen("ProfileCanvas", topBar: true);
@@ -33,13 +48,17 @@ namespace Bbong.Client
                 new Vector2(0.2f, 0.584f), new Vector2(0.65f, 0.706f));
             _saveBtn = UiKit.CreateButton(root, "저장", new Vector2(0.67f, 0.584f), new Vector2(0.8f, 0.706f), OnSave, 32);
 
-            // 통계 placeholder
             var statsPanel = UiKit.CreatePanel(root, new Color(0, 0, 0, 0.3f));
             UiKit.Anchor(statsPanel.rectTransform, new Vector2(0.2f, 0.3f), new Vector2(0.8f, 0.52f));
-            UiKit.CreateText(root, "전적\n0전 0승 0패", 32, TextAnchor.MiddleCenter,
-                new Vector2(0.2f, 0.3f), new Vector2(0.8f, 0.52f)).color = new Color(1, 1, 1, 0.6f);
-            UiKit.CreateText(root, "맞춤게임을 하면 전적이 쌓여요", 24, TextAnchor.MiddleCenter,
+
+            _statsText = UiKit.CreateText(root, "전적 불러오는 중...", 32, TextAnchor.MiddleCenter,
+                new Vector2(0.2f, 0.3f), new Vector2(0.8f, 0.52f));
+            _statsText.color = new Color(1, 1, 1, 0.85f);
+
+            UiKit.CreateText(root, "맞춤게임 기준 · 친구와 함께는 집계하지 않아요", 24, TextAnchor.MiddleCenter,
                 new Vector2(0.2f, 0.24f), new Vector2(0.8f, 0.29f)).color = new Color(1, 1, 1, 0.4f);
+
+            StartCoroutine(ServerApi.FetchStats(ShowStats, _ => _statsText.text = "전적을 불러오지 못했어요"));
 
             UiKit.BackButton(root, Back);
 

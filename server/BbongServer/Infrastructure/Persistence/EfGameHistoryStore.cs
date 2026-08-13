@@ -22,7 +22,8 @@ public sealed class EfGameHistoryStore : IGameHistoryStore
             RoomCode = game.RoomCode,
             Stake = game.Stake,
             TargetPlayers = game.TargetPlayers,
-            StartedAtUtc = game.StartedAtUtc
+            StartedAtUtc = game.StartedAtUtc,
+            Mode = game.Mode.ToString()
         });
         _db.GamePlayers.AddRange(game.Players.Select(p => new GamePlayerRow
         {
@@ -70,6 +71,7 @@ public sealed class EfGameHistoryStore : IGameHistoryStore
             }
 
             p.Payout = completion.PayoutsBySeat.TryGetValue(p.Seat, out var payout) ? payout : 0;
+            p.Won = completion.WinnerSeats.Contains(p.Seat);
         }
 
         await _db.SaveChangesAsync();

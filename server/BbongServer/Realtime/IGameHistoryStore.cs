@@ -25,7 +25,18 @@ public sealed record GameRecord(
     int Stake,
     int TargetPlayers,
     DateTimeOffset StartedAtUtc,
-    IReadOnlyList<GamePlayerRecord> Players);
+    IReadOnlyList<GamePlayerRecord> Players,
+    GameMode Mode);
+
+/// <summary>
+/// 방이 만들어진 경로. 모든 게임에 남겨 데이터 추적에 쓰고, 전적 집계는 QuickMatch만 센다
+/// (친구방은 상대를 직접 고를 수 있어 승패를 주고받기 쉽다).
+/// </summary>
+public enum GameMode
+{
+    Friend,
+    QuickMatch
+}
 
 public sealed record GameCompletion(
     Guid GameId,

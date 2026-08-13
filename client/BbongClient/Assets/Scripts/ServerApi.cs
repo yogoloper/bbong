@@ -46,6 +46,7 @@ namespace Bbong.Client
         [Serializable] private class ResumeBody { public string userId; public string resumeSecret; }
         [Serializable] public class MeResult { public string userId; public string nickname; public bool isGuest; public long balance; }
         [Serializable] private class BalanceResult { public long balance; }
+        [Serializable] public class StatsResult { public int games; public int wins; public int winRate; public long totalWinnings; }
         [Serializable] private class ErrorResult { public string error; }
         [Serializable] private class RenameBody { public string nickname; }
         [Serializable] private class AdBody { public string kind; }
@@ -95,6 +96,11 @@ namespace Bbong.Client
                 Session.IsGuest = r.isGuest;
                 onOk();
             }, onErr);
+
+        /// <summary>내 전적(맞춤게임 기준). 서버가 집계 규칙을 갖고 있어 클라는 표시만 한다.</summary>
+        public static IEnumerator FetchStats(Action<StatsResult> onOk, Action<string> onErr) =>
+            Send("GET", "/me/stats", null, auth: true,
+                text => onOk(JsonUtility.FromJson<StatsResult>(text)), onErr);
 
         public static IEnumerator Rename(string nickname, Action onOk, Action<string> onErr)
         {

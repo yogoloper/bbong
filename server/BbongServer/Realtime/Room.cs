@@ -466,7 +466,9 @@ public sealed class Room
                 .Concat(_fillBots.Select((n, i) => new GamePlayerRecord(_members.Count + i, null, n, true)))
                 .Concat(_botNames.Select((n, i) => new GamePlayerRecord(_members.Count + _fillBots.Count + i, null, n, true)))
                 .ToList();
-            var record = new GameRecord(_gameId, Code, Stake, TargetPlayers, DateTimeOffset.UtcNow, players);
+            // 맞춤게임은 목표 인원을 갖고 열린다(빠른매칭). 친구방은 초대코드로 모인다.
+            var mode = TargetPlayers > 0 ? GameMode.QuickMatch : GameMode.Friend;
+            var record = new GameRecord(_gameId, Code, Stake, TargetPlayers, DateTimeOffset.UtcNow, players, mode);
             Chain(h => h.CreateGameAsync(record));
         }
 

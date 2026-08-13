@@ -128,6 +128,18 @@ app.MapGet("/me/games", async (ClaimsPrincipal user, HttpContext ctx) =>
     return Results.Ok(games);
 }).RequireAuthorization();
 
+// 내 전적(맞춤게임만 집계 — 친구방은 상대를 고를 수 있어 승률이 의미를 잃는다)
+app.MapGet("/me/stats", async (ClaimsPrincipal user, HttpContext ctx) =>
+{
+    var db = ctx.RequestServices.GetService<BbongServer.Infrastructure.Persistence.BbongDbContext>();
+    if (db is null)
+    {
+        return Results.Ok(BbongServer.Infrastructure.Persistence.PlayerStats.Empty);
+    }
+
+    return Results.Ok(await BbongServer.Infrastructure.Persistence.PlayerStats.ForAsync(db, CurrentUserId(user)));
+}).RequireAuthorization();
+
 app.MapGet("/games/{gameId:guid}/events", async (Guid gameId, ClaimsPrincipal user, HttpContext ctx) =>
 {
     var db = ctx.RequestServices.GetService<BbongServer.Infrastructure.Persistence.BbongDbContext>();

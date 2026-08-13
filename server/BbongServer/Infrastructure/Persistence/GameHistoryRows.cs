@@ -22,6 +22,9 @@ public sealed class GameRow
 
     /// <summary>우승 좌석 CSV("0,2"). null = 미완료(서버 재시작 등).</summary>
     public string? WinnerSeats { get; set; }
+
+    /// <summary>방이 만들어진 경로(Friend | QuickMatch). 전적은 QuickMatch만 집계한다.</summary>
+    public string Mode { get; set; } = "";
 }
 
 /// <summary>좌석별 참여자 — 유저별 게임 조회 인덱스.</summary>
@@ -45,6 +48,9 @@ public sealed class GamePlayerRow
     public int? FinalDebt { get; set; }
 
     public long Payout { get; set; }
+
+    /// <summary>이 좌석이 우승했는지. 집계 때 우승 좌석 CSV를 파싱하지 않도록 확정해 둔다.</summary>
+    public bool Won { get; set; }
 }
 
 /// <summary>라운드 진행 이벤트(딜 스냅샷·드로우·버림·뽕·족보·스톱·정산). 페이로드는 JSONB.</summary>
