@@ -307,6 +307,12 @@ namespace Bbong.Client
         /// <summary>설정 오버레이가 닫힐 때 돌려줄, 오버레이 직전 화면의 뒤로 동작.</summary>
         public static System.Action PreviousBackAction { get; private set; }
 
+        /// <summary>
+        /// 게임 테이블이 살아 있는 동안만 채워지는 "판 나가기" 동작. 설정 오버레이가 이걸 보고
+        /// 나가기 버튼을 띄운다 — 판을 버리는 동작을 테이블 표면에서 한 겹 안으로 밀어 넣기 위해서다.
+        /// </summary>
+        public static System.Action ExitGameAction { get; set; }
+
         public static void InvokeBack()
         {
             if (BackAction != null)

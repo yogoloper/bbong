@@ -371,20 +371,24 @@ namespace Bbong.Client
             BuildExitUi(root);
         }
 
-        /// <summary>나가기 버튼(우상단 코너 — 손패·액션 버튼과 대각선 반대라 오클릭 최소) + 확인 모달.</summary>
+        /// <summary>테이블이 사라지면 설정에 남긴 나가기 훅도 걷는다 — 로비에서 뜨면 안 된다.</summary>
+        private void OnDestroy()
+        {
+            if (ReferenceEquals(UiKit.ExitGameAction?.Target, this))
+            {
+                UiKit.ExitGameAction = null;
+            }
+        }
+
+        /// <summary>
+        /// 우상단 설정 버튼(손패·액션 버튼과 대각선 반대라 오클릭 최소) + 나가기 확인 모달.
+        /// 나가기는 설정 안으로 넣었다 — 판을 버리는 동작이 손끝 하나 거리에 상시 노출돼 있으면
+        /// 오클릭 한 번에 판이 날아간다. 소리를 끄는 건 판 중에도 필요해서 진입점은 남긴다.
+        /// </summary>
         private void BuildExitUi(Transform root)
         {
-            // 나가기: 터치 가능 크기(≈48dp) + 중성 회색 — 붉은색은 확인 모달의 파괴적 동작에만
-            var exitBtn = UiKit.CreateButton(root, "나가기",
-                new Vector2(0.90f, 0.868f), new Vector2(0.99f, 0.99f), ShowExitConfirm, 26); // 상하 여백 명시(터치 하한 확장이 상단에 붙는 것 방지)
-            exitBtn.GetComponent<Image>().color = new Color(0.32f, 0.36f, 0.44f, 0.92f);
-            var exitLabel = exitBtn.GetComponentInChildren<Text>();
-            exitLabel.color = Color.white;
-            exitLabel.fontStyle = FontStyle.Bold;
-            TableArt.AddOutline(exitLabel);
-
-            // 판이 도는 중에도 소리를 꺼야 하는 순간이 있다. 오버레이라 테이블은 그대로 살아 있다.
-            UiKit.SettingsButton(root, new Vector2(0.805f, 0.868f), new Vector2(0.89f, 0.99f), 24);
+            UiKit.SettingsButton(root, new Vector2(0.90f, 0.868f), new Vector2(0.99f, 0.99f), 26);
+            UiKit.ExitGameAction = ShowExitConfirm; // 설정 오버레이가 이걸 보고 나가기 버튼을 띄운다
 
             // 확인 모달 — 캔버스 직속(셰이크 무관), 표시할 때 최상위로 올림
             var dim = UiKit.CreatePanel(_canvasGo.transform, new Color(0f, 0f, 0f, 0.65f));

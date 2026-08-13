@@ -80,7 +80,19 @@ namespace Bbong.Client
                 _notice.color = new Color(1f, 0.8f, 0.5f);
             }
 
-            UiKit.CreateButton(root, "닫기", new Vector2(0.42f, 0.115f), new Vector2(0.58f, 0.19f), Close, 30);
+            // 게임 중일 때만 나가기. 판을 버리는 동작이라 확인 모달은 테이블이 갖고 있다.
+            if (UiKit.ExitGameAction != null)
+            {
+                var exit = UiKit.CreateButton(root, "게임 나가기",
+                    new Vector2(0.27f, 0.115f), new Vector2(0.485f, 0.19f), ExitGame, 28);
+                exit.GetComponent<Image>().color = new Color(0.42f, 0.24f, 0.26f);
+                UiKit.CreateButton(root, "닫기", new Vector2(0.515f, 0.115f), new Vector2(0.73f, 0.19f), Close, 30);
+            }
+            else
+            {
+                UiKit.CreateButton(root, "닫기", new Vector2(0.42f, 0.115f), new Vector2(0.58f, 0.19f), Close, 30);
+            }
+
             UiKit.BackAction = Close; // 기기 뒤로가기는 오버레이만 닫는다
         }
 
@@ -125,6 +137,14 @@ namespace Bbong.Client
         private void ShowTerms() =>
             _notice.text = "포인트는 게임 안에서만 쓰는 재화이며 환전되지 않습니다.\n" +
                            "전체 약관과 개인정보처리방침은 출시 시 앱 안에서 제공됩니다.";
+
+        /// <summary>오버레이를 먼저 걷고 테이블의 나가기 확인 모달로 넘긴다.</summary>
+        private void ExitGame()
+        {
+            var exit = UiKit.ExitGameAction;
+            Close();
+            exit?.Invoke();
+        }
 
         /// <summary>오버레이만 걷어낸다 — 뒤에 있던 화면은 그대로 살아 있다.</summary>
         private void Close()

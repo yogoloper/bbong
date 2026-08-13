@@ -128,16 +128,18 @@ app.MapGet("/me/games", async (ClaimsPrincipal user, HttpContext ctx) =>
     return Results.Ok(games);
 }).RequireAuthorization();
 
-// 내 전적(맞춤게임만 집계 — 친구방은 상대를 고를 수 있어 승률이 의미를 잃는다)
+// 내 전적. 맞춤게임/친구방을 따로, 각각 인원(2~6)별로도 나눠 준다 — 화면이 탭으로 가른다.
 app.MapGet("/me/stats", async (ClaimsPrincipal user, HttpContext ctx) =>
 {
     var db = ctx.RequestServices.GetService<BbongServer.Infrastructure.Persistence.BbongDbContext>();
     if (db is null)
     {
-        return Results.Ok(BbongServer.Infrastructure.Persistence.PlayerStats.Empty);
+        return Results.Ok(new BbongServer.Infrastructure.Persistence.PlayerStatsBreakdown(
+            System.Array.Empty<BbongServer.Infrastructure.Persistence.ModeStats>()));
     }
 
-    return Results.Ok(await BbongServer.Infrastructure.Persistence.PlayerStats.ForAsync(db, CurrentUserId(user)));
+    return Results.Ok(
+        await BbongServer.Infrastructure.Persistence.PlayerStats.BreakdownAsync(db, CurrentUserId(user)));
 }).RequireAuthorization();
 
 // 최근 게임 기록. 집계와 달리 친구방도 보여준다 — 승률에서 빼는 것과 기록에서 감추는 건 다르다.
