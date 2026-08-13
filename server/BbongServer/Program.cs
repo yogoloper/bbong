@@ -140,6 +140,20 @@ app.MapGet("/me/stats", async (ClaimsPrincipal user, HttpContext ctx) =>
     return Results.Ok(await BbongServer.Infrastructure.Persistence.PlayerStats.ForAsync(db, CurrentUserId(user)));
 }).RequireAuthorization();
 
+// 최근 게임 기록. 집계와 달리 친구방도 보여준다 — 승률에서 빼는 것과 기록에서 감추는 건 다르다.
+app.MapGet("/me/history", async (ClaimsPrincipal user, HttpContext ctx, int? limit) =>
+{
+    var db = ctx.RequestServices.GetService<BbongServer.Infrastructure.Persistence.BbongDbContext>();
+    if (db is null)
+    {
+        return Results.Ok(System.Array.Empty<BbongServer.Infrastructure.Persistence.PlayerHistoryEntry>());
+    }
+
+    return Results.Ok(await BbongServer.Infrastructure.Persistence.PlayerHistory.ForAsync(
+        db, CurrentUserId(user),
+        limit ?? BbongServer.Infrastructure.Persistence.PlayerHistory.DefaultLimit));
+}).RequireAuthorization();
+
 app.MapGet("/games/{gameId:guid}/events", async (Guid gameId, ClaimsPrincipal user, HttpContext ctx) =>
 {
     var db = ctx.RequestServices.GetService<BbongServer.Infrastructure.Persistence.BbongDbContext>();

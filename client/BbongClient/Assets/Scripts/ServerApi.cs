@@ -47,6 +47,8 @@ namespace Bbong.Client
         [Serializable] public class MeResult { public string userId; public string nickname; public bool isGuest; public long balance; }
         [Serializable] private class BalanceResult { public long balance; }
         [Serializable] public class StatsResult { public int games; public int wins; public int winRate; public long totalWinnings; }
+        [Serializable] public class HistoryEntry { public string endedAt; public string mode; public int players; public int stake; public bool won; public long payout; }
+        [Serializable] private class HistoryWrap { public HistoryEntry[] items; }
         [Serializable] private class ErrorResult { public string error; }
         [Serializable] private class RenameBody { public string nickname; }
         [Serializable] private class AdBody { public string kind; }
@@ -101,6 +103,16 @@ namespace Bbong.Client
         public static IEnumerator FetchStats(Action<StatsResult> onOk, Action<string> onErr) =>
             Send("GET", "/me/stats", null, auth: true,
                 text => onOk(JsonUtility.FromJson<StatsResult>(text)), onErr);
+
+        /// <summary>
+        /// 최근 게임 기록. 서버가 JSON 배열을 그대로 주는데 JsonUtility는 최상위 배열을 못 읽어
+        /// 객체로 한 번 감싸서 파싱한다.
+        /// </summary>
+        public static IEnumerator FetchHistory(int limit, Action<HistoryEntry[]> onOk, Action<string> onErr) =>
+            Send("GET", $"/me/history?limit={limit}", null, auth: true,
+                text => onOk(JsonUtility.FromJson<HistoryWrap>("{\"items\":" + text + "}").items
+                             ?? Array.Empty<HistoryEntry>()),
+                onErr);
 
         public static IEnumerator Rename(string nickname, Action onOk, Action<string> onErr)
         {
