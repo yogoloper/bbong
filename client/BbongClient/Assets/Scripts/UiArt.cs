@@ -25,6 +25,7 @@ namespace Bbong.Client
         private static Sprite _iconFriends;
         private static Sprite _iconCoins;
         private static Sprite _iconAvatar;
+        private static Sprite _iconGear;
 
         /// <summary>테이블 펠트 배경: 중앙이 밝은 방사형 그라데이션 + 미세 그레인.</summary>
         public static Sprite Felt => _felt ??= CreateFelt(512);
@@ -84,6 +85,9 @@ namespace Bbong.Client
 
         /// <summary>한 사람 실루엣 + 원형 프레임(프로필) 아이콘.</summary>
         public static Sprite IconAvatar => _iconAvatar ??= CreateIconAvatar();
+
+        /// <summary>설정 진입 버튼용 톱니바퀴.</summary>
+        public static Sprite IconGear => _iconGear ??= CreateIconGear();
 
         /// <summary>Kenney(CC0) 골드 코인 아이콘. 없으면 null.</summary>
         public static Sprite Coin
@@ -425,6 +429,24 @@ namespace Bbong.Client
 
         private static Sdf Intersect(Sdf a, Sdf b) => (x, y) => Mathf.Max(a(x, y), b(x, y));
 
+        /// <summary>안쪽이 음수라서 빼기는 "상대를 뒤집어 교집합"이다(구멍 뚫기).</summary>
+        private static Sdf Subtract(Sdf a, Sdf hole) => (x, y) => Mathf.Max(a(x, y), -hole(x, y));
+
+        /// <summary>도형을 아이콘 중심 기준으로 회전. 샘플 점을 반대로 돌려 만든다.</summary>
+        private static Sdf Rotate(Sdf inner, float degrees)
+        {
+            var rad = -degrees * Mathf.Deg2Rad;
+            var cos = Mathf.Cos(rad);
+            var sin = Mathf.Sin(rad);
+            const float c = IconSize / 2f;
+            return (x, y) =>
+            {
+                var dx = x - c;
+                var dy = y - c;
+                return inner(c + dx * cos - dy * sin, c + dx * sin + dy * cos);
+            };
+        }
+
         private static Sdf Above(float y0) => (_, y) => y0 - y;
 
         private static Sdf Below(float y0) => (_, y) => y - y0;
@@ -585,6 +607,26 @@ namespace Bbong.Client
             Shape(px, Ring(128, 128, 104, 10), IconFill);
             var bust = Union(Circle(128, 150, 40), Intersect(RoundRect(128, 60, 66, 68, 50), Above(30)));
             Shape(px, Intersect(bust, Circle(128, 128, 84)), IconFill); // 프레임 안쪽으로 잘라 아바타처럼
+
+            return IconSprite(px);
+        }
+
+        /// <summary>
+        /// 톱니 8개 + 가운데 구멍. 톱니는 같은 이빨 하나를 45도씩 돌려 만든다.
+        /// 작게 줄여도 형태가 남도록 이빨을 굵고 짧게 잡았다.
+        /// </summary>
+        private static Sprite CreateIconGear()
+        {
+            var px = new Color[IconSize * IconSize];
+
+            var parts = new Sdf[9];
+            parts[0] = Circle(128, 128, 72);
+            for (var i = 0; i < 8; i++)
+            {
+                parts[i + 1] = Rotate(RoundRect(128, 128 + 78, 19, 22, 7), i * 45f);
+            }
+
+            Shape(px, Subtract(Union(parts), Circle(128, 128, 30)), IconFill);
 
             return IconSprite(px);
         }

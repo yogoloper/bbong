@@ -387,7 +387,7 @@ namespace Bbong.Client
         /// </summary>
         private void BuildExitUi(Transform root)
         {
-            UiKit.SettingsButton(root, new Vector2(0.90f, 0.868f), new Vector2(0.99f, 0.99f), 26);
+            UiKit.CornerSettingsButton(root, 0.985f, 0.115f);
             UiKit.ExitGameAction = ShowExitConfirm; // 설정 오버레이가 이걸 보고 나가기 버튼을 띄운다
 
             // 확인 모달 — 캔버스 직속(셰이크 무관), 표시할 때 최상위로 올림

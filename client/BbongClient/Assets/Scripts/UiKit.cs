@@ -95,9 +95,10 @@ namespace Bbong.Client
             CreateText(root, Session.Nickname, 34, TextAnchor.MiddleLeft,
                 new Vector2(0.06f, 0.9f), new Vector2(0.5f, 1f));
 
-            // 설정 진입점. 오버레이로 열려 뒤 화면을 건드리지 않으므로 어느 화면에서든 안전하다.
-            // 상단바 높이에 맞춰야 해서 최소 탭 높이 보정(EnsureTapHeight)을 타지 않게 직접 만든다.
-            SettingsButton(root, new Vector2(0.575f, 0.912f), new Vector2(0.68f, 0.988f));
+            // 설정은 상단바 안이 아니라 바로 아래 오른쪽 끝에 둔다 — 잔액과 한 줄에 넣으면
+            // 정사각 아이콘 자리가 안 나오고, 자릿수가 늘 때마다 위치가 밀린다.
+            // 상단바 헤어라인(0.898) 바로 아래 ~ 로비 카드 윗변(0.80) 위 — 그 사이에 정확히 들어간다
+            CornerSettingsButton(root, 0.895f, 0.092f);
 
             // 코인+숫자를 우측 정렬 레이아웃으로 묶어 자릿수와 무관하게 우측 여백 고정
             var wallet = new GameObject("Wallet", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -134,10 +135,12 @@ namespace Bbong.Client
         /// 찾아 정리하고 넘어간다.
         /// </summary>
         /// <summary>
-        /// 설정 진입 버튼. 상단바가 없는 화면(게임 테이블)도 직접 부를 수 있게 열어 둔다.
-        /// 좁은 띠에 맞춰야 해서 최소 탭 높이 보정(EnsureTapHeight)을 타지 않게 직접 만든다.
+        /// 설정 진입 버튼(톱니바퀴). 상단바가 없는 화면(게임 테이블)도 직접 부를 수 있게 열어 둔다.
+        /// 글자 대신 아이콘인 이유는 어느 화면에서나 같은 자리·같은 크기로 놓기 위해서다 —
+        /// "설정"이라는 글자는 폭이 화면마다 달라져 정사각 자리에 안 맞는다.
+        /// 최소 탭 높이 보정(EnsureTapHeight)은 정사각 비율을 깨서 타지 않게 직접 만든다.
         /// </summary>
-        public static Button SettingsButton(Transform parent, Vector2 min, Vector2 max, int fontSize = 30)
+        public static Button SettingsButton(Transform parent, Vector2 min, Vector2 max)
         {
             var go = new GameObject("Settings", typeof(RectTransform), typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
@@ -146,12 +149,24 @@ namespace Bbong.Client
             img.type = Image.Type.Sliced;
             img.color = new Color(0.16f, 0.24f, 0.42f, 0.9f);
             Anchor(go.GetComponent<RectTransform>(), min, max);
-            CreateText(go.transform, "설정", fontSize, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one)
-                .color = Color.white;
+
+            CreateIcon(go.transform, UiArt.IconGear, new Vector2(0.18f, 0.18f), new Vector2(0.82f, 0.82f));
+
             var btn = go.GetComponent<Button>();
             btn.onClick.AddListener(OpenSettings);
             ApplyButtonStates(btn);
             return btn;
+        }
+
+        /// <summary>
+        /// 상단바 오른쪽 끝에 맞춘 정사각 설정 버튼. 1920x1080 기준이라 세로 비율에
+        /// 1080/1920을 곱해야 정사각이 된다.
+        /// </summary>
+        public static Button CornerSettingsButton(Transform parent, float top, float height)
+        {
+            var width = height * 1080f / 1920f;
+            return SettingsButton(parent,
+                new Vector2(0.978f - width, top - height), new Vector2(0.978f, top));
         }
 
         public static void OpenSettings()
