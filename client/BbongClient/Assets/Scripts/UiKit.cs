@@ -113,8 +113,7 @@ namespace Bbong.Client
 
             // 설정은 상단바 안이 아니라 바로 아래 오른쪽 끝에 둔다 — 잔액과 한 줄에 넣으면
             // 정사각 아이콘 자리가 안 나오고, 자릿수가 늘 때마다 위치가 밀린다.
-            // 상단바 헤어라인(0.898) 바로 아래 ~ 로비 카드 윗변(0.80) 위 — 그 사이에 정확히 들어간다
-            CornerSettingsButton(root, 0.895f, 0.092f);
+            CornerSettingsButton(root);
 
             // 코인+숫자를 우측 정렬 레이아웃으로 묶어 자릿수와 무관하게 우측 여백 고정
             var wallet = new GameObject("Wallet", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -174,15 +173,23 @@ namespace Bbong.Client
             return btn;
         }
 
+        // 설정 톱니는 어느 화면에서나 같은 자리·같은 크기여야 한다. 화면을 옮길 때마다 눈이
+        // 다시 찾아야 하는 버튼은 없느니만 못하다. 로비 상단바(0.9~1.0) 아래로 내려간 값이라,
+        // 상단바가 없는 게임 테이블에서도 같은 높이를 쓴다.
+        private const float SettingsTop = 0.895f;
+        private const float SettingsHeight = 0.092f;
+        private const float SettingsRight = 0.994f;
+
         /// <summary>
-        /// 상단바 오른쪽 끝에 맞춘 정사각 설정 버튼. 1920x1080 기준이라 세로 비율에
+        /// 화면 오른쪽 끝 고정 위치의 정사각 설정 버튼. 1920x1080 기준이라 세로 비율에
         /// 1080/1920을 곱해야 정사각이 된다.
         /// </summary>
-        public static Button CornerSettingsButton(Transform parent, float top, float height)
+        public static Button CornerSettingsButton(Transform parent)
         {
-            var width = height * 1080f / 1920f;
+            var width = SettingsHeight * 1080f / 1920f;
             return SettingsButton(parent,
-                new Vector2(0.994f - width, top - height), new Vector2(0.994f, top));
+                new Vector2(SettingsRight - width, SettingsTop - SettingsHeight),
+                new Vector2(SettingsRight, SettingsTop));
         }
 
         /// <summary>

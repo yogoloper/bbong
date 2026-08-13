@@ -16,6 +16,7 @@ namespace Bbong.Client
         private static Sprite _greenButton;
         private static Sprite _pill;
         private static Sprite _panel9;
+        private static Sprite _chip;
         private static Sprite _coin;
         private static Sprite _vignette;
         private static bool _coinLoaded;
@@ -67,6 +68,12 @@ namespace Bbong.Client
 
         /// <summary>Kenney UI(CC0) 파란 패널 9-slice(상단바·정보 패널). 없으면 null(호출부 단색 폴백).</summary>
         public static Sprite Panel9 => _panel9 ??= LoadSliced("UI/panel", 18);
+
+        /// <summary>
+        /// 틴트 전용 흰 라운드 사각형(칩·배지·통계 타일). 색은 전적으로 Image.color가 정한다 —
+        /// Pill은 모서리가 캡슐이라 낮은 배지에 쓰면 9-slice 테두리가 높이를 넘어 뭉갠다.
+        /// </summary>
+        public static Sprite Chip => _chip ??= RoundedGradient(64, 64, 16, Color.white, Color.white);
 
         /// <summary>펼친 책(튜토리얼) 아이콘.</summary>
         public static Sprite IconBook => _iconBook ??= CreateIconBook();
@@ -451,6 +458,8 @@ namespace Bbong.Client
 
         private static Sdf Below(float y0) => (_, y) => y - y0;
 
+        private static Sdf LeftOf(float x0) => (x, _) => x - x0;
+
         /// <summary>SDF를 커버리지 알파로 합성(0.5 오프셋 = 픽셀 중심 기준 반 픽셀 AA).</summary>
         private static void Fill(Color[] px, Sdf sdf, Color color)
         {
@@ -612,21 +621,40 @@ namespace Bbong.Client
         }
 
         /// <summary>
-        /// 톱니 8개 + 가운데 구멍. 톱니는 같은 이빨 하나를 45도씩 돌려 만든다.
+        /// 톱니 8개 + 가운데 축 구멍. 톱니는 같은 이빨 하나를 45도씩 돌려 만든다.
         /// 작게 줄여도 형태가 남도록 이빨을 굵고 짧게 잡았다.
+        /// 트로피·동전과 같은 마감을 내려고 평평한 원판 대신 세 겹으로 쌓는다 —
+        /// 오른쪽 아래 그림자로 부피를, 축 둘레의 낮은 단으로 기계 느낌을 준다.
+        /// 크림 면이 이미 흰색에 가까워 하이라이트로는 대비가 안 나므로 밝기 대신 그림자로만 세운다.
         /// </summary>
         private static Sprite CreateIconGear()
         {
             var px = new Color[IconSize * IconSize];
+            const float c = IconSize / 2f;
 
             var parts = new Sdf[9];
-            parts[0] = Circle(128, 128, 72);
+            parts[0] = Circle(c, c, 76);
             for (var i = 0; i < 8; i++)
             {
-                parts[i + 1] = Rotate(RoundRect(128, 128 + 78, 19, 22, 7), i * 45f);
+                parts[i + 1] = Rotate(RoundRect(c, c + 82, 20, 24, 8), i * 45f);
             }
 
-            Shape(px, Subtract(Union(parts), Circle(128, 128, 30)), IconFill);
+            var wheel = Subtract(Union(parts), Circle(c, c, 28));
+            Shape(px, wheel, IconFill);
+
+            // 왼쪽 위에서 빛이 든다고 보고 오른쪽 아래를 세 단으로 눌러 둥글게 보이게 한다.
+            // 한 번에 칠하면 경계가 칼처럼 서므로 원을 조금씩 줄여 겹치는 만큼 짙어지게 했다.
+            // 바퀴 안쪽만 칠하므로 톱니 윤곽선(네이비)은 그대로 남는다.
+            var shade = new Color(IconShade.r, IconShade.g, IconShade.b, 0.32f);
+            for (var i = 0; i < 3; i++)
+            {
+                Fill(px, Subtract(wheel, Circle(c - 24, c + 24, 120 - i * 16)), shade);
+            }
+
+            Shape(px, Subtract(Circle(c, c, 46), Circle(c, c, 28)), IconShade); // 축 둘레의 낮은 단
+            // 빛이 드는 쪽 구멍 벽에만 그늘을 넣어야 파인 것처럼 보인다(반대쪽에 넣으면 솟아 보인다)
+            Fill(px, Intersect(Ring(c, c, 34, 4f), Intersect(Above(c), LeftOf(c))),
+                new Color(IconLine.r, IconLine.g, IconLine.b, 0.30f));
 
             return IconSprite(px);
         }
