@@ -38,6 +38,10 @@ namespace Bbong.Client
 
         private void Start()
         {
+            // 모바일 Unity 기본값은 30fps — 카드 흔들림·확대 같은 연속 모션이 뚝뚝 끊겨 보인다.
+            // 웹(WebGL)은 브라우저 vsync를 따르므로 이 값을 무시한다.
+            Application.targetFrameRate = 60;
+
             AppSettings.Apply(); // 저장된 소리 설정을 실행 즉시 반영
             RegisterAndroidBackHandler();
         }

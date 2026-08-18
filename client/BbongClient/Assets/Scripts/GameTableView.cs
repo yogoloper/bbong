@@ -791,15 +791,29 @@ namespace Bbong.Client
             return SeatCenter + new Vector2(Mathf.Cos(angle) * _seatRadius.x, Mathf.Sin(angle) * ry);
         }
 
+        /// <summary>마지막으로 그린 손패 내용. 같은 손이면 재생성을 건너뛰기 위한 서명.</summary>
+        private string _handSignature;
+
+        /// <summary>
+        /// 자식을 떼어낸 뒤 파괴한다. Destroy는 프레임 끝에 실행돼 한 프레임 동안 옛 위젯이
+        /// 레이아웃에 같이 껴 있다가 빠진다 — 손패가 순간 조였다 펴지는 "틱"의 원인.
+        /// </summary>
+        private static void ClearChildren(Transform parent)
+        {
+            for (var i = parent.childCount - 1; i >= 0; i--)
+            {
+                var stale = parent.GetChild(i);
+                stale.SetParent(null, false);
+                Destroy(stale.gameObject);
+            }
+        }
+
         private void RenderHand(RoundView view, ICollection<Card> hidden)
         {
-            foreach (Transform child in _handRow)
-            {
-                Destroy(child.gameObject);
-            }
-
             if (_meldLaidSeat == MySeat)
             {
+                ClearChildren(_handRow);
+                _handSignature = null;
                 return; // 내 공개 패 — 전부 테이블에 내려놓음(ShowMeldSet이 펼침)
             }
 
@@ -813,7 +827,20 @@ namespace Bbong.Client
                 }
             }
 
-            foreach (var card in TableArt.Sorted(cards))
+            var sorted = TableArt.Sorted(cards);
+
+            // 손이 그대로면 다시 그리지 않는다 — 턴 전환·뽕 같은 상태 갱신마다 카드를
+            // 갈아 끼우면 흔들림 위상이 끊기고 레이아웃이 한 프레임 널뛴다.
+            var signature = string.Join(",", sorted.Select(TableArt.CardLabel));
+            if (signature == _handSignature)
+            {
+                return;
+            }
+
+            _handSignature = signature;
+            ClearChildren(_handRow);
+
+            foreach (var card in sorted)
             {
                 var go = TableArt.CreateCardFace(_handRow, card, 130, 200, _font);
                 var captured = card;
