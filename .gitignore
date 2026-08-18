@@ -36,3 +36,6 @@ _Recovery/
 _Recovery.meta
 .DS_Store
 client/BbongClient/Data/
+
+# Unity 안드로이드 빌드 임시 캐시(Bee/gradle/cmake)
+client/BbongClient/.utmp/

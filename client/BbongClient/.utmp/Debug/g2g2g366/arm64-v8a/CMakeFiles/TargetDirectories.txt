@@ -1,5 +1,0 @@
-/Users/hyeong-won/Desktop/01.projects/06.bbong/client/BbongClient/.utmp/Debug/g2g2g366/arm64-v8a/CMakeFiles/edit_cache.dir
-/Users/hyeong-won/Desktop/01.projects/06.bbong/client/BbongClient/.utmp/Debug/g2g2g366/arm64-v8a/CMakeFiles/rebuild_cache.dir
-/Users/hyeong-won/Desktop/01.projects/06.bbong/client/BbongClient/.utmp/Debug/g2g2g366/arm64-v8a/FramePacing/CMakeFiles/swappywrapper.dir
-/Users/hyeong-won/Desktop/01.projects/06.bbong/client/BbongClient/.utmp/Debug/g2g2g366/arm64-v8a/FramePacing/CMakeFiles/edit_cache.dir
-/Users/hyeong-won/Desktop/01.projects/06.bbong/client/BbongClient/.utmp/Debug/g2g2g366/arm64-v8a/FramePacing/CMakeFiles/rebuild_cache.dir
