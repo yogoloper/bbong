@@ -14,8 +14,8 @@ namespace Bbong.Client
     /// </summary>
     public sealed class MatchSetupBootstrap : MonoBehaviour
     {
-        private static readonly Color Selected = UiKit.Accent;
-        private static readonly Color Unselected = new(0.16f, 0.24f, 0.42f); // 어두운 네이비 — 밝은 것은 선택/CTA뿐
+        private static readonly Color Selected = UiTheme.Accent;
+        private static readonly Color Unselected = UiTheme.Control; // 어두운 네이비 — 밝은 것은 선택/CTA뿐
 
         private GameObject _canvas;
         private int _players = 4;
@@ -60,7 +60,7 @@ namespace Bbong.Client
 
             var subtitle = UiKit.CreateText(root, "1등이 총상금을 전부 가져갑니다", 26, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.735f), new Vector2(0.9f, 0.775f));
-            subtitle.color = new Color(1f, 1f, 1f, 0.8f);
+            subtitle.color = UiTheme.InkMuted;
 
             // 라벨-칩 간격 < 그룹 간 간격(약 1:2) — 라벨이 아래 칩 무리로 묶여 읽히게 한다
             UiKit.CreateText(root, "인원", 36, TextAnchor.MiddleCenter,
@@ -76,12 +76,12 @@ namespace Bbong.Client
 
             _prize = UiKit.CreateText(root, "", 38, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.22f), new Vector2(0.9f, 0.268f));
-            _prize.color = UiKit.Accent;
+            _prize.color = UiTheme.InkOn; // 골드는 "지금 고른 칩"에만 — 총상금까지 금색이면 셋이 경쟁한다
             _prize.fontStyle = FontStyle.Bold;
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.168f), new Vector2(0.9f, 0.212f));
-            _status.color = new Color(1f, 0.8f, 0.5f);
+            _status.color = UiTheme.InkMuted;
 
             UiKit.PrimaryCta(root, "시작하기", OnMatch);
             UiKit.BackButton(root, Back);
@@ -108,7 +108,7 @@ namespace Bbong.Client
         {
             button.GetComponent<Image>().color = selected ? Selected : Unselected;
             var text = button.GetComponentInChildren<Text>();
-            text.color = selected ? Color.black : Color.white;
+            text.color = selected ? UiTheme.Ink : UiTheme.InkOn;
             text.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
         }
 
@@ -172,18 +172,17 @@ namespace Bbong.Client
 
             var count = UiKit.CreateText(root, $"{_room.members.Length} / {_room.targetPlayers}", 68, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.58f), new Vector2(0.9f, 0.70f));
-            count.fontStyle = FontStyle.Bold;
-            count.color = UiKit.Accent;
+            count.fontStyle = FontStyle.Bold; // 68px 볼드면 충분히 주인공 — 골드는 아래 상금 줄 하나만
 
             // 총상금 = 입장료 × 목표 인원 — 다 차면 받을 확정 금액을 바로 보여준다
             UiKit.CreateText(root, $"입장료 {_room.stake:N0} · 총상금 {(long)_room.stake * _room.targetPlayers:N0}", 30,
-                TextAnchor.MiddleCenter, new Vector2(0.1f, 0.51f), new Vector2(0.9f, 0.57f)).color = UiKit.Accent;
+                TextAnchor.MiddleCenter, new Vector2(0.1f, 0.51f), new Vector2(0.9f, 0.57f)).color = UiTheme.Accent;
 
             var lines = string.Join("\n", _room.members.Select(m =>
                 m.userId == Session.UserId ? $"{m.nickname} (나)" : m.nickname));
             for (var i = _room.members.Length; i < _room.targetPlayers; i++)
             {
-                lines += "\n<color=#FFFFFF40>- 빈 자리 -</color>"; // 목표 인원만큼 줄 유지 — 진행률이 목록으로 읽힘
+                lines += "\n<color=#FFFFFF57>- 빈 자리 -</color>"; // InkDisabled(α0.34) — 목표 인원만큼 줄 유지
             }
 
             UiKit.CreateText(root, lines, 34, TextAnchor.UpperCenter,
@@ -203,7 +202,7 @@ namespace Bbong.Client
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.0f), new Vector2(0.9f, 0.06f));
-            _status.color = new Color(1f, 0.8f, 0.5f);
+            _status.color = UiTheme.InkMuted;
         }
 
         /// <summary>
@@ -212,8 +211,8 @@ namespace Bbong.Client
         /// </summary>
         private System.Collections.IEnumerator SearchPulse(Text label)
         {
-            const string bright = "FFF5E0FF";
-            const string dim = "FFF5E033";
+            const string bright = "F7F5EDFF"; // InkOn
+            const string dim = "F7F5ED57";    // InkOn을 InkDisabled 알파(0.34)로
             var step = 0;
             while (label != null)
             {

@@ -50,20 +50,6 @@ namespace Bbong.Client
         private const float HistoryRowTop = 0.59f;
         private const float HistoryRowH = 0.05f;
 
-        private static readonly Color Ink = new(0.07f, 0.11f, 0.22f);        // 골드 바탕 위 글자
-        private static readonly Color TabOff = new(0.10f, 0.16f, 0.32f, 0.6f);
-
-        // 판 위에 얹는 면은 흰색 알파가 아니라 네이비로 칠한다. 흰색을 깔면 어두운 배경에서
-        // 회색으로 떠서, 네이비+골드로 짠 다른 화면과 재질이 달라 보인다.
-        private static readonly Color Surface = new(0.15f, 0.22f, 0.42f, 0.92f);   // 타일·칸 바탕
-        private static readonly Color SurfaceDim = new(0.13f, 0.19f, 0.36f, 0.75f); // 안 고른 칸
-        private static readonly Color Trough = new(0f, 0f, 0f, 0.34f);              // 막대 홈
-
-        // 로비 모드 카드의 색을 기록 줄까지 잇는다. 다만 맞춤게임의 골드는 여기서 이미
-        // "이김/상금"이 쓰고 있어, 모드 이름에는 부딪히지 않는 차가운 색을 쓴다.
-        private static readonly Color QuickTint = new(0.66f, 0.79f, 0.98f);
-        private static readonly Color FriendTint = new(0.82f, 0.62f, 0.93f);
-
         private GameObject _canvas;
         private InputField _nickInput;
         private Text _status;
@@ -91,30 +77,32 @@ namespace Bbong.Client
 
             // 닉네임 입력·저장은 탭과 같은 줄(보드 윗변~탭 윗변)에 세운다 — 헤더가 한 층으로
             // 정리되고, 입력창 높이도 탭 높이(=최소 탭 높이)와 자로 잰 듯 맞는다.
+            // 왼쪽 변은 보드 안 요소들(모드 고르개·표)과 같은 0.065에 맞춘다.
             _nickInput = UiKit.CreateInputField(root, Session.Nickname, GameConfig.MaxNicknameLength,
-                new Vector2(BoardLeft, BoardTop), new Vector2(0.24f, TabTop));
+                new Vector2(RowLeft, BoardTop), new Vector2(0.24f, TabTop));
             _saveBtn = UiKit.CreateButton(root, "저장",
                 new Vector2(0.25f, BoardTop), new Vector2(0.35f, TabTop), OnSave, 28);
 
             // 저장 결과는 그 줄 바로 위에 잠깐 떠오른다
-            _status = UiKit.CreateText(root, "", 24, TextAnchor.MiddleLeft,
+            _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleLeft,
                 new Vector2(BoardLeft, TabTop + 0.006f), new Vector2(0.5f, TabTop + 0.056f));
-            _status.color = new Color(1f, 0.8f, 0.5f);
+            _status.color = UiTheme.InkMuted;
 
             // 보드를 탭보다 먼저 만든다 — uGUI는 나중에 만든 쪽이 위에 그려져서,
             // 순서를 바꾸면 선택된 탭과 보드를 잇는 다리가 판 밑으로 깔린다.
-            var board = UiKit.CreatePanel(root, new Color(0f, 0f, 0f, 0.3f));
+            var board = UiKit.CreatePanel(root, UiTheme.PanelBg);
             if (UiArt.Panel9 != null)
             {
                 board.sprite = UiArt.Panel9;
                 board.type = Image.Type.Sliced;
-                board.color = new Color(0.10f, 0.15f, 0.30f, 0.90f); // 상단바와 같은 네이비 계열
+                board.color = UiTheme.PanelBg; // 상단바와 같은 판 색
             }
 
             UiKit.Anchor(board.rectTransform, new Vector2(BoardLeft, BoardBottom), new Vector2(BoardRight, BoardTop));
 
             // 탭이 앉는 레일. 선택 안 된 탭도 이 선 위에 서 있어야 허공에 뜨지 않는다.
-            UiKit.Anchor(UiKit.CreatePanel(root, Gold(0.22f)).rectTransform,
+            // 레일은 구조물이지 강조 대상이 아니다 — 골드가 아니라 구분선 색.
+            UiKit.Anchor(UiKit.CreatePanel(root, UiTheme.Divider).rectTransform,
                 new Vector2(BoardLeft, BoardTop - 0.0015f), new Vector2(BoardRight, BoardTop + 0.0015f));
 
             Tab(root, "통계", 0.46f, 0.63f,
@@ -129,7 +117,7 @@ namespace Bbong.Client
 
             _loading = UiKit.CreateText(root, "불러오는 중...", 26, TextAnchor.MiddleCenter,
                 new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.46f));
-            _loading.color = new Color(1f, 1f, 1f, 0.5f);
+            _loading.color = UiTheme.InkMuted;
 
             StartCoroutine(ServerApi.FetchStats(s => { _stats = s; Redraw(); },
                 _ => _loading.text = "전적을 불러오지 못했어요"));
@@ -138,9 +126,6 @@ namespace Bbong.Client
 
             UiKit.BackButton(root, Back);
         }
-
-        private static Color Gold(float alpha) =>
-            new(UiKit.Accent.r, UiKit.Accent.g, UiKit.Accent.b, alpha);
 
         /// <summary>보드 좌표로 바로 놓는 단색 판 — 줄무늬·구분선·승률 막대에 쓴다.</summary>
         private Image Fill(Color color, float x0, float y0, float x1, float y1)
@@ -152,33 +137,25 @@ namespace Bbong.Client
 
         // ── 탭 ──
 
-        /// <summary>화면 내내 살아 있는 탭(통계/게임 기록). 다시 칠하려면 다리까지 같이 쥐고 있어야 한다.</summary>
-        private readonly List<(Button btn, Image bridge, Func<bool> selected)> _tabs = new();
+        /// <summary>화면 내내 살아 있는 탭(통계/게임 기록).</summary>
+        private readonly List<(Button btn, Func<bool> selected)> _tabs = new();
 
-        /// <summary>
-        /// 보드 위에 얹히는 탭. 선택된 쪽만 골드로 채우고, 보드 윗변을 덮는 다리를 켜서
-        /// 탭과 판이 한 장으로 이어지게 한다 — 색만 맞바꾸면 그냥 버튼 두 개로 읽힌다.
-        /// </summary>
+        /// <summary>보드 위에 얹히는 탭. 선택 표시는 골드 채움 하나면 충분하다 — 밑줄까지 겹치면 과하다.</summary>
         private void Tab(Transform parent, string label, float x0, float x1, Func<bool> selected, Action onClick)
         {
             var btn = UiKit.CreateButton(parent, label,
                 new Vector2(x0, BoardTop), new Vector2(x1, TabTop), () => onClick(), 30);
 
-            var bridge = UiKit.CreatePanel(parent, UiKit.Accent);
-            UiKit.Anchor(bridge.rectTransform,
-                new Vector2(x0 + 0.004f, BoardTop - 0.006f), new Vector2(x1 - 0.004f, BoardTop + 0.004f));
-
-            _tabs.Add((btn, bridge, selected));
-            PaintTab(btn, bridge, selected());
+            _tabs.Add((btn, selected));
+            PaintTab(btn, selected());
         }
 
-        private static void PaintTab(Button btn, Image bridge, bool on)
+        private static void PaintTab(Button btn, bool on)
         {
-            btn.GetComponent<Image>().color = on ? UiKit.Accent : TabOff;
+            btn.GetComponent<Image>().color = on ? UiTheme.Accent : UiTheme.SurfaceDim;
             var text = btn.GetComponentInChildren<Text>();
-            text.color = on ? Ink : new Color(1f, 1f, 1f, 0.55f);
+            text.color = on ? UiTheme.Ink : UiTheme.InkMuted;
             text.fontStyle = on ? FontStyle.Bold : FontStyle.Normal;
-            bridge.enabled = on;
         }
 
         /// <summary>
@@ -187,14 +164,14 @@ namespace Bbong.Client
         /// </summary>
         private void ModeSegments()
         {
-            var track = UiKit.CreatePanel(_content, new Color(0f, 0f, 0f, 0.30f));
+            var track = UiKit.CreatePanel(_content, UiTheme.Trough);
             track.sprite = UiArt.Chip;
             track.type = Image.Type.Sliced;
-            UiKit.Anchor(track.rectTransform, new Vector2(0.07f, BandBottom), new Vector2(0.44f, BandTop));
+            UiKit.Anchor(track.rectTransform, new Vector2(RowLeft, BandBottom), new Vector2(0.435f, BandTop));
 
-            Segment("맞춤게임", 0.0755f, 0.2525f, _mode == QuickMatch,
+            Segment("맞춤게임", 0.0705f, 0.2475f, _mode == QuickMatch,
                 () => { _mode = QuickMatch; Redraw(); });
-            Segment("친구와 함께", 0.2575f, 0.4345f, _mode == Friend,
+            Segment("친구와 함께", 0.2525f, 0.4295f, _mode == Friend,
                 () => { _mode = Friend; Redraw(); });
         }
 
@@ -205,18 +182,18 @@ namespace Bbong.Client
 
             var img = btn.GetComponent<Image>();
             img.sprite = UiArt.Chip;
-            img.color = on ? UiKit.Accent : SurfaceDim;
+            img.color = on ? UiTheme.Accent : UiTheme.SurfaceDim;
 
             var text = btn.GetComponentInChildren<Text>();
-            text.color = on ? Ink : new Color(1f, 1f, 1f, 0.6f);
+            text.color = on ? UiTheme.Ink : UiTheme.InkMuted;
             text.fontStyle = on ? FontStyle.Bold : FontStyle.Normal;
         }
 
         private void Redraw()
         {
-            foreach (var (btn, bridge, selected) in _tabs)
+            foreach (var (btn, selected) in _tabs)
             {
-                PaintTab(btn, bridge, selected());
+                PaintTab(btn, selected());
             }
 
             // Destroy는 프레임 끝에 실행돼 한 프레임 동안 옛 위젯이 겹치고 클릭까지 먹는다.
@@ -265,14 +242,14 @@ namespace Bbong.Client
             var rows = mode.byPlayers ?? Array.Empty<ServerApi.SeatCountStats>();
             for (var i = 0; i < rows.Length; i++)
             {
-                StatsRow(rows[i], StatsRowTop - (i + 1) * StatsRowH, i % 2 == 1);
+                StatsRow(rows[i], StatsRowTop - (i + 1) * StatsRowH);
             }
 
             if (_mode == Friend)
             {
                 UiKit.CreateText(_content, "친구와 함께는 상대를 고를 수 있어 맞춤게임 승률과 따로 셉니다",
                     22, TextAnchor.MiddleCenter,
-                    new Vector2(0.05f, 0.085f), new Vector2(0.95f, 0.13f)).color = new Color(1f, 1f, 1f, 0.4f);
+                    new Vector2(0.05f, 0.085f), new Vector2(0.95f, 0.13f)).color = UiTheme.InkMuted;
             }
         }
 
@@ -282,9 +259,10 @@ namespace Bbong.Client
         /// </summary>
         private void SummaryTiles(ServerApi.ModeStats mode)
         {
-            Tile(0, "판수", $"{mode.games}", $"{mode.wins}승 {mode.games - mode.wins}패", Color.white, -1);
-            Tile(1, "승률", $"{mode.winRate}%", null, UiKit.Accent, mode.winRate);
-            Tile(2, "누적 상금", $"{mode.totalWinnings:N0}", null, UiKit.Accent, -1);
+            // 골드는 승률(막대와 한 쌍) 하나만 — 타일 두 개가 같은 색으로 경쟁하면 강조가 아니다
+            Tile(0, "판수", $"{mode.games}", $"{mode.wins}승 {mode.games - mode.wins}패", UiTheme.InkOn, -1);
+            Tile(1, "승률", $"{mode.winRate}%", null, UiTheme.Accent, mode.winRate);
+            Tile(2, "누적 상금", $"{mode.totalWinnings:N0}", null, UiTheme.InkOn, -1);
         }
 
         private void Tile(int index, string label, string value, string sub, Color valueColor, int barPercent)
@@ -294,13 +272,13 @@ namespace Bbong.Client
             var w = (right - left - gap * 2f) / 3f;
             var x0 = left + index * (w + gap);
 
-            var card = UiKit.CreatePanel(_content, Surface);
+            var card = UiKit.CreatePanel(_content, UiTheme.Surface);
             card.sprite = UiArt.Chip;
             card.type = Image.Type.Sliced;
             UiKit.Anchor(card.rectTransform, new Vector2(x0, BandBottom), new Vector2(x0 + w, BandTop));
 
             UiKit.CreateText(card.transform, label, 20, TextAnchor.UpperCenter,
-                new Vector2(0f, 0.60f), new Vector2(1f, 0.94f)).color = new Color(1f, 1f, 1f, 0.5f);
+                new Vector2(0f, 0.60f), new Vector2(1f, 0.94f)).color = UiTheme.InkMuted;
 
             var v = UiKit.CreateText(card.transform, value, 42, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.24f), new Vector2(1f, 0.66f));
@@ -310,7 +288,7 @@ namespace Bbong.Client
             if (sub != null)
             {
                 UiKit.CreateText(card.transform, sub, 20, TextAnchor.LowerCenter,
-                    new Vector2(0f, 0.06f), new Vector2(1f, 0.26f)).color = new Color(1f, 1f, 1f, 0.45f);
+                    new Vector2(0f, 0.06f), new Vector2(1f, 0.26f)).color = UiTheme.InkMuted;
             }
 
             if (barPercent < 0)
@@ -319,11 +297,11 @@ namespace Bbong.Client
             }
 
             // 승률 타일에만 막대를 깔아 아래 표의 인원별 막대와 같은 눈금으로 읽히게 한다
-            var bar = UiKit.CreatePanel(card.transform, Trough);
+            var bar = UiKit.CreatePanel(card.transform, UiTheme.Trough);
             UiKit.Anchor(bar.rectTransform, new Vector2(0.12f, 0.10f), new Vector2(0.88f, 0.17f));
             if (barPercent > 0)
             {
-                var lit = UiKit.CreatePanel(card.transform, UiKit.Accent);
+                var lit = UiKit.CreatePanel(card.transform, UiTheme.AccentSubtle);
                 UiKit.Anchor(lit.rectTransform, new Vector2(0.12f, 0.10f),
                     new Vector2(0.12f + 0.76f * barPercent / 100f, 0.17f));
             }
@@ -339,17 +317,17 @@ namespace Bbong.Client
 
             var icon = UiKit.CreateIcon(_content, friend ? UiArt.IconFriends : UiArt.IconTrophy,
                 new Vector2(0.46f, 0.335f), new Vector2(0.54f, 0.465f));
-            icon.color = new Color(1f, 1f, 1f, 0.20f);
+            icon.color = UiTheme.InkDisabled;
 
             UiKit.CreateText(_content, friend ? "아직 친구와 함께한 판이 없어요" : "아직 맞춤게임 전적이 없어요",
                 28, TextAnchor.MiddleCenter,
-                new Vector2(0.05f, 0.255f), new Vector2(0.95f, 0.315f)).color = new Color(1f, 1f, 1f, 0.7f);
+                new Vector2(0.05f, 0.255f), new Vector2(0.95f, 0.315f)).color = UiTheme.InkMuted;
 
             UiKit.CreateText(_content, friend
                     ? "친구와 함께한 판은 맞춤게임 승률과 따로 셉니다"
                     : "포인트를 걸고 한 판 하면 여기부터 쌓여요",
                 22, TextAnchor.MiddleCenter,
-                new Vector2(0.05f, 0.20f), new Vector2(0.95f, 0.25f)).color = new Color(1f, 1f, 1f, 0.4f);
+                new Vector2(0.05f, 0.20f), new Vector2(0.95f, 0.25f)).color = UiTheme.InkMuted;
         }
 
         /// <summary>인원별 표의 열 위치. 헤더와 각 행이 같은 값을 써야 줄이 맞는다.</summary>
@@ -368,25 +346,20 @@ namespace Bbong.Client
             foreach (var (title, min, max, anchor) in Columns)
             {
                 UiKit.CreateText(_content, title, 24, anchor,
-                    new Vector2(min, 0.470f), new Vector2(max, 0.515f)).color = new Color(1f, 1f, 1f, 0.45f);
+                    new Vector2(min, 0.470f), new Vector2(max, 0.515f)).color = UiTheme.InkMuted;
             }
 
-            Fill(new Color(1f, 1f, 1f, 0.14f), RowLeft, 0.464f, RowRight, 0.467f);
+            Fill(UiTheme.Divider, RowLeft, 0.464f, RowRight, 0.467f);
         }
 
-        private void StatsRow(ServerApi.SeatCountStats row, float y, bool striped)
+        private void StatsRow(ServerApi.SeatCountStats row, float y)
         {
             // 표 자체는 강조 없이 담담하게 — 눈이 갈 곳은 승률 게이지 하나로 좁힌다.
-            // 최고 줄 금빛 배경, 골드 상금 글자, 볼드 인원까지 얹었더니 어디를 보라는 건지
-            // 흐려져서 전부 걷어냈다. 줄무늬는 행 구분용으로만 아주 옅게 남긴다.
-            if (striped)
-            {
-                Fill(new Color(1f, 1f, 1f, 0.045f), RowLeft, y, RowRight, y + StatsRowH);
-            }
+            // 줄무늬도 걷어냈다: 다섯 줄짜리 표는 줄무늬 없이도 줄이 헷갈리지 않는다.
 
             // 안 해본 인원도 줄을 남기되 흐리게 — 표가 들쭉날쭉하지 않아야 비교가 쉽다
             var played = row.games > 0;
-            var bright = played ? new Color(1f, 1f, 1f, 0.9f) : new Color(1f, 1f, 1f, 0.28f);
+            var bright = played ? UiTheme.InkOn : UiTheme.InkDisabled;
 
             WinRateBar(row, y, played);
 
@@ -418,11 +391,12 @@ namespace Bbong.Client
             var mid = y + StatsRowH / 2f;
             const float half = 0.011f;
 
-            Fill(Trough, BarLeft, mid - half, BarRight, mid + half);
+            Fill(UiTheme.Trough, BarLeft, mid - half, BarRight, mid + half);
 
             if (played && row.winRate > 0)
             {
-                Fill(UiKit.Accent,
+                // 채움은 은은한 골드 — 원색 골드로 채우면 표에서 제일 시끄러운 물건이 된다
+                Fill(UiTheme.AccentSubtle,
                     BarLeft, mid - half, BarLeft + (BarRight - BarLeft) * row.winRate / 100f, mid + half);
             }
 
@@ -450,37 +424,32 @@ namespace Bbong.Client
             _loading.gameObject.SetActive(false);
 
             UiKit.CreateText(_content, "맞춤게임과 친구와 함께를 모두 보여줍니다", 22, TextAnchor.MiddleRight,
-                new Vector2(0.5f, 0.605f), new Vector2(0.93f, 0.677f)).color = new Color(1f, 1f, 1f, 0.4f);
+                new Vector2(0.5f, 0.605f), new Vector2(0.93f, 0.677f)).color = UiTheme.InkMuted;
             UiKit.CreateText(_content, "최근 기록", 30, TextAnchor.MiddleLeft,
                 new Vector2(0.07f, 0.605f), new Vector2(0.4f, 0.677f)).fontStyle = FontStyle.Bold;
-            Fill(new Color(1f, 1f, 1f, 0.12f), RowLeft, 0.5945f, RowRight, 0.5965f);
+            Fill(UiTheme.Divider, RowLeft, 0.5945f, RowRight, 0.5965f);
 
             for (var i = 0; i < _history.Length && i < HistoryRows; i++)
             {
-                HistoryRow(_history[i], HistoryRowTop - (i + 1) * HistoryRowH, i % 2 == 1);
+                HistoryRow(_history[i], HistoryRowTop - (i + 1) * HistoryRowH);
             }
         }
 
         /// <summary>기록 한 줄: 등수 배지 · 모드 · 인원/상대 · 정산액 · 시각.</summary>
-        private void HistoryRow(ServerApi.HistoryEntry entry, float y, bool striped)
+        private void HistoryRow(ServerApi.HistoryEntry entry, float y)
         {
             var win = entry.won;
 
             if (win)
             {
-                // 이긴 판은 바탕을 금빛으로 깔고 왼쪽에 띠를 세운다. 아홉 줄을 다 읽지 않아도
-                // 어느 판을 이겼는지 스치듯 보이는 게 기록 탭에서 제일 자주 하는 일이다.
-                Fill(Gold(0.11f), RowLeft, y, RowRight, y + HistoryRowH);
-                Fill(UiKit.Accent, RowLeft, y + 0.006f, RowLeft + 0.004f, y + HistoryRowH - 0.006f);
-            }
-            else if (striped)
-            {
-                Fill(new Color(1f, 1f, 1f, 0.035f), RowLeft, y, RowRight, y + HistoryRowH);
+                // 이긴 판은 왼쪽 골드 띠 하나로 표시한다. 바탕까지 금빛으로 깔면
+                // 절반을 이긴 화면의 절반이 금빛이 돼 강조가 강조 노릇을 못 한다.
+                Fill(UiTheme.Accent, RowLeft, y + 0.006f, RowLeft + 0.004f, y + HistoryRowH - 0.006f);
             }
 
             // 사람이 여럿이면 등수가 승패보다 정보량이 많다. 3인전 2등과 6인전 2등은 다른 판이라
             // 사람 수를 붙여 "2/3"으로 읽히게 한다. 봇만 있는 판은 등수가 늘 1/1이라 승패로 쓴다.
-            var badge = UiKit.CreatePanel(_content, win ? UiKit.Accent : SurfaceDim);
+            var badge = UiKit.CreatePanel(_content, win ? UiTheme.Surface : UiTheme.SurfaceDim);
             badge.sprite = UiArt.Chip;
             badge.type = Image.Type.Sliced;
             UiKit.Anchor(badge.rectTransform,
@@ -489,32 +458,34 @@ namespace Bbong.Client
             var result = UiKit.CreateText(badge.transform,
                 entry.humans >= 2 ? $"{entry.rank}/{entry.humans}" : win ? "승" : "패", 24,
                 TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
-            result.color = win ? Ink : new Color(1f, 1f, 1f, 0.55f);
+            result.color = win ? UiTheme.InkOn : UiTheme.InkMuted;
             result.fontStyle = FontStyle.Bold;
 
+            // 모드 이름은 이미 글자가 말한다 — 하늘/보라 틴트는 색만 보태고 정보를 더하지 않았다
             var friend = entry.mode == Friend;
             UiKit.CreateText(_content, friend ? "친구와 함께" : "맞춤게임", 24, TextAnchor.MiddleLeft,
                     new Vector2(0.158f, y), new Vector2(0.30f, y + HistoryRowH))
-                .color = friend ? FriendTint : QuickTint;
+                .color = UiTheme.InkMuted;
 
             var with = entry.opponents == null || entry.opponents.Length == 0
                 ? $"{entry.players}인"
                 : $"{entry.players}인 · {string.Join(", ", entry.opponents)}";
             var label = UiKit.CreateText(_content, with, 23, TextAnchor.MiddleLeft,
                 new Vector2(0.305f, y), new Vector2(0.69f, y + HistoryRowH));
-            label.color = new Color(1f, 1f, 1f, 0.55f);
+            label.color = UiTheme.InkMuted;
             label.verticalOverflow = VerticalWrapMode.Truncate; // 닉네임이 길어도 다음 줄을 침범하지 않게
 
-            // 정산액은 받은 상금 기준. 진 판은 입장료만 나가고 상금이 없어 0으로 남는다.
+            // 정산액: 이긴 판은 받은 상금(+), 진 판은 나간 입장료(-). 무료 판만 "-"로 남는다.
+            var lost = !win && entry.stake > 0;
             var payout = UiKit.CreateText(_content,
-                entry.payout > 0 ? $"+{entry.payout:N0}" : "-", 25, TextAnchor.MiddleRight,
-                new Vector2(0.70f, y), new Vector2(0.82f, y + HistoryRowH));
-            payout.color = entry.payout > 0 ? UiKit.Accent : new Color(1f, 1f, 1f, 0.3f);
+                entry.payout > 0 ? $"+{entry.payout:N0}" : lost ? $"-{entry.stake:N0}" : "-", 25,
+                TextAnchor.MiddleRight, new Vector2(0.70f, y), new Vector2(0.82f, y + HistoryRowH));
+            payout.color = entry.payout > 0 ? UiTheme.InkOn : lost ? UiTheme.InkMuted : UiTheme.InkDisabled;
             payout.fontStyle = entry.payout > 0 ? FontStyle.Bold : FontStyle.Normal;
 
             UiKit.CreateText(_content, Ago(entry.endedAt), 22, TextAnchor.MiddleRight,
                     new Vector2(0.83f, y), new Vector2(0.925f, y + HistoryRowH))
-                .color = new Color(1f, 1f, 1f, 0.38f);
+                .color = UiTheme.InkDisabled;
         }
 
         /// <summary>절대 시각보다 "얼마 전"이 판을 떠올리기 쉽다. 하루가 넘으면 날짜로 바꾼다.</summary>
@@ -554,11 +525,11 @@ namespace Bbong.Client
                 return;
             }
 
-            _saveBtn.interactable = false;
+            UiKit.SetEnabled(_saveBtn, false);
             _status.text = "저장 중...";
             StartCoroutine(ServerApi.Rename(nick,
-                () => { _status.text = "저장 완료"; _saveBtn.interactable = true; },
-                err => { _status.text = err; _saveBtn.interactable = true; }));
+                () => { _status.text = "저장 완료"; UiKit.SetEnabled(_saveBtn, true); },
+                err => { _status.text = err; UiKit.SetEnabled(_saveBtn, true); }));
         }
 
         private void Back() => UiKit.GoTo<MainLobbyBootstrap>(_canvas, this);

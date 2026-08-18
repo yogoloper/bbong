@@ -65,12 +65,14 @@ namespace Bbong.Client
 
         private void BuildGuidePanel()
         {
-            var panel = UiKit.CreatePanel(_table.CanvasGo.transform, new Color(0.09f, 0.12f, 0.21f, 1f));
+            // 판 색은 PanelBg — 불투명으로만 올린다(뒤 텍스트 비침 방지)
+            var opaque = new Color(UiTheme.PanelBg.r, UiTheme.PanelBg.g, UiTheme.PanelBg.b, 1f);
+            var panel = UiKit.CreatePanel(_table.CanvasGo.transform, opaque);
             if (UiArt.Panel9 != null)
             {
                 panel.sprite = UiArt.Panel9;
                 panel.type = Image.Type.Sliced;
-                panel.color = new Color(0.10f, 0.14f, 0.26f, 1f); // 네이비 틴트 — 불투명(뒤 텍스트 비침 방지)
+                panel.color = opaque;
             }
 
             UiKit.Anchor(panel.rectTransform, new Vector2(0.16f, 0.775f), new Vector2(0.84f, 0.99f));
@@ -80,7 +82,7 @@ namespace Bbong.Client
 
             _guideText = UiKit.CreateText(panel.transform, "", 28, TextAnchor.MiddleLeft,
                 new Vector2(0.03f, 0.08f), new Vector2(0.72f, 0.92f));
-            _guideText.color = new Color(0.96f, 0.95f, 0.90f);
+            _guideText.color = UiTheme.InkOn;
             _guideText.horizontalOverflow = HorizontalWrapMode.Wrap;
             _guideText.resizeTextForBestFit = true;
             _guideText.resizeTextMinSize = 16;

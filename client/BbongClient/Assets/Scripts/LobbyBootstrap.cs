@@ -2,8 +2,6 @@ using System.Collections.Generic;
 using BbongCore.Ai;
 using BbongCore.Config;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace Bbong.Client
@@ -15,8 +13,8 @@ namespace Bbong.Client
     /// </summary>
     public sealed class LobbyBootstrap : MonoBehaviour
     {
-        private static readonly Color SelectedColor = UiKit.Accent;
-        private static readonly Color UnselectedColor = new(0.16f, 0.24f, 0.42f); // 어두운 네이비 — 밝은 것은 선택/CTA뿐
+        private static readonly Color SelectedColor = UiTheme.Accent;
+        private static readonly Color UnselectedColor = UiTheme.Control; // 어두운 네이비 — 밝은 것은 선택/CTA뿐
 
         // 봇 난이도 표시명(쉬움/보통/어려움)
         private static readonly (BotDifficulty value, string label)[] Difficulties =
@@ -27,7 +25,6 @@ namespace Bbong.Client
         private int _playerCount = 4;
         private BotDifficulty _difficulty = BotDifficulty.Normal;
 
-        private Font _font;
         private GameObject _canvasGo;
         private Text _summary;
         private Button _startBtn;
@@ -36,9 +33,7 @@ namespace Bbong.Client
 
         private void Start()
         {
-            _font = Resources.Load<Font>("Fonts/Pretendard-SemiBold")
-                    ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            EnsureEventSystem();
+            UiKit.EnsureEventSystem();
             UiKit.DestroyStrayTables(); // 연습 설정에 들어온 시점엔 이전 판이 남아 있으면 안 됨
             BuildUi();
             RefreshSelection();
@@ -67,31 +62,19 @@ namespace Bbong.Client
 
         private void BuildUi()
         {
-            _canvasGo = new GameObject("LobbyCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            var canvas = _canvasGo.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            var scaler = _canvasGo.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080); // 폰 가로(16:9 기준, 넓은 화면은 여유 확장)
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand; // 화면비 달라도 글씨 비대 방지
-            var root = _canvasGo.transform;
+            var (canvas, root) = UiKit.CreateScreen("LobbyCanvas", topBar: true);
+            _canvasGo = canvas;
 
-            var bg = CreatePanel(root, Color.white);
-            bg.sprite = UiArt.Backdrop;
-            Stretch(bg.rectTransform);
-
-            UiKit.TopBar(root); // 공통 상단바(다른 화면과 통일)
-
-            var title = CreateText(root, "연습 게임", 60, TextAnchor.MiddleCenter);
+            var title = UiKit.CreateText(root, "연습 게임", 56, TextAnchor.MiddleCenter,
+                new Vector2(0.05f, 0.79f), new Vector2(0.95f, 0.875f));
             title.fontStyle = FontStyle.Bold;
-            Anchor(title.rectTransform, new Vector2(0.05f, 0.79f), new Vector2(0.95f, 0.875f));
 
-            var subtitle = CreateText(root, "봇 상대로 부담 없이 한 판, 포인트는 안 걸어요", 30, TextAnchor.MiddleCenter);
-            subtitle.color = new Color(1f, 1f, 1f, 0.7f);
-            Anchor(subtitle.rectTransform, new Vector2(0.05f, 0.73f), new Vector2(0.95f, 0.78f));
+            var subtitle = UiKit.CreateText(root, "봇 상대로 부담 없이 한 판, 포인트는 안 걸어요", 30,
+                TextAnchor.MiddleCenter, new Vector2(0.05f, 0.73f), new Vector2(0.95f, 0.78f));
+            subtitle.color = UiTheme.InkMuted;
 
-            var playerLabel = CreateText(root, "인원", 40, TextAnchor.MiddleCenter);
-            Anchor(playerLabel.rectTransform, new Vector2(0.05f, 0.585f), new Vector2(0.95f, 0.635f));
+            UiKit.CreateText(root, "인원", 36, TextAnchor.MiddleCenter,
+                new Vector2(0.05f, 0.585f), new Vector2(0.95f, 0.635f));
 
             var playerRow = CreateRow(root, new Vector2(0.25f, 0.46f), new Vector2(0.75f, 0.575f), 14).transform;
             for (var n = GameConfig.MinPlayers; n <= GameConfig.MaxPlayers; n++)
@@ -99,8 +82,8 @@ namespace Bbong.Client
                 CreateChoice(playerRow, $"{n}명", n, _playerChoices, v => _playerCount = v);
             }
 
-            var diffLabel = CreateText(root, "봇 난이도", 40, TextAnchor.MiddleCenter);
-            Anchor(diffLabel.rectTransform, new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.43f));
+            UiKit.CreateText(root, "봇 난이도", 36, TextAnchor.MiddleCenter,
+                new Vector2(0.05f, 0.38f), new Vector2(0.95f, 0.43f));
 
             var diffRow = CreateRow(root, new Vector2(0.30f, 0.255f), new Vector2(0.70f, 0.37f), 14).transform;
             foreach (var (value, label) in Difficulties)
@@ -108,9 +91,10 @@ namespace Bbong.Client
                 CreateChoice(diffRow, label, (int)value, _difficultyChoices, v => _difficulty = (BotDifficulty)v);
             }
 
-            _summary = CreateText(root, "", 36, TextAnchor.MiddleCenter);
-            _summary.color = UiKit.Accent;
-            Anchor(_summary.rectTransform, new Vector2(0.05f, 0.165f), new Vector2(0.95f, 0.23f));
+            // 요약은 확인용 문구 — 선택 칩(골드)·CTA(파랑)에 이어 세 번째 강조가 되면 안 된다
+            _summary = UiKit.CreateText(root, "", 36, TextAnchor.MiddleCenter,
+                new Vector2(0.05f, 0.165f), new Vector2(0.95f, 0.23f));
+            _summary.color = UiTheme.InkMuted;
 
             _startBtn = UiKit.PrimaryCta(root, "게임 시작", OnStartGame);
 
@@ -136,7 +120,7 @@ namespace Bbong.Client
         {
             button.GetComponent<Image>().color = selected ? SelectedColor : UnselectedColor;
             var text = button.GetComponentInChildren<Text>();
-            text.color = selected ? Color.black : Color.white;
+            text.color = selected ? UiTheme.Ink : UiTheme.InkOn;
             text.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
         }
 
@@ -156,20 +140,12 @@ namespace Bbong.Client
             _summary.text = $"나 + 봇 {_playerCount - 1}  ·  난이도 {label}";
         }
 
-        // ── UI 헬퍼 (GameTableBootstrap과 동일 패턴) ──
+        // ── UI 헬퍼 (레이아웃 그룹 기반이라 앵커 기반 UiKit.CreateButton을 못 쓴다) ──
 
-        private void EnsureEventSystem()
+        private static Image CreateRow(Transform parent, Vector2 min, Vector2 max, float spacing)
         {
-            if (EventSystem.current == null)
-            {
-                new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
-            }
-        }
-
-        private Image CreateRow(Transform parent, Vector2 min, Vector2 max, float spacing)
-        {
-            var panel = CreatePanel(parent, new Color(0, 0, 0, 0.12f));
-            Anchor(panel.rectTransform, min, max);
+            var panel = UiKit.CreatePanel(parent, UiTheme.Trough);
+            UiKit.Anchor(panel.rectTransform, min, max);
             var layout = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
             layout.spacing = spacing;
             layout.childAlignment = TextAnchor.MiddleCenter;
@@ -179,30 +155,7 @@ namespace Bbong.Client
             return panel;
         }
 
-        private static Image CreatePanel(Transform parent, Color color)
-        {
-            var go = new GameObject("Panel", typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(parent, false);
-            go.GetComponent<Image>().color = color;
-            return go.GetComponent<Image>();
-        }
-
-        private Text CreateText(Transform parent, string content, int size, TextAnchor anchor)
-        {
-            var go = new GameObject("Text", typeof(RectTransform), typeof(Text));
-            go.transform.SetParent(parent, false);
-            var text = go.GetComponent<Text>();
-            text.font = _font;
-            text.text = content;
-            text.fontSize = size;
-            text.alignment = anchor;
-            text.color = Color.white;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            return text;
-        }
-
-        private Button CreateButton(Transform parent, string label, UnityEngine.Events.UnityAction onClick)
+        private static Button CreateButton(Transform parent, string label, UnityEngine.Events.UnityAction onClick)
         {
             var go = new GameObject("Button", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
@@ -213,21 +166,11 @@ namespace Bbong.Client
             var le = go.GetComponent<LayoutElement>();
             le.preferredWidth = 172;  // 맞춤게임 칩 폭(0.09)과 동일 그리드
             le.preferredHeight = 132; // 터치 하한(UiKit.MinTapHeight ≒ 132유닛)과 통일
-            var text = CreateText(go.transform, label, 28, TextAnchor.MiddleCenter);
-            text.color = Color.white;
-            Stretch(text.rectTransform);
-            go.GetComponent<Button>().onClick.AddListener(onClick);
-            return go.GetComponent<Button>();
-        }
-
-        private static void Stretch(RectTransform rt) => Anchor(rt, Vector2.zero, Vector2.one);
-
-        private static void Anchor(RectTransform rt, Vector2 min, Vector2 max)
-        {
-            rt.anchorMin = min;
-            rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
+            UiKit.CreateText(go.transform, label, 28, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            var btn = go.GetComponent<Button>();
+            btn.onClick.AddListener(onClick);
+            UiKit.ApplyButtonStates(btn); // 이 화면만 hover/press 반응이 없던 버그 수정
+            return btn;
         }
     }
 }

@@ -19,11 +19,6 @@ namespace Bbong.Client
         private const float SheetTop = 0.92f;
         private const float SheetBottom = 0.10f;
 
-        private static readonly Color Ink = new(0.07f, 0.11f, 0.22f);            // 골드 바탕 위 글자
-        private static readonly Color Sheet = new(0.10f, 0.15f, 0.30f, 0.97f);   // 판 — 프로필 보드와 동일
-        private static readonly Color SurfaceDim = new(0.13f, 0.19f, 0.36f, 0.75f);
-        private static readonly Color Track = new(0f, 0f, 0f, 0.45f);
-
         private GameObject _canvas;
         private Text _notice;
         private AudioSource _audio;
@@ -53,7 +48,7 @@ namespace Bbong.Client
             _chime = TableArt.Tone("settings-chime", 660f, 0.09f, 18f);
 
             // 뒤 화면을 어둡게 덮고, 바깥을 눌러도 닫히게 — 뒤 버튼이 눌리는 사고를 막는다
-            var scrim = UiKit.CreatePanel(canvasGo.transform, new Color(0f, 0f, 0f, 0.72f));
+            var scrim = UiKit.CreatePanel(canvasGo.transform, UiTheme.Scrim);
             UiKit.Stretch(scrim.rectTransform);
             var scrimBtn = scrim.gameObject.AddComponent<Button>();
             scrimBtn.transition = Selectable.Transition.None;
@@ -62,11 +57,11 @@ namespace Bbong.Client
             var root = SafeArea.Wrap(canvasGo.transform);
 
             // Panel9 스프라이트는 반투명이라 뒤 화면이 비친다 — 단색 백킹을 먼저 깔아 가린다
-            var backing = UiKit.CreatePanel(root, new Color(0.07f, 0.11f, 0.23f, 0.995f));
+            var backing = UiKit.CreatePanel(root, UiTheme.Ink);
             UiKit.Anchor(backing.rectTransform,
                 new Vector2(SheetLeft, SheetBottom), new Vector2(SheetRight, SheetTop));
 
-            var sheet = UiKit.CreatePanel(root, Sheet);
+            var sheet = UiKit.CreatePanel(root, UiTheme.PanelBg);
             if (UiArt.Panel9 != null)
             {
                 sheet.sprite = UiArt.Panel9;
@@ -81,9 +76,10 @@ namespace Bbong.Client
             var gear = UiKit.CreateIcon(root, UiArt.IconGear,
                 new Vector2(0.40f, 0.822f), new Vector2(0.435f, 0.884f));
             gear.color = new Color(1f, 1f, 1f, 0.9f);
-            UiKit.CreateText(root, "설정", 42, TextAnchor.MiddleLeft,
+            UiKit.CreateText(root, "설정", 48, TextAnchor.MiddleLeft,
                 new Vector2(0.447f, 0.812f), new Vector2(0.60f, 0.894f)).fontStyle = FontStyle.Bold;
-            UiKit.Anchor(UiKit.CreatePanel(root, Gold(0.30f)).rectTransform,
+            // 헤어라인은 구조물 — 골드는 이 시트에서 "닫기" 하나만 쓴다
+            UiKit.Anchor(UiKit.CreatePanel(root, UiTheme.Divider).rectTransform,
                 new Vector2(SheetLeft + 0.02f, 0.796f), new Vector2(SheetRight - 0.02f, 0.799f));
 
             Toggle(root, "소리", 0.645f, () => AppSettings.SoundOn, on =>
@@ -101,7 +97,7 @@ namespace Bbong.Client
             });
 
             // 토글 층과 문서 층 사이 옅은 구분선
-            UiKit.Anchor(UiKit.CreatePanel(root, new Color(1f, 1f, 1f, 0.10f)).rectTransform,
+            UiKit.Anchor(UiKit.CreatePanel(root, UiTheme.Divider).rectTransform,
                 new Vector2(SheetLeft + 0.02f, 0.468f), new Vector2(SheetRight - 0.02f, 0.470f));
 
             // 규칙·약관은 앱 안에서 열어야 한다(스토어 정책상 외부 링크만 두면 반려 사유가 된다)
@@ -111,13 +107,13 @@ namespace Bbong.Client
 
             _notice = UiKit.CreateText(root, "", 23, TextAnchor.UpperCenter,
                 new Vector2(0.295f, 0.25f), new Vector2(0.705f, 0.335f));
-            _notice.color = new Color(1f, 1f, 1f, 0.7f);
+            _notice.color = UiTheme.InkMuted;
 
             // 턴 타이머는 서버가 돌린다. 오버레이를 열어도 판은 안 멈추니 미리 알려준다.
             if (FindAnyObjectByType<GameTableView>() != null)
             {
                 _notice.text = "판은 계속 진행돼요. 내 차례를 놓치지 않게 곧 닫아주세요.";
-                _notice.color = new Color(1f, 0.8f, 0.5f);
+                _notice.color = UiTheme.InkOn; // 밝기로만 띄운다 — amber는 골드도 흰색도 아닌 제3의 색
             }
 
             // 게임 중일 때만 나가기. 판을 버리는 동작이라 확인 모달은 테이블이 갖고 있다.
@@ -125,7 +121,7 @@ namespace Bbong.Client
             {
                 var exit = UiKit.CreateButton(root, "게임 나가기",
                     new Vector2(0.30f, 0.115f), new Vector2(0.492f, 0.237f), ExitGame, 28);
-                exit.GetComponent<Image>().color = new Color(0.42f, 0.24f, 0.26f);
+                exit.GetComponent<Image>().color = UiTheme.Danger; // 테이블의 스톱과 같은 붉은색 — 같은 뜻엔 같은 색
                 Primary(UiKit.CreateButton(root, "닫기",
                     new Vector2(0.508f, 0.115f), new Vector2(0.70f, 0.237f), Close, 28));
             }
@@ -138,15 +134,12 @@ namespace Bbong.Client
             UiKit.BackAction = Close; // 기기 뒤로가기는 오버레이만 닫는다
         }
 
-        private static Color Gold(float alpha) =>
-            new(UiKit.Accent.r, UiKit.Accent.g, UiKit.Accent.b, alpha);
-
-        /// <summary>닫기는 이 시트의 주 동작 — 골드로 채워 시선이 끝나는 자리를 만든다.</summary>
+        /// <summary>닫기는 이 시트의 주 동작 — 다른 화면 CTA와 같은 액션 파랑으로 시선이 끝나는 자리를 만든다.</summary>
         private static void Primary(Button btn)
         {
-            btn.GetComponent<Image>().color = UiKit.Accent;
+            btn.GetComponent<Image>().color = UiTheme.Primary;
             var text = btn.GetComponentInChildren<Text>();
-            text.color = Ink;
+            text.color = UiTheme.InkOn;
             text.fontStyle = FontStyle.Bold;
         }
 
@@ -156,8 +149,8 @@ namespace Bbong.Client
             var btn = UiKit.CreateButton(root, label, min, max, () => onClick(), 25);
             var img = btn.GetComponent<Image>();
             img.sprite = UiArt.Chip;
-            img.color = SurfaceDim;
-            btn.GetComponentInChildren<Text>().color = new Color(1f, 1f, 1f, 0.85f);
+            img.color = UiTheme.SurfaceDim;
+            btn.GetComponentInChildren<Text>().color = UiTheme.InkMuted;
         }
 
         /// <summary>
@@ -169,7 +162,7 @@ namespace Bbong.Client
             UiKit.CreateText(root, label, 32, TextAnchor.MiddleLeft,
                 new Vector2(0.31f, y), new Vector2(0.46f, y + 0.10f));
 
-            var track = UiKit.CreatePanel(root, Track);
+            var track = UiKit.CreatePanel(root, UiTheme.Trough);
             track.sprite = UiArt.Chip;
             track.type = Image.Type.Sliced;
             UiKit.Anchor(track.rectTransform, new Vector2(0.495f, y - 0.008f), new Vector2(0.695f, y + 0.108f));
@@ -200,9 +193,10 @@ namespace Bbong.Client
 
         private static void PaintSegment(Button btn, bool selected)
         {
-            btn.GetComponent<Image>().color = selected ? UiKit.Accent : new Color(0f, 0f, 0f, 0f);
+            // 켜진 칩이 골드면 소리·진동 두 개가 주 액션 "닫기"와 동급으로 경쟁한다 — 면 밝기로만 구분
+            btn.GetComponent<Image>().color = selected ? UiTheme.Surface : new Color(0f, 0f, 0f, 0f);
             var text = btn.GetComponentInChildren<Text>();
-            text.color = selected ? Ink : new Color(1f, 1f, 1f, 0.55f);
+            text.color = selected ? UiTheme.InkOn : UiTheme.InkMuted;
             text.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
         }
 

@@ -12,8 +12,8 @@ namespace Bbong.Client
     /// </summary>
     internal static class UiKit
     {
-        public static readonly Color Accent = new(0.94f, 0.83f, 0.55f); // 전 화면 공용 소프트 골드(노란 텍스트 단일 출처)
-        public static readonly Color ButtonColor = new(0.20f, 0.28f, 0.48f); // 네이비 계열 — 부차 버튼이 CTA보다 밝지 않게
+        public static readonly Color Accent = UiTheme.Accent; // 별칭 — 색 정의는 UiTheme 단일 출처
+        public static readonly Color ButtonColor = UiTheme.Control; // 별칭 — 부차 버튼이 CTA보다 밝지 않게
 
         private static Font _font;
 
@@ -76,22 +76,22 @@ namespace Bbong.Client
             // 캔버스 직속으로 올리되 배경(0번) 바로 위, 안전 영역 루트 아래에 끼워 넣는다.
             // root가 안전 영역일 수도, 캔버스 자신일 수도 있어(화면마다 다르다) 캔버스를 거슬러 찾는다.
             var canvas = root.GetComponentInParent<Canvas>().transform;
-            var panel = CreatePanel(canvas, new Color(0, 0, 0, 0.35f));
+            var panel = CreatePanel(canvas, UiTheme.PanelBg);
             if (UiArt.Panel9 != null)
             {
                 panel.sprite = UiArt.Panel9;
                 panel.type = Image.Type.Sliced;
-                panel.color = new Color(0.10f, 0.16f, 0.32f, 0.95f); // 네이비 틴트 — 배경 테마와 통일
+                panel.color = UiTheme.PanelBg; // 네이비 틴트 — 배경 테마와 통일
             }
 
             Anchor(panel.rectTransform, new Vector2(0f, 0.9f), new Vector2(1f, 1f));
             panel.transform.SetSiblingIndex(1);
 
-            var hairline = CreatePanel(canvas, new Color(Accent.r, Accent.g, Accent.b, 0.30f)); // 골드 헤어라인
+            var hairline = CreatePanel(canvas, UiTheme.AccentSubtle); // 골드 헤어라인(은은하게)
             Anchor(hairline.rectTransform, new Vector2(0f, 0.898f), new Vector2(1f, 0.9f));
             hairline.transform.SetSiblingIndex(2);
 
-            var avatar = CreatePanel(root, new Color(0.3f, 0.55f, 0.9f));
+            var avatar = CreatePanel(root, UiTheme.Surface); // 상단바에 유채색은 골드 하나만 남긴다
             avatar.sprite = UiArt.Pill;
             avatar.type = Image.Type.Sliced;
             Anchor(avatar.rectTransform, new Vector2(0.006f, 0.915f), new Vector2(0.044f, 0.985f));
@@ -138,7 +138,7 @@ namespace Bbong.Client
 
             var pts = CreateText(wallet.transform, $"{Session.Balance:N0}", 38, TextAnchor.MiddleRight,
                 Vector2.zero, Vector2.one);
-            pts.color = Accent;
+            pts.color = UiTheme.InkOn; // 골드는 옆 코인 아이콘이 이미 말한다 — 본문 골드 예산을 비워 둔다
             pts.fontStyle = FontStyle.Bold;
             var ptsRt = pts.rectTransform;
             ptsRt.sizeDelta = new Vector2(ptsRt.sizeDelta.x, 108f);
@@ -162,7 +162,7 @@ namespace Bbong.Client
             var img = go.GetComponent<Image>();
             img.sprite = UiArt.Button;
             img.type = Image.Type.Sliced;
-            img.color = new Color(0.16f, 0.24f, 0.42f, 0.9f);
+            img.color = UiTheme.Control;
             Anchor(go.GetComponent<RectTransform>(), min, max);
 
             CreateIcon(go.transform, UiArt.IconGear, new Vector2(0.18f, 0.18f), new Vector2(0.82f, 0.82f));
@@ -255,7 +255,7 @@ namespace Bbong.Client
             var img = go.GetComponent<Image>();
             img.sprite = UiArt.Button; // 일반 버튼과 동일한 Kenney 9-slice
             img.type = Image.Type.Sliced;
-            img.color = new Color(0.24f, 0.5f, 0.88f); // 우주 배경과 같은 블루 계열(배경보다 밝게 강조)
+            img.color = UiTheme.Primary; // 배경보다 밝은 액션 블루 — 흰 라벨 대비 5.2:1
             Anchor(go.GetComponent<RectTransform>(), min, max);
 
             var text = CreateText(go.transform, label, fontSize, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
@@ -286,7 +286,7 @@ namespace Bbong.Client
             text.text = content;
             text.fontSize = size;
             text.alignment = anchor;
-            text.color = Color.white;
+            text.color = UiTheme.InkOn;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             Anchor(text.rectTransform, min, max);
@@ -312,14 +312,28 @@ namespace Bbong.Client
         }
 
         /// <summary>hover/pressed/disabled 상태색 — 기본값(0.96 하이라이트)은 화면에서 무변화라 명시한다.</summary>
-        private static void ApplyButtonStates(Button btn)
+        public static void ApplyButtonStates(Button btn)
         {
             var colors = btn.colors;
-            colors.highlightedColor = new Color(1.12f, 1.12f, 1.12f);
+            colors.highlightedColor = new Color(1.08f, 1.08f, 1.08f); // 골드(0.94) 버튼도 클리핑 없이 hover가 보이는 상한
             colors.pressedColor = new Color(0.82f, 0.82f, 0.82f);
             colors.disabledColor = new Color(0.45f, 0.45f, 0.45f, 0.6f);
             colors.fadeDuration = 0.08f;
             btn.colors = colors;
+        }
+
+        /// <summary>
+        /// 버튼 활성/비활성 전환. Button.colors.disabledColor는 배경 Image에만 걸리고
+        /// 자식 Text는 흰색 그대로 남아 "눌러도 되는" 것처럼 보인다 — 라벨도 같이 낮춘다.
+        /// </summary>
+        public static void SetEnabled(Button btn, bool on)
+        {
+            btn.interactable = on;
+            var label = btn.GetComponentInChildren<Text>();
+            if (label != null)
+            {
+                label.color = on ? UiTheme.InkOn : UiTheme.InkDisabled;
+            }
         }
 
         public static Button CreateButton(Transform parent, string label, Vector2 min, Vector2 max,

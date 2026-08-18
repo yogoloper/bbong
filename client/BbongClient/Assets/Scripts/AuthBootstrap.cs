@@ -66,12 +66,12 @@ namespace Bbong.Client
             var social = UiKit.CreateButton(root, "소셜 로그인 (준비중)",
                 new Vector2(0.34f, 0.20f), new Vector2(0.66f, 0.29f), () => { }, 30);
             social.interactable = false;
-            social.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.15f); // 텍스트 버튼 수준으로 강등
-            social.GetComponentInChildren<Text>().color = new Color(1f, 1f, 1f, 0.5f);
+            social.GetComponent<Image>().color = UiTheme.SurfaceDim; // 전 화면 유일한 흰색 판이었다 — 네이비 체계 안으로
+            social.GetComponentInChildren<Text>().color = UiTheme.InkDisabled;
 
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.08f), new Vector2(0.9f, 0.17f));
-            _status.color = new Color(1f, 0.8f, 0.5f);
+            _status.color = UiTheme.InkMuted;
         }
 
         private void OnGuest()

@@ -53,7 +53,7 @@ namespace Bbong.Client
                 new Vector2(0.1f, 0.74f), new Vector2(0.9f, 0.86f));
             title.fontStyle = FontStyle.Bold;
             UiKit.CreateText(root, "입장료 없이 친구들끼리 편하게 한 판", 28, TextAnchor.MiddleCenter,
-                new Vector2(0.1f, 0.66f), new Vector2(0.9f, 0.73f)).color = new Color(1f, 1f, 1f, 0.7f);
+                new Vector2(0.1f, 0.66f), new Vector2(0.9f, 0.73f)).color = UiTheme.InkMuted;
 
             UiKit.CtaButton(root, "방 만들기",
                 new Vector2(0.34f, 0.50f), new Vector2(0.66f, 0.62f), OnCreateRoom, 38);
@@ -62,7 +62,7 @@ namespace Bbong.Client
 
             UiKit.CreateText(root, "방을 만들면 초대코드가 나옵니다.\n친구에게 코드를 알려주고 함께 플레이하세요.", 28,
                 TextAnchor.MiddleCenter, new Vector2(0.1f, 0.20f), new Vector2(0.9f, 0.32f))
-                .color = new Color(1f, 1f, 1f, 0.7f);
+                .color = UiTheme.InkMuted;
 
             BuildStatus(root);
             UiKit.BackButton(root, () => UiKit.GoTo<MainLobbyBootstrap>(_canvas, this));
@@ -99,7 +99,7 @@ namespace Bbong.Client
         private void BuildWaitingRoom()
         {
             Rebuild(out var root);
-            var title = UiKit.CreateText(root, "대기실", 48, TextAnchor.MiddleCenter,
+            var title = UiKit.CreateText(root, "대기실", 56, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.87f)); // 다른 화면과 동일 높이 — 상단바에 안 물림
             title.fontStyle = FontStyle.Bold;
 
@@ -107,13 +107,13 @@ namespace Bbong.Client
             var code = UiKit.CreateText(root, $"초대코드  {_room.code}", 72, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.62f), new Vector2(0.9f, 0.76f));
             code.fontStyle = FontStyle.Bold;
-            code.color = UiKit.Accent;
+            code.color = UiTheme.Accent; // 이 화면의 주 강조는 초대코드 하나
 
             if (_room.stake > 0)
             {
                 var humans = _room.members.Count(m => !m.isBot); // 봇은 입장료가 없어 상금에서 제외
                 UiKit.CreateText(root, $"입장료 {_room.stake:N0} · 현재 총상금 {(long)_room.stake * humans:N0}", 30,
-                    TextAnchor.MiddleCenter, new Vector2(0.1f, 0.56f), new Vector2(0.9f, 0.61f)).color = UiKit.Accent;
+                    TextAnchor.MiddleCenter, new Vector2(0.1f, 0.56f), new Vector2(0.9f, 0.61f)).color = UiTheme.InkMuted;
             }
 
             var lines = "";
@@ -126,7 +126,7 @@ namespace Bbong.Client
 
             for (var i = _room.members.Length; i < GameConfig.MaxPlayers; i++)
             {
-                lines += "<color=#FFFFFF40>- 빈 자리 -</color>\n"; // 정원까지 줄 유지 — 진행률이 목록만 봐도 읽힘
+                lines += "<color=#FFFFFF57>- 빈 자리 -</color>\n"; // InkDisabled(α0.34) — 정원까지 줄 유지
             }
 
             // 6줄(정원)이 아래 봇 버튼 영역을 침범하지 않도록 목록 상단을 올리고 줄 높이를 줄인다.
@@ -140,24 +140,24 @@ namespace Bbong.Client
                 var addBot = UiKit.CreateButton(root, "봇 추가",
                     new Vector2(0.30f, 0.22f), new Vector2(0.48f, 0.342f),
                     () => WsClient.Instance.Send(new AddBotMsg()), 30);
-                addBot.interactable = _room.members.Length < GameConfig.MaxPlayers;
+                UiKit.SetEnabled(addBot, _room.members.Length < GameConfig.MaxPlayers);
                 var removeBot = UiKit.CreateButton(root, "봇 빼기",
                     new Vector2(0.52f, 0.22f), new Vector2(0.70f, 0.342f),
                     () => WsClient.Instance.Send(new RemoveBotMsg()), 30);
-                removeBot.interactable = botCount > 0;
+                UiKit.SetEnabled(removeBot, botCount > 0);
 
                 var start = UiKit.PrimaryCta(root, "게임 시작", () => WsClient.Instance.Send(new StartGameMsg()));
-                start.interactable = _room.members.Length >= 2; // 봇 포함 2명 이상
+                UiKit.SetEnabled(start, _room.members.Length >= 2); // 봇 포함 2명 이상
                 if (!start.interactable)
                 {
                     UiKit.CreateText(root, "2명부터 시작할 수 있어요", 26, TextAnchor.MiddleCenter,
-                        new Vector2(0.1f, 0.165f), new Vector2(0.9f, 0.215f)).color = new Color(1f, 1f, 1f, 0.6f);
+                        new Vector2(0.1f, 0.165f), new Vector2(0.9f, 0.215f)).color = UiTheme.InkMuted;
                 }
             }
             else
             {
                 UiKit.CreateText(root, "방장이 시작하기를 기다리는 중...", 30, TextAnchor.MiddleCenter,
-                    new Vector2(0.1f, 0.13f), new Vector2(0.9f, 0.20f)).color = new Color(1f, 1f, 1f, 0.7f);
+                    new Vector2(0.1f, 0.13f), new Vector2(0.9f, 0.20f)).color = UiTheme.InkMuted;
             }
 
             BuildStatus(root);
@@ -183,7 +183,7 @@ namespace Bbong.Client
         {
             _status = UiKit.CreateText(root, "", 28, TextAnchor.MiddleCenter,
                 new Vector2(0.1f, 0.02f), new Vector2(0.9f, 0.10f));
-            _status.color = new Color(1f, 0.8f, 0.5f);
+            _status.color = UiTheme.InkMuted;
         }
 
         // ── 액션 ──

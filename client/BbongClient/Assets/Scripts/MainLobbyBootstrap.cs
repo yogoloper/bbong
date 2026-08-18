@@ -45,17 +45,6 @@ namespace Bbong.Client
             }
         }
 
-        // 모드별 강조색 — 카드 얼굴이자 하위 화면까지 이어지는 색 체계
-        private static readonly Color[] ModeTint =
-        {
-            new(0.35f, 0.62f, 0.95f), // 튜토리얼 — 하늘
-            new(0.36f, 0.72f, 0.52f), // 연습 — 초록
-            new(0.94f, 0.83f, 0.55f), // 맞춤게임 — 골드
-            new(0.78f, 0.48f, 0.86f), // 친구와 함께 — 보라
-            new(0.95f, 0.66f, 0.32f), // 포인트 얻기 — 주황
-            new(0.60f, 0.66f, 0.80f), // 프로필 — 중성 회청
-        };
-
         private static Sprite ModeIcon(int i) => i switch
         {
             0 => UiArt.IconBook,
@@ -73,27 +62,24 @@ namespace Bbong.Client
         {
             var i = _modeIndex++;
 
-            // 카드 = 반투명 패널 + 클릭 버튼. 제목은 하단, 위쪽은 모드 색 아이콘 영역.
+            // 카드 = 반투명 패널 + 클릭 버튼. 제목은 하단, 위쪽은 아이콘 영역.
+            // 모드 구분은 아이콘 도형이 한다 — 카드마다 색을 달리 주면 첫 화면부터 무지개가 된다.
             var btn = UiKit.CreateButton(root, "", min, max, onClick);
-            btn.GetComponent<Image>().color = new Color(0.12f, 0.22f, 0.42f, 0.95f);
-            var colors = btn.colors;
-            colors.pressedColor = new Color(1.2f, 1.2f, 1.2f); // 눌림 피드백
-            btn.colors = colors;
+            btn.GetComponent<Image>().color = UiTheme.Surface;
 
-            var accentTop = UiKit.CreatePanel(btn.transform, ModeTint[i]);
+            var accentTop = UiKit.CreatePanel(btn.transform, UiTheme.SurfaceDim);
             accentTop.sprite = UiArt.Pill;
             accentTop.type = Image.Type.Sliced;
             UiKit.Anchor(accentTop.rectTransform, new Vector2(0.08f, 0.45f), new Vector2(0.92f, 0.9f));
             UiKit.CreateIcon(accentTop.transform, ModeIcon(i),
                 new Vector2(0.12f, 0.1f), new Vector2(0.88f, 0.9f));
 
-            var t = UiKit.CreateText(btn.transform, title, 40, TextAnchor.MiddleCenter,
+            UiKit.CreateText(btn.transform, title, 40, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.25f), new Vector2(1f, 0.42f));
-            t.color = Color.white;
-            t.fontStyle = FontStyle.Bold;
+
             var d = UiKit.CreateText(btn.transform, desc, 26, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.08f), new Vector2(1f, 0.24f));
-            d.color = new Color(1f, 1f, 1f, 0.8f);
+            d.color = UiTheme.InkMuted;
         }
 
         private void OnTutorial() => UiKit.GoTo<TutorialBootstrap>(_canvas, this);
