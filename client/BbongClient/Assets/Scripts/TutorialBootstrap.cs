@@ -42,7 +42,8 @@ namespace Bbong.Client
             _names = new[] { me, "너구리 사범", "수달 조교", "펭귄 문하생" };
 
             _table = gameObject.AddComponent<GameTableView>();
-            _table.SetSeatRadius(new Vector2(0.40f, 0.24f)); // 설명 패널(상단)과 맞은편 좌석 겹침 방지
+            // 좌석 배치는 실전과 완전히 동일하게 둔다. 맞은편(위) 좌석은 안내 밴드가 통째로
+            // 덮는데, 25개 레슨 어디서도 그 좌석을 언급하지 않는 배경 인물이라 가려도 된다.
             _table.MySeat = 0;
             _table.PlayerCount = 4;
             _table.Nicknames = _names;
@@ -75,37 +76,71 @@ namespace Bbong.Client
                 panel.color = opaque;
             }
 
-            UiKit.Anchor(panel.rectTransform, new Vector2(0.16f, 0.775f), new Vector2(0.84f, 0.99f));
+            // 교습 밴드: 맞은편 좌석을 통째로 덮는 층. 화면 꼭대기에 붙이는 것보다 한 뼘
+            // 아래라 시선이 편하고, 하한은 버림 더미 산개 상단(≈0.69)이 정한다.
+            // 높이 고정 — 단계마다 높이가 변하면 아래 판이 들썩여서 빈 여백보다 나쁘다.
+            UiKit.Anchor(panel.rectTransform, new Vector2(0.165f, 0.775f), new Vector2(0.935f, 0.965f));
             var shadow = panel.gameObject.AddComponent<Shadow>();
             shadow.effectColor = new Color(0f, 0f, 0f, 0.5f);
             shadow.effectDistance = new Vector2(8f, -8f);
 
-            _guideText = UiKit.CreateText(panel.transform, "", 28, TextAnchor.MiddleLeft,
-                new Vector2(0.03f, 0.08f), new Vector2(0.72f, 0.92f));
+            // 폰트는 36 고정. bestFit은 내용이 많은 단계일수록 글자를 줄이는 — 정확히
+            // 거꾸로 가는 — 장치라 쓰지 않는다. 대신 문구를 3줄 상한으로 맞춘다(Guide 가드).
+            // 세로 0.13~0.87: 3줄(42×1.15×3 ≈ 145유닛)이 차도 위아래로 27유닛씩 숨 쉴 여백
+            _guideText = UiKit.CreateText(panel.transform, "", 42, TextAnchor.MiddleLeft,
+                new Vector2(0.022f, 0.13f), new Vector2(0.978f, 0.87f));
             _guideText.color = UiTheme.InkOn;
             _guideText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            _guideText.resizeTextForBestFit = true;
-            _guideText.resizeTextMinSize = 16;
-            _guideText.resizeTextMaxSize = 28;
+            _guideText.lineSpacing = 1.15f;
 
-            var next = UiKit.CtaButton(panel.transform, "다음",
-                new Vector2(0.76f, 0.18f), new Vector2(0.97f, 0.62f), () => _nextPressed = true, 28);
+            // '다음'은 실전 액션 버튼(뽕/패스)과 같은 자리·같은 너비의 우측 하단 바에 둔다 —
+            // 튜토리얼 내내 "행동은 오른쪽 아래"라는 실전 감각을 그대로 익히게 한다.
+            // 다음이 보일 때 액션 버튼은 항상 숨어 있어(단계가 상호배타) 자리 다툼이 없다.
+            var next = _table.AddBarButton("다음", () => _nextPressed = true);
             _nextLabel = next.GetComponentInChildren<Text>();
-            _nextLabel.fontStyle = FontStyle.Bold;
             _nextBtn = next.gameObject;
         }
 
         private void Guide(string message, bool showNext, string nextLabel = "다음")
         {
+            WarnIfOverflow(message);
             _guideText.text = message;
             _nextLabel.text = nextLabel;
             _nextBtn.SetActive(showNext);
+        }
+
+        /// <summary>
+        /// 밴드는 42px 고정 2줄 상한 — 길면 문구를 쪼개 '다음'으로 잇는다. 넘치면 조용히
+        /// 삐져나가므로 렌더 줄 수를 어림해 개발 중에 바로 잡는다.
+        /// 한 줄 예산은 16:9 기준 전각 33자(ASCII는 0.5자).
+        /// </summary>
+        private static void WarnIfOverflow(string message)
+        {
+            var lines = 0;
+            foreach (var logical in message.Split('\n'))
+            {
+                var width = 0f;
+                foreach (var ch in logical)
+                {
+                    width += ch < 128 ? 0.5f : 1f;
+                }
+
+                lines += Mathf.Max(1, Mathf.CeilToInt(width / 33f));
+            }
+
+            if (lines > 2)
+            {
+                Debug.LogWarning($"[Tutorial] 안내 {lines}줄 — 2줄 초과: {message[..Mathf.Min(20, message.Length)]}…");
+            }
         }
 
         private IEnumerator WaitNext()
         {
             _nextPressed = false;
             yield return new WaitUntil(() => _nextPressed);
+            // 누르는 즉시 감춘다 — 연출(카드 비행·1초 호흡)이 끝나고 뽕/패스로 바뀔 때까지
+            // 다음이 남아 있으면 전환이 굼떠 보인다. 다음 단계의 Guide가 필요하면 다시 켠다.
+            _nextBtn.SetActive(false);
         }
 
         private IEnumerator WaitCard(System.Func<Card, bool> valid)
@@ -168,6 +203,10 @@ namespace Bbong.Client
                 }).ToArray()
             };
             _table.Render(view, _laidNow);
+
+            // 중앙 프롬프트("~를 클릭하세요")는 안내 밴드와 같은 지시를 두 번 하는 중복이라
+            // 억제한다. Render 직후 덮어써야 하므로 반드시 이 자리에서.
+            _table.SetPrompt("");
         }
 
         // ── 레슨 진행 ──
@@ -178,13 +217,13 @@ namespace Bbong.Client
             yield return LessonPong();
             yield return LessonNaturalPong();
             yield return LessonHandClearBak();
+            yield return LessonNaturalBagaji();
             yield return LessonMeld();
             yield return LessonStop();
             yield return LessonBagaji();
 
-            Guide("수고하셨어요! 이제 규칙은 다 배우셨습니다.\n" +
-                  "[연습]에서 봇을 상대로 감을 잡아보세요.\n" +
-                  "실전에서는 행동 하나에 5초 제한이 있으니 서두르셔야 합니다!", true, "로비로");
+            Guide("수고하셨어요! 이제 [연습]에서 봇 상대로 감을 잡아보세요.\n" +
+                  "실전에서는 행동마다 5초 제한이 있으니 서두르셔야 합니다!", true, "로비로");
             yield return WaitNext();
             UiKit.GoTo<MainLobbyBootstrap>(_table.CanvasGo, this);
         }
@@ -202,14 +241,15 @@ namespace Bbong.Client
             Show(RoundPhase.TurnGap, 0);
 
             Guide("나이롱뽕에 오신 걸 환영합니다!\n" +
-                  "같은 숫자 카드를 모아 \"뽕!\"을 외치는 게임이에요.\n" +
-                  "라운드가 끝날 때 손에 남은 카드의 숫자 합이 그대로 '빚'이 되고,\n" +
-                  "5라운드를 치른 뒤 누적 빚이 가장 적은 사람이 우승합니다.", true);
+                  "같은 숫자 카드를 모아 \"뽕!\"을 외치는 게임이에요.", true);
             yield return WaitNext();
 
-            Guide("전원 5장으로 시작하고, 첫 라운드 선은 무작위로 정해집니다.\n" +
-                  "내 차례가 되면 한 장을 뽑아 손패가 6장이 되고,\n" +
-                  "한 장을 버려서 다시 5장으로 맞춥니다.", true);
+            Guide("라운드가 끝나면 남은 손패 합이 '빚'이 되고,\n" +
+                  "5라운드 누적 빚이 가장 적은 사람이 우승합니다.", true);
+            yield return WaitNext();
+
+            Guide("전원 5장으로 시작합니다.\n" +
+                  "내 차례엔 한 장 뽑고 한 장 버려 5장을 유지해요.", true);
             yield return WaitNext();
 
             _round = _round.Draw();
@@ -223,7 +263,7 @@ namespace Bbong.Client
             _table.DiscardFx(0, tossed);
             Show(RoundPhase.TurnGap, 1);
 
-            Guide("좋아요! 버린 카드는 가운데 더미에 쌓이고 차례가 옆으로 넘어갑니다.\n" +
+            Guide("좋아요! 버린 카드는 더미에 쌓이고 차례가 넘어갑니다.\n" +
                   "뽑고 버리고, 이게 게임의 기본 흐름입니다.", true);
             yield return WaitNext();
         }
@@ -244,12 +284,21 @@ namespace Bbong.Client
                   "내 손에 8이 두 장 보이시죠? 너구리 사범 차례를 지켜보세요.", true);
             yield return WaitNext();
 
+            // 사범 턴도 실전처럼 — 한 장 뽑아 6장이 됐다가 한 장 버려 5장
+            _round = _round.Draw();
+            _table.DrawFx(1);
+            Show(RoundPhase.WaitingDiscard, 1);
+            yield return new WaitForSeconds(0.9f);
+
             var botToss = C(8, CardColor.Green);
             _round = _round.Discard(botToss);
             _table.DiscardFx(1, botToss);
+            Show(RoundPhase.TurnGap, 1); // 버리는 즉시 사범 손패 수 갱신
+            yield return new WaitForSeconds(1f); // 카드가 날아가 놓이는 걸 본 뒤에 뽕 타임
             Show(RoundPhase.PongWindow, 1, canPong: true, pongNumber: 8);
 
-            Guide("사범이 8을 버렸습니다! 같은 숫자를 두 장 들고 있으면 5초 안에 뽕을 부를 수 있어요.\n지금입니다, [뽕] 버튼을 누르세요!", false);
+            Guide("사범이 8을 버렸습니다! 같은 숫자 두 장이면 뽕을 부를 수 있어요.\n" +
+                  "지금입니다, [뽕] 버튼을 누르세요!", false);
             yield return new WaitUntil(() => _pongPressed);
             _pongPressed = false;
 
@@ -259,9 +308,8 @@ namespace Bbong.Client
             _table.PongFx($"{_names[0]}\n8뽕!");
             Show(RoundPhase.WaitingPongDiscard, 0);
 
-            Guide("사범이 버린 8 위에 내 8 두 장을 얹어 한 묶음으로 내려놓았습니다.\n" +
-                  "손을 떠난 카드는 라운드가 끝나도 빚에 들어가지 않아요.\n" +
-                  "이제 필요 없는 카드 1장을 추가로 버립니다. 남은 카드 중 하나를 클릭하세요.", false);
+            Guide("버린 8 위에 내 8 두 장을 얹었습니다. 손을 떠난 카드는 빚 제외!\n" +
+                  "이제 남은 카드 중 하나를 골라 마저 버리세요.", false);
             yield return WaitCard(c => c.Number != 8);
 
             var toss = _clickedCard!.Value;
@@ -270,10 +318,10 @@ namespace Bbong.Client
             _table.DiscardFx(0, toss);
             Show(RoundPhase.TurnGap, 1);
 
+            // 붉은 뒷면(쌍 경고) 설명은 여기서 예고하지 않는다 — 다음 레슨이 자연뽕이라
+            // "다음 레슨에서 보시죠"가 어긋난다. 손 털기 레슨 도입부가 직접 설명한다.
             Guide("뽕 완성! 손패가 5장에서 2장으로 확 줄었죠.\n" +
-                  "손패가 적을수록 라운드가 끝날 때 남는 빚도 적습니다.\n" +
-                  "한 가지 더, 손패가 딱 2장인데 두 장의 숫자가 같아지면\n" +
-                  "그 좌석의 카드 뒷면이 붉게 바뀌어 전원에게 보입니다. 다음 레슨에서 보시죠.", true);
+                  "손패가 적을수록 라운드가 끝날 때 남는 빚도 적습니다.", true);
             yield return WaitNext();
         }
 
@@ -314,9 +362,8 @@ namespace Bbong.Client
             _table.DiscardFx(0, toss);
             Show(RoundPhase.TurnGap, 1);
 
-            Guide("자연뽕 완성! 효과는 뽕과 같아서 내려놓은 세 장은 빚에서 빠집니다.\n" +
-                  "그런데 한 라운드에 뽕을 두 번 하면 손패가 전부 사라지겠죠?\n" +
-                  "그때 무슨 일이 벌어지는지 다음 레슨에서 보시죠.", true);
+            Guide("자연뽕 완성! 내려놓은 세 장은 빚에서 빠집니다.\n" +
+                  "그런데 뽕을 두 번 해 손패가 다 사라지면? 다음 레슨에서 보시죠.", true);
             yield return WaitNext();
         }
 
@@ -332,11 +379,17 @@ namespace Bbong.Client
                 draw: new[] { C(3, CardColor.Green) }, discard: new Card[0], currentSeat: 0);
             Show(RoundPhase.TurnGap, 0);
 
-            Guide("뽕을 두 번 해서 손패를 전부 털면 '손 털기', 그 자리에서 라운드가 끝납니다.\n" +
-                  "지금 너구리 사범은 뽕을 한 번 해서 손이 딱 2장인데요.\n" +
-                  "사범 카드 뒷면이 붉죠? 남은 2장이 같은 숫자라는 경고입니다.", true);
+            Guide("뽕을 두 번 해 손을 털면 '손 털기' — 즉시 라운드가 끝나요.\n" +
+                  "지금 너구리 사범은 뽕을 한 번 해서 손이 딱 2장입니다.", true);
             yield return WaitNext();
 
+            Guide("사범 카드 뒷면이 붉죠?\n" +
+                  "남은 2장이 같은 숫자라는 경고입니다.", true);
+            yield return WaitNext();
+
+            // 실전과 같게 내 턴은 뽑기부터 — 6장 상태에서 버리게 한다
+            _round = _round.Draw();
+            _table.DrawFx(0);
             Show(RoundPhase.WaitingDiscard, 0);
             Guide("붉은 뒷면인 상대에게 같은 숫자를 버려주면 어떻게 될까요?\n직접 해봅시다. 손에 있는 9를 버려보세요.", false);
             yield return WaitCard(c => c.Number == 9);
@@ -344,6 +397,8 @@ namespace Bbong.Client
             var tossed = _clickedCard!.Value;
             _round = _round.Discard(tossed);
             _table.DiscardFx(0, tossed);
+            Show(RoundPhase.TurnGap, 1); // 버린 카드가 손에서 빠진 상태로 재렌더 — 안 하면 1초간 유령 카드가 남는다
+            yield return new WaitForSeconds(1f); // 내 카드가 놓인 걸 보고 나서 사범이 뽕
 
             var laid = _round.Players[1].Hand.Cards.ToList(); // 사범 손의 9 두 장(버린 9는 더미에 그대로)
             _round = _round.Pong(1, null); // 사범의 두 번째 뽕 = 손 털기
@@ -352,16 +407,81 @@ namespace Bbong.Client
             Show(RoundPhase.RoundOver, 1);
             _table.ShowCallout($"{_names[1]}\n손 털기!", new Color(1f, 0.4f, 0.35f));
 
-            Guide("사범이 내 9를 받아 두 번째 뽕, 손을 다 털고 라운드가 끝났습니다.\n" +
-                  "이게 '일반뽕 바가지'예요. 카드를 버린 나는 손합에 30을 더해 물고,\n" +
-                  "털어낸 사범은 0점, 나머지는 자기 손합을 빚으로 집니다.\n" +
-                  "바가지를 당한 나는 다음 라운드의 선을 잡습니다.", true);
+            Guide("사범이 내 9를 받아 두 번째 뽕, 손을 다 털었습니다.\n" +
+                  "이게 '일반뽕 바가지'예요.", true);
             yield return WaitNext();
 
-            Guide("붉은 뒷면은 눈에 보이니 피할 수 있지만, 경고조차 없는 경우도 있습니다.\n" +
-                  "상대가 2,2,5,5,5를 들고 있다면 내가 버린 2로 뽕을 하고\n" +
-                  "남은 5,5,5를 그 자리에서 자연뽕해 손을 털어버리거든요.\n" +
-                  "이 '자연뽕 바가지'는 피할 방법이 없는 만큼 50점으로 더 무겁습니다!", true);
+            Guide("버린 나는 손합에 30을 더해 물고, 사범은 0점이에요.\n" +
+                  "나머지는 손합만큼 빚지고, 다음 선은 내가 잡습니다.", true);
+            yield return WaitNext();
+        }
+
+        /// <summary>자연뽕 바가지를 설명이 아니라 직접 겪게 한다 — 경고 없이 당하는 게 핵심이라 체험이 맞다.</summary>
+        private IEnumerator LessonNaturalBagaji()
+        {
+            Setup(new[]
+                {
+                    new Player(0, new Hand(new[] { C(2, CardColor.Red), C(6, CardColor.Blue), C(9, CardColor.Green), C(11, CardColor.Yellow), C(12, CardColor.Red) })),
+                    new Player(1, new Hand(new[] { C(2, CardColor.Blue), C(2, CardColor.Yellow), C(5, CardColor.Red), C(5, CardColor.Blue), C(5, CardColor.Green) })),
+                    new Player(2, new Hand(new[] { C(1, CardColor.Green), C(3, CardColor.Blue), C(7, CardColor.Red), C(10, CardColor.Blue), C(12, CardColor.Green) })),
+                    new Player(3, new Hand(new[] { C(3, CardColor.Yellow), C(4, CardColor.Red), C(6, CardColor.Green), C(8, CardColor.Blue), C(10, CardColor.Yellow) }))
+                },
+                draw: new[] { C(1, CardColor.Red) }, discard: new Card[0], currentSeat: 0);
+
+            // 실전과 같게 내 턴은 뽑기부터 — 6장 상태에서 버리게 한다
+            _round = _round.Draw();
+            _table.DrawFx(0);
+            Show(RoundPhase.WaitingDiscard, 0);
+
+            Guide("붉은 뒷면은 보고 피할 수 있지만, 경고 없는 바가지도 있습니다.\n" +
+                  "직접 겪어보죠. 내 차례입니다 — 손에 있는 2를 버려보세요.", false);
+            yield return WaitCard(c => c.Number == 2);
+
+            var tossed = _clickedCard!.Value;
+            _round = _round.Discard(tossed);
+            _table.DiscardFx(0, tossed);
+            Show(RoundPhase.TurnGap, 1); // 버린 카드가 손에서 빠진 상태로 재렌더
+            yield return new WaitForSeconds(1f); // 내 카드가 놓인 걸 보고 나서 사범이 뽕
+
+            // 사범: 내 2를 받아 뽕 → 남은 5,5,5를 그 자리에서 자연뽕 → 손 털기.
+            // 엔진에 뽕+자연뽕 연쇄를 태우는 대신 연출만 하고, 내려놓을 때마다 사범 손패 수가
+            // 맞는 상태로 뷰를 재구성한다. Setup()은 타임라인(내려놓은 묶음)까지 지우므로 안 쓴다.
+            var pongLaid = _round.Players[1].Hand.Cards.Where(c => c.Number == 2).ToList();
+            _table.GroupFx(1, pongLaid);
+            _table.PongFx($"{_names[1]}\n2뽕!");
+            _round = RoundState.Restore(new[]
+                {
+                    new Player(0, new Hand(_round.Players[0].Hand.Cards.ToArray())),
+                    new Player(1, new Hand(new[] { C(5, CardColor.Red), C(5, CardColor.Blue), C(5, CardColor.Green) }), PongCount: 1),
+                    new Player(2, new Hand(_round.Players[2].Hand.Cards.ToArray())),
+                    new Player(3, new Hand(_round.Players[3].Hand.Cards.ToArray()))
+                },
+                new[] { C(1, CardColor.Red) }, new Card[0], 1, new SeededRandom(1));
+            Show(RoundPhase.WaitingPongDiscard, 1); // 내려놓은 2장이 사범 손에서도 빠진 상태
+            yield return new WaitForSeconds(1.2f);
+
+            var naturalLaid = _round.Players[1].Hand.Cards.ToList(); // 남은 5,5,5
+            _table.GroupFx(1, naturalLaid);
+            _table.PongFx($"{_names[1]}\n5자연뽕!");
+            _round = RoundState.Restore(new[]
+                {
+                    new Player(0, new Hand(_round.Players[0].Hand.Cards.ToArray())),
+                    new Player(1, new Hand(System.Array.Empty<Card>()), PongCount: 2),
+                    new Player(2, new Hand(_round.Players[2].Hand.Cards.ToArray())),
+                    new Player(3, new Hand(_round.Players[3].Hand.Cards.ToArray()))
+                },
+                new[] { C(1, CardColor.Red) }, new Card[0], 1, new SeededRandom(1));
+            Show(RoundPhase.RoundOver, 1); // 손 털기 — 사범 손 0장
+            yield return new WaitForSeconds(0.8f);
+
+            _table.ShowCallout($"{_names[1]}\n자연뽕 바가지!", new Color(1f, 0.4f, 0.35f));
+
+            Guide("경고 없이 당했습니다! 이게 '자연뽕 바가지'입니다.\n" +
+                  "내 2로 뽕을 하고, 남은 5,5,5를 바로 자연뽕해 손을 털었죠.", true);
+            yield return WaitNext();
+
+            Guide("피할 수 없는 만큼 벌도 무겁습니다 — 버린 나는 50점!\n" +
+                  "노리는 사람이 있으니 뽕은 신중하게.", true);
             yield return WaitNext();
         }
 
@@ -377,8 +497,8 @@ namespace Bbong.Client
                 draw: new[] { C(6, CardColor.Blue) }, discard: new Card[0], currentSeat: 0);
             Show(RoundPhase.TurnGap, 0);
 
-            Guide("'족보'는 한 방 역전기입니다.\n" +
-                  "카드를 뽑은 직후 6장이 특별한 조합을 이루면,\n선언과 동시에 라운드가 끝나고 누적 빚을 크게 덜어냅니다.", true);
+            Guide("'족보'는 한 방 역전기 — 뽑은 직후 6장이 특별한 조합이면\n" +
+                  "선언과 동시에 라운드가 끝나고 누적 빚을 크게 덜어냅니다.", true);
             yield return WaitNext();
 
             _round = _round.Draw();
@@ -393,11 +513,12 @@ namespace Bbong.Client
             _table.PongFx($"{_names[0]}\n{MeldNames.Korean(meld.Type)}!");
             Show(RoundPhase.RoundOver, 0);
 
-            Guide("족보 완성! 스트레이트는 여섯 장의 합만큼 빚을 탕감합니다. 1+2+3+4+5+6이니 21점이죠.\n" +
-                  "족보는 모두 다섯 가지예요.\n" +
-                  "스트레이트(연속 6장) · 또이또이(같은 숫자 2+2+2 또는 3+3) · 총통(같은 숫자 4장)\n" +
-                  "10이하(6장 합 10 이하) · 66이상(6장 합 66 이상)\n" +
-                  "또이또이는 이번 라운드 빚 없이 끝나고, 총통·10이하·66이상은 100점을 탕감합니다!", true);
+            Guide("족보 완성! 스트레이트는 여섯 장의 합만큼 빚을 탕감합니다.\n" +
+                  "1+2+3+4+5+6이니 21점을 덜었죠.", true);
+            yield return WaitNext();
+
+            Guide("족보는 다섯: 스트레이트(연속 6장) · 또이또이(2+2+2/3+3, 빚 0)\n" +
+                  "총통(같은 4장) · 10이하 · 66이상 — 셋 다 100점 탕감!", true);
             yield return WaitNext();
         }
 
@@ -413,14 +534,13 @@ namespace Bbong.Client
                 draw: new[] { C(7, CardColor.Green) }, discard: new Card[0], currentSeat: 0);
             Show(RoundPhase.TurnGap, 0);
 
-            Guide("이번엔 '스톱'입니다. 뽕한 사람이 2명 이상이고\n" +
-                  "내 남은 2장의 합이 10 이하면 내 턴에 스톱을 부를 수 있어요.\n" +
-                  "단, 뽕한 사람들 중 내 손합이 유일하게 가장 낮아야 성공이라 동점이면 실패입니다.", true);
+            Guide("'스톱': 뽕한 사람이 2명 이상이고 내 남은 2장 합이 10 이하면\n" +
+                  "내 턴에 외칠 수 있어요. 뽕한 사람 중 손합이 가장 낮아야 성공!", true);
             yield return WaitNext();
 
             Show(RoundPhase.WaitingStop, 0, canStop: true);
-            Guide("나와 사범 둘 다 뽕을 했고, 내 손패는 1+2=3, 사범은 9+9=18.\n" +
-                  "내가 훨씬 낮으니 성공입니다. [스톱] 버튼으로 라운드를 끝내세요!", false);
+            Guide("나와 사범 둘 다 뽕! 내 손합 3, 사범 18로 내가 훨씬 낮습니다.\n" +
+                  "[스톱] 버튼으로 라운드를 끝내세요!", false);
             yield return new WaitUntil(() => _stopPressed);
             _stopPressed = false;
 
@@ -429,10 +549,8 @@ namespace Bbong.Client
             _table.ShowCallout($"{_names[0]}\n스톱!", new Color(0.55f, 0.85f, 1f));
             Show(RoundPhase.RoundOver, 0);
 
-            Guide("스톱 성공! 성공하면 10에서 손합을 뺀 만큼 빚을 청산합니다.\n" +
-                  "내 합이 3이니 10−3=7, 즉 7점을 덜어내는 셈이죠.\n" +
-                  "나머지 사람들은 각자 남은 손패 합만큼 빚을 집니다.\n" +
-                  "그런데 스톱에는 함정이 하나 있습니다. 다음 레슨에서 보시죠!", true);
+            Guide("스톱 성공! 10−손합만큼 청산 — 내 합이 3이니 7점을 덜었죠.\n" +
+                  "나머지는 손합만큼 빚집니다. 그런데 함정이 하나… 다음 레슨에서!", true);
             yield return WaitNext();
         }
 
@@ -448,10 +566,8 @@ namespace Bbong.Client
                 draw: new[] { C(7, CardColor.Yellow) }, discard: new Card[0], currentSeat: 1);
             Show(RoundPhase.TurnGap, 1);
 
-            Guide("스톱의 함정, '스톱 바가지'입니다.\n" +
-                  "사범이 손패 합 8(3+5)로 스톱을 외치려 하는데,\n" +
-                  "내 손패는 합 2(1+1)로 사범보다 낮습니다.\n" +
-                  "참고로 합이 같기만 해도 스톱은 실패합니다.", true);
+            Guide("스톱의 함정, '스톱 바가지'! 사범이 손합 8로 스톱을 외치려는데\n" +
+                  "내 손합은 2 — 사범보다 낮습니다. 어떻게 될까요?", true);
             yield return WaitNext();
 
             _table.PlayStopSfx();
@@ -459,10 +575,16 @@ namespace Bbong.Client
             _table.ShowMeldSet(_round.Players[0].Hand.Cards, 0);
             Show(RoundPhase.RoundOver, 1);
 
-            Guide("스톱 바가지! 손합이 선언자보다 적거나 같은 뽕 플레이어가 있으면 실패입니다.\n" +
-                  "실패한 사범은 손합 8에 30을 더해 38점을 물고, 바가지를 먹인 나는 0점,\n" +
-                  "나머지는 자기 손합을 빚으로 집니다. 다음 라운드 선은 당한 사범이 잡고요.\n" +
-                  "뽕을 했다면 손합을 낮게 유지하는 게 공격에도 수비에도 좋습니다.", true);
+            Guide("스톱 바가지! 손합이 선언자보다 적거나 같은\n" +
+                  "뽕 플레이어가 있으면 스톱은 실패합니다.", true);
+            yield return WaitNext();
+
+            Guide("실패한 사범은 손합 8에 30을 더해 38점을 물고,\n" +
+                  "바가지를 먹인 나는 0점, 나머지는 손합만큼 빚을 집니다.", true);
+            yield return WaitNext();
+
+            Guide("다음 선은 당한 사범이 잡습니다.\n" +
+                  "뽕을 했다면 손합을 낮게 — 공격에도 수비에도 좋아요!", true);
             yield return WaitNext();
         }
     }
