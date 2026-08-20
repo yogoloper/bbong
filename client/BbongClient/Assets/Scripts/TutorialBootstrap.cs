@@ -193,27 +193,48 @@ namespace Bbong.Client
 
         private Image _blinkScrim;
 
+        /// <summary>
+        /// 되감기 가림막. 리플레이는 레슨 경계마다 프레임을 넘기므로(중첩 코루틴) 몇 프레임에
+        /// 걸쳐 중간 상태가 지나간다 — 반투명이면 바닥패가 생겼다 없어지는 게 비쳐 보인다.
+        /// 완전 불투명 + 최상위 별도 캔버스로 올려 리플레이가 끝날 때까지 전부 가린다.
+        /// </summary>
+        private void EnsureBlinkScrim()
+        {
+            if (_blinkScrim != null)
+            {
+                return;
+            }
+
+            var go = new GameObject("RewindScrim", typeof(Canvas), typeof(GraphicRaycaster), typeof(Image));
+            var canvas = go.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 700; // 설정 오버레이(500)보다도 위 — 무엇이 새로 생겨도 덮는다
+            _blinkScrim = go.GetComponent<Image>();
+            _blinkScrim.color = new Color(0f, 0f, 0f, 0f);
+            _blinkScrim.raycastTarget = false;
+        }
+
+        private void OnDestroy()
+        {
+            if (_blinkScrim != null)
+            {
+                Destroy(_blinkScrim.gameObject); // 별도 캔버스라 화면 전환 정리에 안 딸려 간다
+            }
+        }
+
         private IEnumerator RewindWithBlink(int target)
         {
             _rewinding = true;
-            // 캔버스 알파를 낮추면 뒤 카메라 배경(밝은 회색)이 드러나 밝게 번쩍인다 —
-            // 대신 위에 검은 스크림을 덮어 어둡게 눈을 감았다 뜨는 느낌으로.
-            if (_blinkScrim == null)
-            {
-                _blinkScrim = UiKit.CreatePanel(_table.CanvasGo.transform, new Color(0f, 0f, 0f, 0f));
-                UiKit.Stretch(_blinkScrim.rectTransform);
-            }
-
-            _blinkScrim.transform.SetAsLastSibling();
+            EnsureBlinkScrim();
             _blinkScrim.raycastTarget = true; // 전환 중 오탭 방지
 
-            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.12f)
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.10f)
             {
-                _blinkScrim.color = new Color(0f, 0f, 0f, Mathf.Lerp(0f, 0.85f, t));
+                _blinkScrim.color = new Color(0f, 0f, 0f, t);
                 yield return null;
             }
 
-            _blinkScrim.color = new Color(0f, 0f, 0f, 0.85f);
+            _blinkScrim.color = Color.black;
 
             if (_runner != null)
             {
@@ -231,12 +252,14 @@ namespace Bbong.Client
             _stopPressed = false;
             _clickedCard = null;
             _laidNow.Clear();
-            _runner = StartCoroutine(RunTutorial()); // 어두운 사이에 리플레이가 끝나 상태가 잡힌다
-            _blinkScrim.transform.SetAsLastSibling(); // 리플레이가 만든 위젯들 위로 다시
+            _runner = StartCoroutine(RunTutorial());
+
+            // 리플레이가 목표 비트에 닿을 때까지 완전 불투명 유지 — 중간 상태는 한 장도 안 보인다
+            yield return new WaitUntil(() => !_ff);
 
             for (var t = 0f; t < 1f; t += Time.deltaTime / 0.18f)
             {
-                _blinkScrim.color = new Color(0f, 0f, 0f, Mathf.Lerp(0.85f, 0f, t));
+                _blinkScrim.color = new Color(0f, 0f, 0f, 1f - t);
                 yield return null;
             }
 
