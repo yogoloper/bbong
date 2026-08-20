@@ -26,6 +26,19 @@ namespace Bbong.Client
         private Text _guideText;
         private GameObject _nextBtn;
         private Text _nextLabel;
+        private GameObject _prevBtn;
+
+        // '이전' = 결정적 리플레이. 튜토리얼은 전부 스크립트라, 처음부터 목표 직전 단계까지
+        // 연출·대기 없이 즉시 재실행하면 판 상태(손패·더미·좌석)가 그대로 복원된다.
+        // 사용자가 골랐던 카드는 기록해 두고 같은 카드로 재현한다.
+        private int _bitIndex;                       // 현재 표시 중인 설명 비트 번호(1부터)
+        private bool _ff;                            // 빨리감기(리플레이) 중인가
+        private int _ffTarget;                       // 리플레이가 멈출 비트
+        private int _ffChoiceCursor;                 // 리플레이가 소비한 카드 선택 수
+        private readonly List<Card> _cardChoices = new(); // 사용자가 실제로 골랐던 카드들
+        private readonly List<bool> _bitHasNext = new();  // 비트별 '다음' 유무 — 되감기 목표 계산용
+        private Coroutine _runner;                   // 진행 코루틴 — 되감기 때 이것만 끊는다
+        private bool _rewinding;                     // 블링크 전환 중 중복 되감기 방지
 
         // 뷰 입력 → 레슨 코루틴이 소비하는 플래그
         private bool _nextPressed;
@@ -59,60 +72,183 @@ namespace Bbong.Client
             _table.ExitConfirmed += () => UiKit.GoTo<MainLobbyBootstrap>(_table.CanvasGo, this);
 
             BuildGuidePanel();
-            StartCoroutine(RunTutorial());
+            _runner = StartCoroutine(RunTutorial());
         }
 
         // ── 안내 패널 ──
 
         private void BuildGuidePanel()
         {
-            // 판 색은 PanelBg — 불투명으로만 올린다(뒤 텍스트 비침 방지)
-            var opaque = new Color(UiTheme.PanelBg.r, UiTheme.PanelBg.g, UiTheme.PanelBg.b, 1f);
-            var panel = UiKit.CreatePanel(_table.CanvasGo.transform, opaque);
+            // 살짝 반투명 — 박스가 맞은편 좌석·더미 위에 얹히므로 뒤가 은은히 비쳐야 덜 답답하다
+            var face = new Color(UiTheme.PanelBg.r, UiTheme.PanelBg.g, UiTheme.PanelBg.b, 0.82f);
+            var panel = UiKit.CreatePanel(_table.CanvasGo.transform, face);
             if (UiArt.Panel9 != null)
             {
                 panel.sprite = UiArt.Panel9;
                 panel.type = Image.Type.Sliced;
-                panel.color = opaque;
+                panel.color = face;
             }
 
-            // 교습 밴드: 맞은편 좌석을 통째로 덮는 층. 화면 꼭대기에 붙이는 것보다 한 뼘
-            // 아래라 시선이 편하고, 하한은 버림 더미 산개 상단(≈0.69)이 정한다.
-            // 높이 고정 — 단계마다 높이가 변하면 아래 판이 들썩여서 빈 여백보다 나쁘다.
-            UiKit.Anchor(panel.rectTransform, new Vector2(0.165f, 0.775f), new Vector2(0.935f, 0.965f));
+            // 교습 박스: 한 뼘 더 내려 맞은편 좌석의 닉네임·빚 줄이 위로 드러나게 한다.
+            // (뒷면 카드는 반투명 배경 너머로 비친다.) 내부는 한 줄 구성 —
+            // [텍스트 영역(좌) | 버튼 영역(우)] 둘 다 박스 가운데줄에 정렬한다.
+            // 높이는 고정 — 단계마다 변하면 아래 판이 들썩여서 빈 여백보다 나쁘다.
+            UiKit.Anchor(panel.rectTransform, new Vector2(0.165f, 0.66f), new Vector2(0.935f, 0.85f));
             var shadow = panel.gameObject.AddComponent<Shadow>();
             shadow.effectColor = new Color(0f, 0f, 0f, 0.5f);
             shadow.effectDistance = new Vector2(8f, -8f);
 
-            // 폰트는 36 고정. bestFit은 내용이 많은 단계일수록 글자를 줄이는 — 정확히
-            // 거꾸로 가는 — 장치라 쓰지 않는다. 대신 문구를 3줄 상한으로 맞춘다(Guide 가드).
-            // 세로 0.13~0.87: 3줄(42×1.15×3 ≈ 145유닛)이 차도 위아래로 27유닛씩 숨 쉴 여백
+            // 폰트는 42 고정. bestFit은 내용이 많은 단계일수록 글자를 줄이는 — 정확히
+            // 거꾸로 가는 — 장치라 쓰지 않는다. 대신 문구를 2줄 상한으로 맞춘다(Guide 가드).
+            // 텍스트 영역: 버튼 영역(0.748~) 직전까지 — 현행 문구가 개행 없이 들어가는 폭.
             _guideText = UiKit.CreateText(panel.transform, "", 42, TextAnchor.MiddleLeft,
-                new Vector2(0.022f, 0.13f), new Vector2(0.978f, 0.87f));
+                new Vector2(0.022f, 0.08f), new Vector2(0.738f, 0.92f));
             _guideText.color = UiTheme.InkOn;
             _guideText.horizontalOverflow = HorizontalWrapMode.Wrap;
             _guideText.lineSpacing = 1.15f;
 
-            // '다음'은 실전 액션 버튼(뽕/패스)과 같은 자리·같은 너비의 우측 하단 바에 둔다 —
-            // 튜토리얼 내내 "행동은 오른쪽 아래"라는 실전 감각을 그대로 익히게 한다.
-            // 다음이 보일 때 액션 버튼은 항상 숨어 있어(단계가 상호배타) 자리 다툼이 없다.
-            var next = _table.AddBarButton("다음", () => _nextPressed = true);
+            // 버튼 영역: [이전][다음] 가로 배치, 박스 가운데줄에 정렬. 다음이 최우측,
+            // 이전은 그 왼쪽 고정 슬롯 — 다음이 숨는 행동 비트에서도 같은 자리다.
+            // 첫 설명에서는 이전이 숨는다.
+            _prevBtn = UiKit.CreateButton(panel.transform, "이전",
+                new Vector2(0.748f, 0.20f), new Vector2(0.862f, 0.80f), OnPrevPressed, 28).gameObject;
+            var next = UiKit.CreateButton(panel.transform, "다음",
+                new Vector2(0.872f, 0.20f), new Vector2(0.986f, 0.80f), () => _nextPressed = true, 28);
             _nextLabel = next.GetComponentInChildren<Text>();
+            _nextLabel.fontStyle = FontStyle.Bold;
             _nextBtn = next.gameObject;
         }
 
         private void Guide(string message, bool showNext, string nextLabel = "다음")
         {
+            _bitIndex++;
+            if (_ff)
+            {
+                if (_bitIndex < _ffTarget)
+                {
+                    return; // 아직 빨리감기 중 — 표시 생략
+                }
+
+                // 목표 비트 도착: 리플레이 종료, 여기부터 실플레이 재개.
+                // 목표 이후에 기록된 카드 선택은 무효가 되므로 잘라낸다.
+                _ff = false;
+                _cardChoices.RemoveRange(_ffChoiceCursor, _cardChoices.Count - _ffChoiceCursor);
+            }
+
             WarnIfOverflow(message);
+            if (_bitHasNext.Count < _bitIndex)
+            {
+                _bitHasNext.Add(showNext); // 비트 종류는 스크립트 고정 — 리플레이 때는 이미 기록돼 있다
+            }
+
             _guideText.text = message;
             _nextLabel.text = nextLabel;
             _nextBtn.SetActive(showNext);
+            // 행동 대기 비트에서도 '이전' 허용 — 직전 설명으로 돌아가 다시 읽을 수 있어야 한다.
+            // 목표는 RewindTarget이 잡는다: 직전이 설명이면 그 설명, 묶음 중간이면 묶음 시작.
+            _prevBtn.SetActive(RewindTarget() >= 1);
+        }
+
+        /// <summary>
+        /// 되감기 목표 비트. 직전이 설명이면 그 비트, 직전이 플레이어블 구간이면
+        /// 그 묶음(연속된 행동 비트들)의 첫 비트 — 행동을 처음부터 다시 하게 한다.
+        /// </summary>
+        private int RewindTarget()
+        {
+            var k = _bitIndex - 1;
+            if (k < 1)
+            {
+                return 0;
+            }
+
+            if (_bitHasNext[k - 1])
+            {
+                return k;
+            }
+
+            while (k > 1 && !_bitHasNext[k - 2])
+            {
+                k--; // 행동 묶음의 첫 비트까지 거슬러 올라간다
+            }
+
+            return k;
+        }
+
+        /// <summary>
+        /// '이전': 진행 코루틴을 끊고 처음부터 목표 비트까지 즉시 리플레이한다.
+        /// 판 상태(손패·더미·좌석·버튼)까지 그 시점 그대로 복원되고, 거기서 실플레이가 이어진다.
+        /// 상태 스왑이 한 프레임에 일어나 제자리에서 카드가 휙 바뀌어 보이므로,
+        /// 화면 전체를 짧게 어둡혔다 밝히는 블링크로 감싸 "시간을 되돌렸다"로 읽히게 한다.
+        /// </summary>
+        private void OnPrevPressed()
+        {
+            var target = RewindTarget();
+            if (_ff || _rewinding || target < 1)
+            {
+                return;
+            }
+
+            StartCoroutine(RewindWithBlink(target));
+        }
+
+        private Image _blinkScrim;
+
+        private IEnumerator RewindWithBlink(int target)
+        {
+            _rewinding = true;
+            // 캔버스 알파를 낮추면 뒤 카메라 배경(밝은 회색)이 드러나 밝게 번쩍인다 —
+            // 대신 위에 검은 스크림을 덮어 어둡게 눈을 감았다 뜨는 느낌으로.
+            if (_blinkScrim == null)
+            {
+                _blinkScrim = UiKit.CreatePanel(_table.CanvasGo.transform, new Color(0f, 0f, 0f, 0f));
+                UiKit.Stretch(_blinkScrim.rectTransform);
+            }
+
+            _blinkScrim.transform.SetAsLastSibling();
+            _blinkScrim.raycastTarget = true; // 전환 중 오탭 방지
+
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.12f)
+            {
+                _blinkScrim.color = new Color(0f, 0f, 0f, Mathf.Lerp(0f, 0.85f, t));
+                yield return null;
+            }
+
+            _blinkScrim.color = new Color(0f, 0f, 0f, 0.85f);
+
+            if (_runner != null)
+            {
+                StopCoroutine(_runner); // 진행 코루틴만 — 이 블링크 코루틴은 계속 살아야 한다
+            }
+
+            _ffTarget = target;
+            _ff = true;
+            _bitIndex = 0;
+            _ffChoiceCursor = 0;
+            _nextPressed = false;
+            _pongPressed = false;
+            _naturalPressed = false;
+            _meldPressed = false;
+            _stopPressed = false;
+            _clickedCard = null;
+            _laidNow.Clear();
+            _runner = StartCoroutine(RunTutorial()); // 어두운 사이에 리플레이가 끝나 상태가 잡힌다
+            _blinkScrim.transform.SetAsLastSibling(); // 리플레이가 만든 위젯들 위로 다시
+
+            for (var t = 0f; t < 1f; t += Time.deltaTime / 0.18f)
+            {
+                _blinkScrim.color = new Color(0f, 0f, 0f, Mathf.Lerp(0.85f, 0f, t));
+                yield return null;
+            }
+
+            _blinkScrim.color = new Color(0f, 0f, 0f, 0f);
+            _blinkScrim.raycastTarget = false;
+            _rewinding = false;
         }
 
         /// <summary>
         /// 밴드는 42px 고정 2줄 상한 — 길면 문구를 쪼개 '다음'으로 잇는다. 넘치면 조용히
         /// 삐져나가므로 렌더 줄 수를 어림해 개발 중에 바로 잡는다.
-        /// 한 줄 예산은 16:9 기준 전각 33자(ASCII는 0.5자).
+        /// 한 줄 예산은 16:9 기준 전각 31자(ASCII는 0.5자).
         /// </summary>
         private static void WarnIfOverflow(string message)
         {
@@ -125,7 +261,7 @@ namespace Bbong.Client
                     width += ch < 128 ? 0.5f : 1f;
                 }
 
-                lines += Mathf.Max(1, Mathf.CeilToInt(width / 33f));
+                lines += Mathf.Max(1, Mathf.CeilToInt(width / 31f));
             }
 
             if (lines > 2)
@@ -136,6 +272,11 @@ namespace Bbong.Client
 
         private IEnumerator WaitNext()
         {
+            if (_ff)
+            {
+                yield break; // 리플레이: 사용자가 이미 지나온 '다음'은 즉시 통과
+            }
+
             _nextPressed = false;
             yield return new WaitUntil(() => _nextPressed);
             // 누르는 즉시 감춘다 — 연출(카드 비행·1초 호흡)이 끝나고 뽕/패스로 바뀔 때까지
@@ -145,16 +286,113 @@ namespace Bbong.Client
 
         private IEnumerator WaitCard(System.Func<Card, bool> valid)
         {
+            if (_ff)
+            {
+                _clickedCard = ReplayCard(valid); // 리플레이: 그때 골랐던 카드를 그대로
+                yield break;
+            }
+
             _clickedCard = null;
             while (true)
             {
                 yield return new WaitUntil(() => _clickedCard.HasValue);
                 if (valid(_clickedCard.Value))
                 {
+                    _cardChoices.Add(_clickedCard.Value); // 되감기 재현용 기록
                     yield break;
                 }
 
                 _clickedCard = null; // 대상 아님 — 계속 대기
+            }
+        }
+
+        /// <summary>리플레이 중 카드 선택 재현. 기록이 모자라면(비정상) 손에서 첫 유효 카드.</summary>
+        private Card ReplayCard(System.Func<Card, bool> valid)
+        {
+            if (_ffChoiceCursor < _cardChoices.Count)
+            {
+                return _cardChoices[_ffChoiceCursor++];
+            }
+
+            return _round.Players[0].Hand.Cards.First(valid);
+        }
+
+        /// <summary>버튼 입력 대기 — 리플레이 중에는 즉시 통과.</summary>
+        private IEnumerator WaitSignal(System.Func<bool> signaled, System.Action reset)
+        {
+            if (_ff)
+            {
+                yield break;
+            }
+
+            yield return new WaitUntil(signaled);
+            reset();
+        }
+
+        /// <summary>리플레이 중에는 건너뛰는 연출 호흡.</summary>
+        private IEnumerator Beat(float seconds)
+        {
+            if (!_ff)
+            {
+                yield return new WaitForSeconds(seconds);
+            }
+        }
+
+        // ── 연출 래퍼: 리플레이 중엔 비행 없이 상태만 쌓는다 ──
+
+        private void FxDraw(int seat)
+        {
+            if (!_ff)
+            {
+                _table.DrawFx(seat);
+            }
+        }
+
+        private void FxDiscard(int seat, Card card)
+        {
+            if (_ff)
+            {
+                _table.AddDiscard(card); // 더미 내용만 유지 — 다음 Show()가 그린다
+            }
+            else
+            {
+                _table.DiscardFx(seat, card);
+            }
+        }
+
+        private void FxGroup(int seat, IEnumerable<Card> cards)
+        {
+            if (_ff)
+            {
+                _table.AddGroup(cards);
+            }
+            else
+            {
+                _table.GroupFx(seat, cards.ToList());
+            }
+        }
+
+        private void FxPong(string text)
+        {
+            if (!_ff)
+            {
+                _table.PongFx(text);
+            }
+        }
+
+        private void FxCallout(string text, Color color)
+        {
+            if (!_ff)
+            {
+                _table.ShowCallout(text, color);
+            }
+        }
+
+        private void FxStopSfx()
+        {
+            if (!_ff)
+            {
+                _table.PlayStopSfx();
             }
         }
 
@@ -253,14 +491,14 @@ namespace Bbong.Client
             yield return WaitNext();
 
             _round = _round.Draw();
-            _table.DrawFx(0);
+            FxDraw(0);
             Show(RoundPhase.WaitingDiscard, 0);
             Guide("방금 7을 뽑았습니다.\n필요 없어 보이는 카드를 하나 골라 버려보세요!", false);
             yield return WaitCard(_ => true);
 
             var tossed = _clickedCard!.Value;
             _round = _round.Discard(tossed);
-            _table.DiscardFx(0, tossed);
+            FxDiscard(0, tossed);
             Show(RoundPhase.TurnGap, 1);
 
             Guide("좋아요! 버린 카드는 더미에 쌓이고 차례가 넘어갑니다.\n" +
@@ -286,26 +524,25 @@ namespace Bbong.Client
 
             // 사범 턴도 실전처럼 — 한 장 뽑아 6장이 됐다가 한 장 버려 5장
             _round = _round.Draw();
-            _table.DrawFx(1);
+            FxDraw(1);
             Show(RoundPhase.WaitingDiscard, 1);
-            yield return new WaitForSeconds(0.9f);
+            yield return Beat(0.9f);
 
             var botToss = C(8, CardColor.Green);
             _round = _round.Discard(botToss);
-            _table.DiscardFx(1, botToss);
+            FxDiscard(1, botToss);
             Show(RoundPhase.TurnGap, 1); // 버리는 즉시 사범 손패 수 갱신
-            yield return new WaitForSeconds(1f); // 카드가 날아가 놓이는 걸 본 뒤에 뽕 타임
+            yield return Beat(1f); // 카드가 날아가 놓이는 걸 본 뒤에 뽕 타임
             Show(RoundPhase.PongWindow, 1, canPong: true, pongNumber: 8);
 
-            Guide("사범이 8을 버렸습니다! 같은 숫자 두 장이면 뽕을 부를 수 있어요.\n" +
+            Guide("사범이 8을 버렸습니다! 같은 숫자 두 장이면 뽕 찬스예요.\n" +
                   "지금입니다, [뽕] 버튼을 누르세요!", false);
-            yield return new WaitUntil(() => _pongPressed);
-            _pongPressed = false;
+            yield return WaitSignal(() => _pongPressed, () => _pongPressed = false);
 
             var laid = _round.Players[0].Hand.Cards.Where(c => c.Number == 8).ToList();
             _laidNow.AddRange(laid);
-            _table.GroupFx(0, laid);
-            _table.PongFx($"{_names[0]}\n8뽕!");
+            FxGroup(0, laid);
+            FxPong($"{_names[0]}\n8뽕!");
             Show(RoundPhase.WaitingPongDiscard, 0);
 
             Guide("버린 8 위에 내 8 두 장을 얹었습니다. 손을 떠난 카드는 빚 제외!\n" +
@@ -315,7 +552,7 @@ namespace Bbong.Client
             var toss = _clickedCard!.Value;
             _round = _round.Pong(0, toss);
             _laidNow.Clear();
-            _table.DiscardFx(0, toss);
+            FxDiscard(0, toss);
             Show(RoundPhase.TurnGap, 1);
 
             // 붉은 뒷면(쌍 경고) 설명은 여기서 예고하지 않는다 — 다음 레슨이 자연뽕이라
@@ -342,16 +579,15 @@ namespace Bbong.Client
             yield return WaitNext();
 
             _round = _round.Draw();
-            _table.DrawFx(0);
+            FxDraw(0);
             Show(RoundPhase.WaitingDiscard, 0, canNatural: true, naturalNumber: 5);
             Guide("방금 5를 뽑아서 손에 5가 세 장이 됐습니다!\n[자연뽕] 버튼을 누르세요.", false);
-            yield return new WaitUntil(() => _naturalPressed);
-            _naturalPressed = false;
+            yield return WaitSignal(() => _naturalPressed, () => _naturalPressed = false);
 
             var laid = _round.Players[0].Hand.Cards.Where(c => c.Number == 5).Take(3).ToList();
             _laidNow.AddRange(laid);
-            _table.GroupFx(0, laid);
-            _table.PongFx($"{_names[0]}\n5자연뽕!");
+            FxGroup(0, laid);
+            FxPong($"{_names[0]}\n5자연뽕!");
             Show(RoundPhase.WaitingDiscard, 0);
             Guide("내 손의 5 세 장을 그대로 내려놓았습니다.\n뽕과 마찬가지로 1장을 마저 버립니다. 카드를 클릭하세요.", false);
             yield return WaitCard(c => c.Number != 5);
@@ -359,7 +595,7 @@ namespace Bbong.Client
             var toss = _clickedCard!.Value;
             _round = _round.NaturalPong(5, toss);
             _laidNow.Clear();
-            _table.DiscardFx(0, toss);
+            FxDiscard(0, toss);
             Show(RoundPhase.TurnGap, 1);
 
             Guide("자연뽕 완성! 내려놓은 세 장은 빚에서 빠집니다.\n" +
@@ -389,23 +625,23 @@ namespace Bbong.Client
 
             // 실전과 같게 내 턴은 뽑기부터 — 6장 상태에서 버리게 한다
             _round = _round.Draw();
-            _table.DrawFx(0);
+            FxDraw(0);
             Show(RoundPhase.WaitingDiscard, 0);
             Guide("붉은 뒷면인 상대에게 같은 숫자를 버려주면 어떻게 될까요?\n직접 해봅시다. 손에 있는 9를 버려보세요.", false);
             yield return WaitCard(c => c.Number == 9);
 
             var tossed = _clickedCard!.Value;
             _round = _round.Discard(tossed);
-            _table.DiscardFx(0, tossed);
+            FxDiscard(0, tossed);
             Show(RoundPhase.TurnGap, 1); // 버린 카드가 손에서 빠진 상태로 재렌더 — 안 하면 1초간 유령 카드가 남는다
-            yield return new WaitForSeconds(1f); // 내 카드가 놓인 걸 보고 나서 사범이 뽕
+            yield return Beat(1f); // 내 카드가 놓인 걸 보고 나서 사범이 뽕
 
             var laid = _round.Players[1].Hand.Cards.ToList(); // 사범 손의 9 두 장(버린 9는 더미에 그대로)
             _round = _round.Pong(1, null); // 사범의 두 번째 뽕 = 손 털기
-            _table.GroupFx(1, laid);
-            _table.PongFx($"{_names[1]}\n9뽕!");
+            FxGroup(1, laid);
+            FxPong($"{_names[1]}\n9뽕!");
             Show(RoundPhase.RoundOver, 1);
-            _table.ShowCallout($"{_names[1]}\n손 털기!", new Color(1f, 0.4f, 0.35f));
+            FxCallout($"{_names[1]}\n손 털기!", new Color(1f, 0.4f, 0.35f));
 
             Guide("사범이 내 9를 받아 두 번째 뽕, 손을 다 털었습니다.\n" +
                   "이게 '일반뽕 바가지'예요.", true);
@@ -430,7 +666,7 @@ namespace Bbong.Client
 
             // 실전과 같게 내 턴은 뽑기부터 — 6장 상태에서 버리게 한다
             _round = _round.Draw();
-            _table.DrawFx(0);
+            FxDraw(0);
             Show(RoundPhase.WaitingDiscard, 0);
 
             Guide("붉은 뒷면은 보고 피할 수 있지만, 경고 없는 바가지도 있습니다.\n" +
@@ -439,16 +675,16 @@ namespace Bbong.Client
 
             var tossed = _clickedCard!.Value;
             _round = _round.Discard(tossed);
-            _table.DiscardFx(0, tossed);
+            FxDiscard(0, tossed);
             Show(RoundPhase.TurnGap, 1); // 버린 카드가 손에서 빠진 상태로 재렌더
-            yield return new WaitForSeconds(1f); // 내 카드가 놓인 걸 보고 나서 사범이 뽕
+            yield return Beat(1f); // 내 카드가 놓인 걸 보고 나서 사범이 뽕
 
             // 사범: 내 2를 받아 뽕 → 남은 5,5,5를 그 자리에서 자연뽕 → 손 털기.
             // 엔진에 뽕+자연뽕 연쇄를 태우는 대신 연출만 하고, 내려놓을 때마다 사범 손패 수가
             // 맞는 상태로 뷰를 재구성한다. Setup()은 타임라인(내려놓은 묶음)까지 지우므로 안 쓴다.
             var pongLaid = _round.Players[1].Hand.Cards.Where(c => c.Number == 2).ToList();
-            _table.GroupFx(1, pongLaid);
-            _table.PongFx($"{_names[1]}\n2뽕!");
+            FxGroup(1, pongLaid);
+            FxPong($"{_names[1]}\n2뽕!");
             _round = RoundState.Restore(new[]
                 {
                     new Player(0, new Hand(_round.Players[0].Hand.Cards.ToArray())),
@@ -458,11 +694,11 @@ namespace Bbong.Client
                 },
                 new[] { C(1, CardColor.Red) }, new Card[0], 1, new SeededRandom(1));
             Show(RoundPhase.WaitingPongDiscard, 1); // 내려놓은 2장이 사범 손에서도 빠진 상태
-            yield return new WaitForSeconds(1.2f);
+            yield return Beat(1.2f);
 
             var naturalLaid = _round.Players[1].Hand.Cards.ToList(); // 남은 5,5,5
-            _table.GroupFx(1, naturalLaid);
-            _table.PongFx($"{_names[1]}\n5자연뽕!");
+            FxGroup(1, naturalLaid);
+            FxPong($"{_names[1]}\n5자연뽕!");
             _round = RoundState.Restore(new[]
                 {
                     new Player(0, new Hand(_round.Players[0].Hand.Cards.ToArray())),
@@ -472,9 +708,9 @@ namespace Bbong.Client
                 },
                 new[] { C(1, CardColor.Red) }, new Card[0], 1, new SeededRandom(1));
             Show(RoundPhase.RoundOver, 1); // 손 털기 — 사범 손 0장
-            yield return new WaitForSeconds(0.8f);
+            yield return Beat(0.8f);
 
-            _table.ShowCallout($"{_names[1]}\n자연뽕 바가지!", new Color(1f, 0.4f, 0.35f));
+            FxCallout($"{_names[1]}\n자연뽕 바가지!", new Color(1f, 0.4f, 0.35f));
 
             Guide("경고 없이 당했습니다! 이게 '자연뽕 바가지'입니다.\n" +
                   "내 2로 뽕을 하고, 남은 5,5,5를 바로 자연뽕해 손을 털었죠.", true);
@@ -502,15 +738,14 @@ namespace Bbong.Client
             yield return WaitNext();
 
             _round = _round.Draw();
-            _table.DrawFx(0);
+            FxDraw(0);
             var meld = HandEvaluator.Evaluate(_round.Players[0].Hand);
             Show(RoundPhase.WaitingDiscard, 0, canMeld: true, meldType: meld.Type.ToString(), meldScore: meld.Score);
             Guide("지금 손패가 1-2-3-4-5-6, 연속 6장이면 '스트레이트'입니다!\n[스트레이트] 버튼을 누르세요.", false);
-            yield return new WaitUntil(() => _meldPressed);
-            _meldPressed = false;
+            yield return WaitSignal(() => _meldPressed, () => _meldPressed = false);
 
             _table.ShowMeldSet(_round.Players[0].Hand.Cards, 0);
-            _table.PongFx($"{_names[0]}\n{MeldNames.Korean(meld.Type)}!");
+            FxPong($"{_names[0]}\n{MeldNames.Korean(meld.Type)}!");
             Show(RoundPhase.RoundOver, 0);
 
             Guide("족보 완성! 스트레이트는 여섯 장의 합만큼 빚을 탕감합니다.\n" +
@@ -541,16 +776,15 @@ namespace Bbong.Client
             Show(RoundPhase.WaitingStop, 0, canStop: true);
             Guide("나와 사범 둘 다 뽕! 내 손합 3, 사범 18로 내가 훨씬 낮습니다.\n" +
                   "[스톱] 버튼으로 라운드를 끝내세요!", false);
-            yield return new WaitUntil(() => _stopPressed);
-            _stopPressed = false;
+            yield return WaitSignal(() => _stopPressed, () => _stopPressed = false);
 
             _table.ShowMeldSet(_round.Players[0].Hand.Cards, 0);
-            _table.PlayStopSfx();
-            _table.ShowCallout($"{_names[0]}\n스톱!", new Color(0.55f, 0.85f, 1f));
+            FxStopSfx();
+            FxCallout($"{_names[0]}\n스톱!", new Color(0.55f, 0.85f, 1f));
             Show(RoundPhase.RoundOver, 0);
 
             Guide("스톱 성공! 10−손합만큼 청산 — 내 합이 3이니 7점을 덜었죠.\n" +
-                  "나머지는 손합만큼 빚집니다. 그런데 함정이 하나… 다음 레슨에서!", true);
+                  "나머지는 손합만큼. 그런데 함정이 하나… 다음 레슨에서!", true);
             yield return WaitNext();
         }
 
@@ -570,8 +804,8 @@ namespace Bbong.Client
                   "내 손합은 2 — 사범보다 낮습니다. 어떻게 될까요?", true);
             yield return WaitNext();
 
-            _table.PlayStopSfx();
-            _table.ShowCallout($"{_names[1]}\n스톱 바가지!", new Color(1f, 0.4f, 0.35f));
+            FxStopSfx();
+            FxCallout($"{_names[1]}\n스톱 바가지!", new Color(1f, 0.4f, 0.35f));
             _table.ShowMeldSet(_round.Players[0].Hand.Cards, 0);
             Show(RoundPhase.RoundOver, 1);
 

@@ -849,6 +849,40 @@ namespace Bbong.Client
             }
         }
 
+        /// <summary>
+        /// 손패 영역을 살포시 등장시킨다(튜토리얼 되감기 복원용). 손을 통째로 갈아 끼우면
+        /// 한 프레임에 반짝 튀어 보이는데, 짧은 페이드+스케일로 "다시 잡는" 느낌을 준다.
+        /// </summary>
+        public void HandAppearFx(float duration = 0.2f)
+        {
+            StartCoroutine(HandAppear(duration));
+        }
+
+        private IEnumerator HandAppear(float duration)
+        {
+            var cg = _handRow.GetComponent<CanvasGroup>();
+            if (cg == null)
+            {
+                cg = _handRow.gameObject.AddComponent<CanvasGroup>();
+            }
+
+            for (var t = 0f; t < 1f; t += Time.deltaTime / duration)
+            {
+                if (_handRow == null)
+                {
+                    yield break;
+                }
+
+                var eased = 1f - (1f - t) * (1f - t);
+                cg.alpha = Mathf.Lerp(0.25f, 1f, eased);
+                _handRow.localScale = Vector3.one * Mathf.Lerp(0.94f, 1f, eased);
+                yield return null;
+            }
+
+            cg.alpha = 1f;
+            _handRow.localScale = Vector3.one;
+        }
+
         private void RenderDiscard()
         {
             foreach (Transform child in _discardRow)
