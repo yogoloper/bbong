@@ -241,6 +241,10 @@ namespace Bbong.Client
                 StopCoroutine(_runner); // 진행 코루틴만 — 이 블링크 코루틴은 계속 살아야 한다
             }
 
+            // 아직 날아가던 카드·콜아웃은 여기서 전부 끊는다 — 블랙아웃이 끝난 뒤 뒤늦게
+            // 착지해 되감은 판에 유령 카드를 남기는 것을 막는다.
+            _table.CancelTransientFx();
+
             _ffTarget = target;
             _ff = true;
             _bitIndex = 0;
@@ -416,6 +420,18 @@ namespace Bbong.Client
             if (!_ff)
             {
                 _table.PlayStopSfx();
+            }
+        }
+
+        private void FxMeldSet(IEnumerable<Card> cards, int laidSeat)
+        {
+            if (_ff)
+            {
+                _table.ShowMeldSetInstant(cards, laidSeat); // 리플레이: 비행 없이 즉시 — 유령 착지 방지
+            }
+            else
+            {
+                _table.ShowMeldSet(cards, laidSeat);
             }
         }
 
@@ -767,7 +783,7 @@ namespace Bbong.Client
             Guide("지금 손패가 1-2-3-4-5-6, 연속 6장이면 '스트레이트'입니다!\n[스트레이트] 버튼을 누르세요.", false);
             yield return WaitSignal(() => _meldPressed, () => _meldPressed = false);
 
-            _table.ShowMeldSet(_round.Players[0].Hand.Cards, 0);
+            FxMeldSet(_round.Players[0].Hand.Cards, 0);
             FxPong($"{_names[0]}\n{MeldNames.Korean(meld.Type)}!");
             Show(RoundPhase.RoundOver, 0);
 
@@ -801,7 +817,7 @@ namespace Bbong.Client
                   "[스톱] 버튼으로 라운드를 끝내세요!", false);
             yield return WaitSignal(() => _stopPressed, () => _stopPressed = false);
 
-            _table.ShowMeldSet(_round.Players[0].Hand.Cards, 0);
+            FxMeldSet(_round.Players[0].Hand.Cards, 0);
             FxStopSfx();
             FxCallout($"{_names[0]}\n스톱!", new Color(0.55f, 0.85f, 1f));
             Show(RoundPhase.RoundOver, 0);
@@ -829,7 +845,7 @@ namespace Bbong.Client
 
             FxStopSfx();
             FxCallout($"{_names[1]}\n스톱 바가지!", new Color(1f, 0.4f, 0.35f));
-            _table.ShowMeldSet(_round.Players[0].Hand.Cards, 0);
+            FxMeldSet(_round.Players[0].Hand.Cards, 0);
             Show(RoundPhase.RoundOver, 1);
 
             Guide("스톱 바가지! 손합이 선언자보다 적거나 같은\n" +

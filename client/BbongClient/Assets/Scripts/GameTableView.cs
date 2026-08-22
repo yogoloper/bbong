@@ -1000,6 +1000,17 @@ namespace Bbong.Client
             GroupFx(laidSeat, cards);
         }
 
+        /// <summary>
+        /// 비행 없이 즉시 반영하는 판(튜토리얼 되감기 리플레이용). 리플레이 중 GroupFx를 쏘면
+        /// 블랙아웃이 끝난 뒤 착지해 되감은 판에 유령 카드를 남긴다.
+        /// </summary>
+        public void ShowMeldSetInstant(IEnumerable<Card> cards, int laidSeat)
+        {
+            _meldLaidSeat = laidSeat;
+            AddGroup(cards);
+            RenderDiscard();
+        }
+
         private GameObject PlaceCard(Card card, float w, float h, Vector2 anchor, Vector2 offset, float rot)
         {
             var face = TableArt.CreateCardFace(_discardRow, card, w, h, _font);
@@ -1155,13 +1166,41 @@ namespace Bbong.Client
         }
 
         /// <summary>카드 앞면 한 장을 좌석에서 목표 지점·기울기로 비행시키고 착지 콜백 실행.</summary>
+        // 진행 중 연출 세대. CancelTransientFx가 올리면 이전 세대의 비행은 착지 콜백
+        // (타임라인 추가) 없이 스스로 정리된다 — 튜토리얼 되감기 중 유령 카드 방지.
+        private int _fxGeneration;
+
+        /// <summary>
+        /// 날아가는 카드·콜아웃 등 일시 연출 전부 취소(튜토리얼 되감기용). 취소된 비행은
+        /// 착지 콜백을 실행하지 않으므로 되감은 판의 타임라인에 흔적을 남기지 않는다.
+        /// </summary>
+        public void CancelTransientFx()
+        {
+            _fxGeneration++;
+            if (_calloutFx != null)
+            {
+                StopCoroutine(_calloutFx);
+                _calloutFx = null;
+            }
+
+            _callout.text = "";
+            _calloutGroup.alpha = 0f;
+        }
+
         private IEnumerator FlyFace(int seat, Card card, Vector2 targetAnchor, float targetRot,
             float w, float h, float delay, System.Action onLand)
         {
+            var gen = _fxGeneration;
             _flightsActive++;
             if (delay > 0f)
             {
                 yield return new WaitForSeconds(delay);
+            }
+
+            if (gen != _fxGeneration)
+            {
+                _flightsActive--;
+                yield break;
             }
 
             var fly = TableArt.CreateCardFace(_shakeRoot, card, w, h, _font);
@@ -1172,9 +1211,14 @@ namespace Bbong.Client
             var from = seat == MySeat ? new Vector2(0.5f, 0.15f) : SeatAnchor(seat);
             for (var t = 0f; t < 1f; t += Time.deltaTime / 0.25f)
             {
-                if (fly == null)
+                if (fly == null || gen != _fxGeneration)
                 {
                     _flightsActive--;
+                    if (fly != null)
+                    {
+                        Destroy(fly);
+                    }
+
                     yield break;
                 }
 
@@ -1186,7 +1230,10 @@ namespace Bbong.Client
 
             _flightsActive--;
             Destroy(fly);
-            onLand?.Invoke();
+            if (gen == _fxGeneration)
+            {
+                onLand?.Invoke(); // 취소된 세대는 착지 반영(타임라인 추가) 금지
+            }
         }
 
         /// <summary>재셔플 수렴 연출: 버림 더미 주변의 카드들이 뒷면으로 덮여 덱으로 모여든다.</summary>
@@ -1238,10 +1285,17 @@ namespace Bbong.Client
 
         private IEnumerator FlyCardFromDeck(int seat, float delay = 0f)
         {
+            var gen = _fxGeneration;
             _flightsActive++;
             if (delay > 0f)
             {
                 yield return new WaitForSeconds(delay);
+            }
+
+            if (gen != _fxGeneration)
+            {
+                _flightsActive--;
+                yield break;
             }
 
             PlayDrawSfx();
@@ -1258,9 +1312,14 @@ namespace Bbong.Client
             var to = seat == MySeat ? new Vector2(0.5f, 0.15f) : SeatAnchor(seat); // 내 좌석은 손패로
             for (var t = 0f; t < 1f; t += Time.deltaTime / 0.28f)
             {
-                if (go == null)
+                if (go == null || gen != _fxGeneration)
                 {
                     _flightsActive--;
+                    if (go != null)
+                    {
+                        Destroy(go);
+                    }
+
                     yield break;
                 }
 
