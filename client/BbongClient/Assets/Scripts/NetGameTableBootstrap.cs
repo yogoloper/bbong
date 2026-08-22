@@ -222,7 +222,13 @@ namespace Bbong.Client
                     _table.ShowScorePopup(title, set.cumulativeDebts, _roundHistory, fadeOut: false);
                     if (_view != null)
                     {
+                        // 서버가 세트 종료엔 새 뷰를 주지 않는다 — 마지막 턴 스냅샷의 행동
+                        // 플래그(또이또이/자연뽕 등)가 남아 버튼이 유지되지 않게 지운다.
                         _view.phase = RoundPhase.SetOver;
+                        _view.canMeld = false;
+                        _view.canNaturalPong = false;
+                        _view.canPong = false;
+                        _view.canStop = false;
                     }
 
                     Render();

@@ -1056,12 +1056,17 @@ namespace Bbong.Client
                 || (view.phase == RoundPhase.PongWindow && view.canPong));
             SetButtonLabel(_passBtn, view.phase == RoundPhase.WaitingStop ? "계속" : "패스");
             _pongBtn.gameObject.SetActive(view.phase == RoundPhase.PongWindow && view.canPong);
-            _meldBtn.gameObject.SetActive(view.canMeld);
+            // 선언 버튼은 선언 가능한 국면에서만 — 라운드/세트 종료 스냅샷에 can* 플래그가
+            // 남아 있어도(SetEnded는 서버가 새 뷰를 주지 않는다) 버튼이 살아남지 않게 한다.
+            var canDeclare = view.phase == RoundPhase.WaitingDiscard;
+            _meldBtn.gameObject.SetActive(canDeclare && view.canMeld);
             if (view.canMeld)
             {
                 SetButtonLabel(_meldBtn, MeldKorean(view.meldType)); // 예: "또이또이"
             }
-            _naturalBtn.gameObject.SetActive(view.canNaturalPong && !naturalSelecting);
+            _naturalBtn.gameObject.SetActive(
+                (canDeclare || view.phase == RoundPhase.WaitingPongDiscard) // 뽕 후 추가 버림 중 자연뽕(2,2,5,5,5)
+                && view.canNaturalPong && !naturalSelecting);
         }
 
         // ── 버림 타임라인 ──
