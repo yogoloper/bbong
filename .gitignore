@@ -39,3 +39,6 @@ client/BbongClient/Data/
 
 # Unity 안드로이드 빌드 임시 캐시(Bee/gradle/cmake)
 client/BbongClient/.utmp/
+
+# WebGL 빌드 부산물(배포 불필요)
+webgl/*_BurstDebugInformation_DoNotShip/
